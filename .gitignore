@@ -1,0 +1,49 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# Bevy
+*.wasm
+*.wasm.d.ts
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Nix
+result
+result-*
+.direnv/
+
+# Build artifacts
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Debug
+*.dSYM/
+
+# Logs
+*.log
+
+# Testing
+*.profraw
+*.profdata
+
+# Assets (uncomment if you want to ignore certain asset types)
+# *.blend1
+# *.blend2
+# *.xcf
+# *.psd
+
+# OS
+Thumbs.db
+.Trash-*
