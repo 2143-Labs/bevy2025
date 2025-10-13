@@ -15,6 +15,7 @@
         defaultPackage = naersk-lib.buildPackage ./.;
         devShell = with pkgs; mkShell {
           buildInputs = [ 
+            rust-analyzer
             cargo 
             rustc 
             rustfmt 
