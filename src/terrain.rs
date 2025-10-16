@@ -11,6 +11,10 @@ use noise::{NoiseFn, Perlin};
 #[derive(Component)]
 pub struct Terrain;
 
+/// Marker for boundary walls
+#[derive(Component)]
+pub struct BoundaryWall;
+
 /// Terrain generation parameters
 #[derive(Resource)]
 pub struct TerrainParams {
@@ -35,7 +39,8 @@ pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_terrain);
+        app.add_systems(Startup, setup_terrain)
+            .add_systems(Update, draw_boundary_debug);
     }
 }
 
@@ -62,12 +67,15 @@ fn setup_terrain(
     // Spawn terrain with physics collider
     commands.spawn((
         Mesh3d(terrain_mesh_handle),
-        MeshMaterial3d(terrain_material),
+        MeshMaterial3d(terrain_material.clone()),
         Transform::from_xyz(0.0, 0.0, 0.0),
         RigidBody::Static,
         Collider::trimesh_from_mesh(&terrain_mesh).unwrap(),
         Terrain,
     ));
+
+    // Add boundary walls around the terrain
+    spawn_boundary_walls(&mut commands, &mut meshes, &mut materials, &terrain_params);
 
     // Add directional light (sun)
     commands.spawn((
@@ -78,6 +86,75 @@ fn setup_terrain(
         },
         Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.7, 0.3, 0.0)),
     ));
+}
+
+/// Spawn invisible boundary walls around the terrain to keep balls from falling off
+fn spawn_boundary_walls(
+    commands: &mut Commands,
+    _meshes: &mut ResMut<Assets<Mesh>>,
+    _materials: &mut ResMut<Assets<StandardMaterial>>,
+    params: &TerrainParams,
+) {
+    let size = params.plane_size;
+    let wall_height = size; // Height matches terrain size (100 units)
+    let wall_thickness = 0.1; // Very thin planes
+    let half_size = size * 0.5;
+
+    // Base at lowest possible terrain point
+    let base_y = -params.max_height_delta;
+    let center_y = base_y + wall_height / 2.0;
+
+    // North wall (positive Z) - plane perpendicular to Z axis
+    commands.spawn((
+        Transform::from_xyz(0.0, center_y, half_size),
+        RigidBody::Static,
+        Collider::cuboid(size, wall_height, wall_thickness),
+        BoundaryWall,
+    ));
+
+    // South wall (negative Z) - plane perpendicular to Z axis
+    commands.spawn((
+        Transform::from_xyz(0.0, center_y, -half_size),
+        RigidBody::Static,
+        Collider::cuboid(size, wall_height, wall_thickness),
+        BoundaryWall,
+    ));
+
+    // East wall (positive X) - plane perpendicular to X axis
+    commands.spawn((
+        Transform::from_xyz(half_size, center_y, 0.0),
+        RigidBody::Static,
+        Collider::cuboid(wall_thickness, wall_height, size),
+        BoundaryWall,
+    ));
+
+    // West wall (negative X) - plane perpendicular to X axis
+    commands.spawn((
+        Transform::from_xyz(-half_size, center_y, 0.0),
+        RigidBody::Static,
+        Collider::cuboid(wall_thickness, wall_height, size),
+        BoundaryWall,
+    ));
+}
+
+/// Draw debug wireframe borders for boundary walls
+fn draw_boundary_debug(
+    mut gizmos: Gizmos,
+    walls: Query<(&Transform, &Collider), With<BoundaryWall>>,
+) {
+    for (transform, collider) in walls.iter() {
+        // Get the cuboid dimensions from the collider shape data
+        if let Some(cuboid) = collider.shape_scaled().as_cuboid() {
+            let half_extents = cuboid.half_extents;
+            let pos = transform.translation;
+
+            // Draw a wireframe box
+            gizmos.cuboid(
+                Transform::from_translation(pos).with_scale(Vec3::from(half_extents) * 2.0),
+                Color::srgb(1.0, 0.0, 0.0), // Red debug lines
+            );
+        }
+    }
 }
 
 /// Generate procedural terrain mesh using Perlin noise
