@@ -1,11 +1,20 @@
 use avian3d::prelude::*;
 use bevy::prelude::*;
 
+/// Marker component for spawned balls
+#[derive(Component)]
+pub struct Ball;
+
+/// UI component for the ball counter text
+#[derive(Component)]
+struct BallCounterText;
+
 pub struct PhysicsPlugin;
 
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, spawn_ball_on_space);
+        app.add_systems(Startup, setup_ball_counter_ui)
+            .add_systems(Update, (spawn_ball_on_space, update_ball_counter));
     }
 }
 
@@ -36,7 +45,10 @@ fn spawn_ball_on_space(
         );
 
         // Spawn ball with physics
+        // Ball volume = (4/3) * π * r³ = (4/3) * π * 0.5³ ≈ 0.524 m³
+        // With density ~0.5, mass = 0.524 * 0.5 ≈ 0.26 kg (light, floaty balls)
         commands.spawn((
+            Ball, // Marker component for counting
             Mesh3d(meshes.add(Sphere::new(0.5))),
             MeshMaterial3d(materials.add(StandardMaterial {
                 base_color: color,
@@ -47,7 +59,42 @@ fn spawn_ball_on_space(
             Transform::from_translation(spawn_pos),
             RigidBody::Dynamic,
             Collider::sphere(0.5),
-            Mass(1.0),
+            Mass(0.3), // Lighter balls that will float (density ~0.57 of water)
         ));
+    }
+}
+
+/// Setup UI for ball counter
+fn setup_ball_counter_ui(mut commands: Commands) {
+    // Root UI node
+    commands.spawn(Node {
+        position_type: PositionType::Absolute,
+        top: Val::Px(10.0),
+        left: Val::Px(10.0),
+        padding: UiRect::all(Val::Px(10.0)),
+        ..default()
+    }).with_children(|parent| {
+        // Counter text
+        parent.spawn((
+            Text::new("Balls: 0"),
+            TextFont {
+                font_size: 24.0,
+                ..default()
+            },
+            TextColor(Color::WHITE),
+            BallCounterText,
+        ));
+    });
+}
+
+/// Update ball counter UI
+fn update_ball_counter(
+    balls: Query<&Ball>,
+    mut counter_text: Query<&mut Text, With<BallCounterText>>,
+) {
+    let ball_count = balls.iter().count();
+
+    if let Ok(mut text) = counter_text.single_mut() {
+        text.0 = format!("Balls: {}", ball_count);
     }
 }

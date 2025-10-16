@@ -7,6 +7,9 @@ use bevy::{
 };
 use noise::{NoiseFn, Perlin};
 
+use crate::water::{spawn_water, WaterMaterial};
+use bevy::pbr::ExtendedMaterial;
+
 /// Marker for terrain entity
 #[derive(Component)]
 pub struct Terrain;
@@ -49,8 +52,15 @@ fn setup_terrain(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut water_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, WaterMaterial>>>,
 ) {
     let terrain_params = TerrainParams::default();
+
+    // Calculate water level: 30% between min and max terrain height
+    // Terrain heights range from -max_height_delta to +max_height_delta
+    let min_height = -terrain_params.max_height_delta;
+    let max_height = terrain_params.max_height_delta;
+    let water_level = min_height + 0.3 * (max_height - min_height);
 
     // Generate terrain mesh
     let terrain_mesh = generate_terrain_mesh(&terrain_params);
@@ -76,6 +86,15 @@ fn setup_terrain(
 
     // Add boundary walls around the terrain
     spawn_boundary_walls(&mut commands, &mut meshes, &mut materials, &terrain_params);
+
+    // Spawn water at calculated level
+    spawn_water(
+        &mut commands,
+        &mut meshes,
+        &mut water_materials,
+        water_level,
+        terrain_params.plane_size,
+    );
 
     // Add directional light (sun)
     commands.spawn((
