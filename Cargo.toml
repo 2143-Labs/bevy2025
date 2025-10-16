@@ -5,6 +5,9 @@ edition = "2024"
 
 [dependencies]
 bevy = "0.17"
+noise = "0.9"
+fastrand = "2.0"
+avian3d = "0.4"
 
 [features]
 

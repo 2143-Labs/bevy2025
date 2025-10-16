@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:bevy.org)",
+      "Bash(cargo check:*)",
+      "Bash(nix develop:*)",
+      "Bash(direnv allow:*)",
+      "Bash(nix --extra-experimental-features nix-command --extra-experimental-features flakes develop --command cargo check)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(nix --extra-experimental-features nix-command --extra-experimental-features flakes develop --command cargo build)",
+      "WebFetch(domain:docs.rs)",
+      "Bash(nix --extra-experimental-features nix-command --extra-experimental-features flakes develop --command cargo doc --package bevy --no-deps --open)",
+      "WebFetch(domain:bevyengine.org)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
