@@ -15,7 +15,7 @@ struct GrassMaterial {
 }
 
 struct BallPositions {
-    positions: array<vec4<f32>, 4>, // xyz = position, w = radius
+    positions: array<vec4<f32>, 8>, // xyz = position, w = radius
 }
 
 struct BallCount {
@@ -121,35 +121,14 @@ fn vertex(
     let camera_alignment = abs(dot(to_camera, blade_forward));
     let perpendicular_factor = 1.0 - camera_alignment;
 
-    // Billboard stretching for near/mid grass
-    let stretch_factor = perpendicular_factor * height_factor * 1.5;
+    // Subtle billboard stretching (reduced to avoid hair-like artifacts)
+    // Only apply to near grass where it helps with density
+    let near_factor = 1.0 - smoothstep(20.0, 40.0, distance_to_camera);
+    let stretch_factor = perpendicular_factor * height_factor * 0.8 * near_factor;
     let camera_right = normalize(cross(to_camera, vec3<f32>(0.0, 1.0, 0.0)));
 
-    // View-space billboarding for distant grass (LOD technique)
-    // Grass beyond 50m rotates to fully face camera
-    let billboard_factor = smoothstep(50.0, 70.0, distance_to_camera) * height_factor;
-
-    // Apply billboarding rotation (rotate blade to face camera)
-    var final_position = world_position.xyz;
-
-    // Stretch for perpendicular blades
-    final_position += camera_right * stretch_factor * 0.15;
-
-    // Billboard rotation for distant grass
-    if (billboard_factor > 0.01) {
-        // Rotate towards camera while preserving Y position
-        let to_camera_xz = normalize(vec2<f32>(to_camera.x, to_camera.z));
-        let offset_from_base = final_position - blade_base;
-
-        // Rotate offset to face camera
-        let rotated_offset = vec3<f32>(
-            camera_right.x * offset_from_base.x,
-            offset_from_base.y,
-            camera_right.z * offset_from_base.x
-        );
-
-        final_position = mix(final_position, blade_base + rotated_offset, billboard_factor);
-    }
+    // Apply subtle stretching only for near grass
+    var final_position = world_position.xyz + camera_right * stretch_factor * 0.1;
 
     world_position = vec4<f32>(final_position, world_position.w);
 

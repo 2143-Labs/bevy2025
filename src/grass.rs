@@ -60,9 +60,9 @@ pub struct GrassMaterial {
     #[uniform(100)]
     pub wind_data: Vec4,
 
-    /// Ball positions for interaction (up to 4 balls, w component is radius)
+    /// Ball positions for interaction (up to 8 balls, w component is radius)
     #[uniform(101)]
-    pub ball_positions: [Vec4; 4],
+    pub ball_positions: [Vec4; 8],
 
     /// Number of active balls
     #[uniform(102)]
@@ -107,6 +107,7 @@ fn update_ball_interactions(
     time: Res<Time>,
     mut update_timer: Local<Option<BallInteractionTimer>>,
     all_balls: Query<&Transform, With<crate::physics::Ball>>,
+    camera_query: Query<&Transform, With<Camera>>,
     mut grass_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, GrassMaterial>>>,
 ) {
     // Initialize timer on first run
@@ -118,17 +119,33 @@ fn update_ball_interactions(
         return;
     }
 
-    // Collect ALL ball positions (limit to 4 for shader array)
-    let mut ball_positions = [Vec4::ZERO; 4];
+    // Get camera position to prioritize nearest balls
+    let camera_pos = camera_query.iter().find_map(|t| Some(t.translation)).unwrap_or(Vec3::ZERO);
+
+    // Collect balls sorted by distance to camera (prioritize nearest 8)
+    let mut ball_data: Vec<(f32, Vec4)> = all_balls
+        .iter()
+        .map(|transform| {
+            let dist_to_camera = camera_pos.distance(transform.translation);
+            let ball_vec = Vec4::new(
+                transform.translation.x,
+                transform.translation.y,
+                transform.translation.z,
+                0.5, // Ball radius
+            );
+            (dist_to_camera, ball_vec)
+        })
+        .collect();
+
+    // Sort by distance (nearest first)
+    ball_data.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+    // Take closest 8 balls
+    let mut ball_positions = [Vec4::ZERO; 8];
     let mut count = 0u32;
 
-    for (i, transform) in all_balls.iter().take(4).enumerate() {
-        ball_positions[i] = Vec4::new(
-            transform.translation.x,
-            transform.translation.y,
-            transform.translation.z,
-            0.5, // Ball radius
-        );
+    for (i, (_, ball_vec)) in ball_data.iter().take(8).enumerate() {
+        ball_positions[i] = *ball_vec;
         count += 1;
     }
 
@@ -251,7 +268,7 @@ pub fn spawn_grass_on_terrain(
                 wind.strength,
                 wind.time,
             ),
-            ball_positions: [Vec4::ZERO; 4],
+            ball_positions: [Vec4::ZERO; 8],
             ball_count: 0,
         },
     });
