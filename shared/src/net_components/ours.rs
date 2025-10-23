@@ -5,26 +5,11 @@ use serde::{Deserialize, Serialize};
 pub struct Health {
     pub hp: u32,
 }
-
-#[derive(Serialize, Deserialize, Component, Debug, Clone, Copy)]
-pub struct MovementIntention {
-    pub dir: Vec2,
-}
-
-#[derive(Serialize, Deserialize, Component, Debug, Clone, PartialEq, Eq)]
-pub enum AttackIntention {
-    None,
-    // TODO: For now, all NPC attacks are held here, tightly coupled but easier to test with
-    AutoAttack(Timer),
-}
-
 //include!(concat!(env!("OUT_DIR"), "/net_components_ours.rs"));
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NetComponentOurs {
     Health(Health),
-    MovementIntention(MovementIntention),
-    AttackIntention(AttackIntention),
 }
 
 impl NetComponentOurs {
@@ -34,12 +19,6 @@ impl NetComponentOurs {
     ) {
         match self {
             NetComponentOurs::Health(c) => {
-                entity.insert(c);
-            }
-            NetComponentOurs::MovementIntention(c) => {
-                entity.insert(c);
-            }
-            NetComponentOurs::AttackIntention(c) => {
                 entity.insert(c);
             }
         }

@@ -29,6 +29,19 @@ pub struct SpawnUnit2 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct WorldData2 {
+    pub your_unit_id: NetEntId,
+    pub units: Vec<SpawnUnit2>,
+}
+
+// TODO add codegen logic systems for updating each component
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct UpdateUnit2 {
+    pub net_ent_id: NetEntId,
+    pub components: Vec<NetComponent>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct PlayerDisconnected {
     pub id: NetEntId,
 }
