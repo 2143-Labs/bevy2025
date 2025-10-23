@@ -1,6 +1,10 @@
 [workspace]
 resolver = "2"
-members = ["client", "shared", "server"]
+members = [
+    "client",
+    "shared",
+    #"server",
+]
 
 [profile.dev.package."*"]
 opt-level = 3

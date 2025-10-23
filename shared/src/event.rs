@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use message_io::network::Endpoint;
 use serde::{Deserialize, Serialize};
 
-use crate::stats::Health;
+use crate::net_components::ours::Health;
 
 use self::spells::NPC;
 

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::event::EventFromEndpoint;
+use crate::{event::EventFromEndpoint, net_components::NetComponent};
 use crate::netlib::ServerResources;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,12 @@ pub struct WorldData {
 #[derive(Debug, Clone, Serialize, Deserialize, Event)]
 pub struct SpawnUnit {
     pub data: UnitData,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+pub struct SpawnUnit2 {
+    pub ent_id: NetEntId,
+    pub components: Vec<NetComponent>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Event)]

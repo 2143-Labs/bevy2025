@@ -7,9 +7,7 @@ use serde::{Deserialize, Serialize};
 pub mod animations;
 pub mod casting;
 pub mod event;
-pub mod interactable;
 pub mod netlib;
-pub mod stats;
 pub mod unit;
 pub mod net_components;
 
