@@ -11,42 +11,42 @@ use super::{
     NetEntId, UnitData,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct WorldData {
     pub your_unit_id: NetEntId,
     pub unit_data: Vec<UnitData>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct SpawnUnit {
     pub data: UnitData,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct SpawnUnit2 {
-    pub ent_id: NetEntId,
+    pub net_ent_id: NetEntId,
     pub components: Vec<NetComponent>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct PlayerDisconnected {
     pub id: NetEntId,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct SomeoneMoved {
     pub id: NetEntId,
     pub movement: ChangeMovement,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct SomeoneCast {
     pub caster_id: NetEntId,
     pub cast_id: NetEntId,
     pub cast: Cast,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub enum YourCastResult {
     /// Go ahead with cast
     Ok(NetEntId),
@@ -56,31 +56,31 @@ pub enum YourCastResult {
     No(Duration),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Event, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Message, Hash, PartialEq, Eq)]
 pub struct BulletHit {
     pub bullet: NetEntId,
     pub player: NetEntId,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct SomeoneUpdateComponent {
     pub id: NetEntId,
     pub update: UpdateSharedComponent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct Chat {
     pub source: Option<NetEntId>,
     pub text: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct UnitDie {
     pub id: NetEntId,
     pub disappear: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct SpawnInteractable {
     pub id: NetEntId,
     pub location: Vec3,
@@ -88,7 +88,7 @@ pub struct SpawnInteractable {
     //pub interaction_type: T
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct DespawnInteractable {
     pub id: NetEntId,
 }

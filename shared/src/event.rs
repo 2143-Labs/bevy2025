@@ -19,14 +19,14 @@ impl NetEntId {
     }
 }
 
-#[derive(Debug, Clone, Event)]
+#[derive(Debug, Clone, Message)]
 pub struct EventFromEndpoint<E> {
     pub event: E,
     pub endpoint: Endpoint,
 }
 
 /// Event Reader with endpoint data.
-pub type ERFE<'w, 's, E> = EventReader<'w, 's, EventFromEndpoint<E>>;
+pub type ERFE<'w, 's, E> = MessageReader<'w, 's, EventFromEndpoint<E>>;
 
 impl<E> EventFromEndpoint<E> {
     pub fn new(endpoint: Endpoint, e: E) -> Self {

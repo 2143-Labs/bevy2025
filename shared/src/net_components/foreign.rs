@@ -1,17 +1,20 @@
+#![allow(unused)]
+use serde::{Deserialize, Serialize};
 use bevy::prelude::*;
 
-pub struct UTransform(pub Transform);
-pub struct URigidBody(pub bevy_rapier3d::prelude::RigidBody);
-pub struct UCollider(pub bevy_rapier3d::prelude::Collider);
-pub struct UMass(pub bevy_rapier3d::prelude::Mass);
+pub struct UTransform(Transform);
+pub struct URigidBody(avian3d::prelude::RigidBody);
+pub struct UCollider(avian3d::prelude::Collider);
+pub struct UMass(avian3d::prelude::Mass);
 
 //include!(concat!(env!("OUT_DIR"), "/net_components_foreign.rs"));
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NetComponentForeign {
-    Transform(pub Transform),
-    RigidBody(pub bevy_rapier3d::prelude::RigidBody),
-    Collider(pub bevy_rapier3d::prelude::Collider),
-    Mass(pub bevy_rapier3d::prelude::Mass),
+    Transform(Transform),
+    RigidBody(avian3d::prelude::RigidBody),
+    Collider(avian3d::prelude::Collider),
+    Mass(avian3d::prelude::Mass),
 }
 
 impl NetComponentForeign {

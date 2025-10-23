@@ -12,7 +12,17 @@
         naersk-lib = pkgs.callPackage naersk { };
       in
       {
-        defaultPackage = naersk-lib.buildPackage ./.;
+        defaultPackage = naersk-lib.buildPackage {
+          src = ./.;
+          nativeBuildInputs = with pkgs; [ pkg-config ];
+          buildInputs = with pkgs; [
+            wayland
+            libxkbcommon
+            vulkan-loader
+            alsa-lib
+            udev
+          ];
+        };
         devShell = with pkgs; mkShell {
           buildInputs = [ 
             rust-analyzer
@@ -27,6 +37,7 @@
             vulkan-loader
             alsa-lib
             udev
+            bacon
           ];
           RUST_SRC_PATH = rustPlatform.rustLibSrc;
           LD_LIBRARY_PATH = lib.makeLibraryPath [

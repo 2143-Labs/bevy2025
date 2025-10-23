@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Component, Debug, Eq, PartialEq, Clone, Copy)]
 pub struct Health {
-    hp: u32,
+    pub hp: u32,
 }
 
 #[derive(Serialize, Deserialize, Component, Debug, Clone, Copy)]
@@ -20,10 +20,11 @@ pub enum AttackIntention {
 
 //include!(concat!(env!("OUT_DIR"), "/net_components_ours.rs"));
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NetComponentOurs {
-    Health(pub Health),
-    MovementIntention(pub MovementIntention),
-    AttackIntention(pub AttackIntention),
+    Health(Health),
+    MovementIntention(MovementIntention),
+    AttackIntention(AttackIntention),
 }
 
 impl NetComponentOurs {

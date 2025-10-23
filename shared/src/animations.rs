@@ -41,10 +41,10 @@ pub struct CastPointTimer(pub Timer);
 #[derive(Component)]
 pub struct CastNetId(pub NetEntId);
 
-#[derive(Event, Debug, Clone)]
+#[derive(Message, Debug, Clone)]
 pub struct DoCast(pub SomeoneCast);
 
-#[derive(Event, Debug, Clone)]
+#[derive(Message, Debug, Clone)]
 pub struct DoDamage(pub NetEntId, pub f64);
 
 macro_rules! skill_info {

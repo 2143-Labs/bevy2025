@@ -1,6 +1,7 @@
-use crate::stats::Health;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
+
+use crate::net_components::ours::Health;
 
 // Default derive is used to just cheapy make a variant of the cast object
 #[derive(Debug, Clone, Serialize, Deserialize, Component, Default)]
@@ -14,7 +15,7 @@ pub enum UpdateSharedComponent {
     Health(Health),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Component, Hash, PartialEq, Eq, clap::ValueEnum)]
+#[derive(Debug, Clone, Serialize, Deserialize, Component, Hash, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum NPC {
     Penguin,
@@ -36,10 +37,12 @@ impl NPC {
     }
 
     pub fn get_base_health(&self) -> Health {
-        Health(match self {
-            NPC::Penguin => 50,
-            NPC::Mage => 20,
-        })
+        Health {
+            hp: match self {
+                NPC::Penguin => 50,
+                NPC::Mage => 20,
+            }
+        }
     }
 
     pub fn get_ai_component(&self) -> AIType {

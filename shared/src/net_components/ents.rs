@@ -1,17 +1,18 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Component, Serialize, Deserialize)]
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct Ball;
 
-#[derive(Component, Serialize, Deserialize)]
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct Interactable;
 
 //include!(concat!(env!("OUT_DIR"), "/net_components_ents.rs"));
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NetComponentEnts {
-    Ball(pub Ball),
-    Interactable(pub Interactable),
+    Ball(Ball),
+    Interactable(Interactable),
 }
 
 impl NetComponentEnts {

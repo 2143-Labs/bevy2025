@@ -10,8 +10,9 @@ pub struct NormalMeshMaterial {
 
 //include!(concat!(env!("OUT_DIR"), "/net_components_groups.rs"));
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NetComponentGroups {
-    NormalMeshMaterial(pub NormalMeshMaterial),
+    NormalMeshMaterial(NormalMeshMaterial),
 }
 
 impl NetComponentGroups {
@@ -27,12 +28,9 @@ impl NetComponentGroups {
                 let material_handle = c.material.generate(materials);
 
                 entity.insert((
-                    mesh_handle,
-                    material_handle,
+                    Mesh3d(mesh_handle),
+                    MeshMaterial3d(material_handle),
                 ));
-            }
-            n => {
-                error!(?n, "Invalid NetComponentGroups variant");
             }
         }
     }

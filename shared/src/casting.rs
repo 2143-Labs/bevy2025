@@ -29,8 +29,8 @@ fn update_despawns(
     mut despawn_timer: Query<(Entity, &mut DespawnTime)>,
 ) {
     for (ent, mut timer) in &mut despawn_timer {
-        if timer.0.tick(time.delta()).finished() {
-            commands.entity(ent).despawn_recursive();
+        if timer.0.tick(time.delta()).is_finished() {
+            commands.entity(ent).despawn();
             return;
         }
     }

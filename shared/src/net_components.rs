@@ -12,6 +12,8 @@ pub mod groups;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::event::client::SpawnUnit2;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MeshGenerator(pub String, pub f32);
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -24,8 +26,8 @@ impl MeshGenerator {
 
     pub fn generate(&self, meshes: &mut ResMut<Assets<Mesh>>) -> Handle<Mesh> {
         let my_mesh = match self.0.as_str() {
-            "sphere" => Mesh::from(shape::Cube { size: self.1 }),
-            _ => Mesh::from(shape::Cube { size: 1.0 }),
+            "sphere" => Mesh::from(Sphere { radius: self.1 }),
+            _ => Mesh::from(Sphere { radius: self.1 }),
         };
 
         meshes.add(my_mesh)
@@ -59,6 +61,7 @@ impl MaterialGenerator {
 
 //include!(concat!(env!("OUT_DIR"), "/net_components.rs"));
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NetComponent {
     Foreign(foreign::NetComponentForeign),
     Ours(ours::NetComponentOurs),
@@ -67,16 +70,35 @@ pub enum NetComponent {
 }
 
 impl NetComponent {
-    pub fn to_components(
-        &self,
+    pub fn insert_components(
+        self,
+        ent_commands: &mut EntityCommands,
         meshes: &mut ResMut<Assets<Mesh>>,
         materials: &mut ResMut<Assets<StandardMaterial>>,
-    ) -> Vec<Component> {
+    ) {
         match self {
-            NetComponent::Foreign(foreign) => foreign.to_components(meshes, materials),
-            NetComponent::Ours(ours) => ours.to_components(meshes, materials),
-            NetComponent::Groups(groups) => groups.to_components(meshes, materials),
-            NetComponent::Ents(ents) => ents.to_components(meshes, materials),
+            NetComponent::Foreign(foreign) => foreign.insert_components(ent_commands),
+            NetComponent::Ours(ours) => ours.insert_components(ent_commands),
+            NetComponent::Groups(groups) => groups.insert_components(ent_commands, meshes, materials),
+            NetComponent::Ents(ents) => ents.insert_components(ent_commands),
         }
     }
+}
+
+impl SpawnUnit2 {
+    pub fn spawn_entity(
+        self,
+        commands: &mut Commands,
+        meshes: &mut ResMut<Assets<Mesh>>,
+        materials: &mut ResMut<Assets<StandardMaterial>>,
+    ) -> Entity {
+        let mut ent_commands = commands.spawn(self.net_ent_id);
+
+        for net_comp in self.components {
+            net_comp.insert_components(&mut ent_commands, meshes, materials);
+        }
+
+        ent_commands.id()
+    }
+
 }

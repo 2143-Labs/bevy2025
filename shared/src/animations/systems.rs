@@ -19,16 +19,16 @@ pub fn tick_casts(
         Option<&CastNetId>,
     )>,
     mut commands: Commands,
-    mut do_cast: EventWriter<DoCast>,
+    mut do_cast: MessageWriter<DoCast>,
     time: Res<Time<Virtual>>,
 ) {
     for (ent, net_ent_id, mut cast_timer, mut anim_timer, cast, cast_net_id) in &mut casting_units {
         cast_timer.0.tick(time.delta());
         anim_timer.0.tick(time.delta());
 
-        if cast_timer.0.finished() {
+        if cast_timer.0.is_finished() {
             if let Some(caster) = cast_net_id {
-                do_cast.send(DoCast(SomeoneCast {
+                do_cast.write(DoCast(SomeoneCast {
                     caster_id: *net_ent_id,
                     cast_id: caster.0,
                     cast: cast.clone(),
@@ -41,7 +41,7 @@ pub fn tick_casts(
             cast_timer.0.pause();
         }
 
-        if anim_timer.0.finished() {
+        if anim_timer.0.is_finished() {
             commands
                 .entity(ent)
                 .remove::<AnimationTimer>()
