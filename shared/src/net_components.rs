@@ -106,3 +106,7 @@ impl SpawnUnit2 {
         ent_commands.id()
     }
 }
+
+trait ToNetComponent {
+    fn to_net_component(self) -> NetComponent;
+}

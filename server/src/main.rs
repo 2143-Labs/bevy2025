@@ -1,0 +1,347 @@
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicI16, Arc},
+    time::Duration,
+};
+
+use bevy::{log::LogPlugin, prelude::*};
+use bevy_time::common_conditions::on_timer;
+use message_io::network::Endpoint;
+use rand::Rng;
+use shared::{
+    event::{
+        client::{PlayerDisconnected, SpawnUnit2, WorldData2},
+        server::{ChangeMovement, Heartbeat},
+        NetEntId, ERFE,
+    }, net_components::ents::PlayerCamera, netlib::{
+        send_event_to_server, EventToClient, EventToServer, NetworkConnectionTarget, ServerNetworkingResources, ServerResources
+    }, Config, ConfigPlugin
+};
+
+/// How often to run the system
+const HEARTBEAT_MILLIS: u64 = 200;
+/// How long until disconnect
+const HEARTBEAT_TIMEOUT: u64 = 1000;
+/// How long do you have to connect, as a multipler of the heartbeart timeout.
+/// If the timeout is 1000 ms, then `5` would mean you have `5000ms` to connect.
+const HEARTBEAT_CONNECTION_GRACE_PERIOD: u64 = 5;
+
+#[derive(States, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+enum ServerState {
+    #[default]
+    NotReady,
+    Starting,
+    Running,
+}
+
+#[derive(Resource, Default)]
+struct HeartbeatList {
+    heartbeats: HashMap<NetEntId, Arc<AtomicI16>>,
+}
+
+#[derive(Resource, Default)]
+struct EndpointToNetId {
+    map: HashMap<Endpoint, NetEntId>,
+}
+
+#[derive(Debug, Component)]
+struct PlayerEndpoint(Endpoint);
+
+pub mod chat;
+pub mod game_manager;
+pub mod spawns;
+
+fn main() {
+    info!("Main Start");
+    let mut app = App::new();
+
+    shared::event::server::register_events(&mut app);
+    app.insert_resource(EndpointToNetId::default())
+        .insert_resource(HeartbeatList::default())
+        .add_message::<PlayerDisconnect>()
+        .add_plugins(MinimalPlugins)
+        .add_plugins(LogPlugin {
+            //level: bevy::log::Level::TRACE,
+            ..Default::default()
+        })
+        .add_plugins((
+            ConfigPlugin,
+            chat::ChatPlugin,
+            game_manager::GamePlugin,
+            spawns::SpawnPlugin,
+            //StatusPlugin,
+        ))
+        .init_state::<ServerState>()
+        .add_systems(
+            Startup,
+            (
+                add_network_connection_info_from_config,
+                |mut state: ResMut<NextState<ServerState>>| state.set(ServerState::Starting),
+            ),
+        )
+        .add_systems(
+            OnEnter(ServerState::Starting),
+            (
+                shared::netlib::setup_server::<EventToServer>,
+                |mut state: ResMut<NextState<ServerState>>| state.set(ServerState::Running),
+            ),
+        )
+        .add_systems(
+            Update,
+            (
+                on_player_disconnect,
+                on_player_connect,
+                on_player_heartbeat,
+                shared::event::server::drain_events,
+                on_movement,
+            )
+                .run_if(in_state(ServerState::Running)),
+        )
+        .add_systems(
+            Update,
+            check_heartbeats.run_if(on_timer(Duration::from_millis(200))),
+        );
+
+    app.run();
+}
+
+fn add_network_connection_info_from_config(config: Res<Config>, mut commands: Commands) {
+    commands.insert_resource(NetworkConnectionTarget {
+        ip: config.ip.clone(),
+        port: config.port,
+    });
+}
+
+fn on_player_connect(
+    mut new_players: ERFE<shared::event::server::ConnectRequest>,
+    mut heartbeat_mapping: ResMut<HeartbeatList>,
+    mut endpoint_to_net_id: ResMut<EndpointToNetId>,
+    clients: Query<(
+        &Transform,
+        &PlayerEndpoint,
+        &NetEntId,
+        &PlayerName,
+    ), With<shared::ents::PlayerCamera>,>,
+    balls: Query<
+        (&Transform, &NetEntId),
+        With<shared::ents::Ball>,
+    >,
+    sr: Res<ServerNetworkingResources>,
+    _config: Res<Config>,
+    mut commands: Commands,
+) {
+    for player in new_players.read() {
+        info!("Got packet");
+        // Generate their name
+        let name = player
+            .event
+            .name
+            .clone()
+            .unwrap_or_else(|| format!("Player #{}", rand::thread_rng().gen_range(1..10000)));
+
+        //if they are too far, just put them at the spawn
+        //let default_spawn = player
+            //.event
+            //.my_location
+            //.with_translation(Vec3::new(0.0, 0.0, 0.0));
+
+        //let spawn_location = if player
+            //.event
+            //.my_location
+            //.translation
+            //.distance_squared(default_spawn.translation)
+            //> 10.0
+        //{
+            //default_spawn
+        //} else {
+            //player.event.my_location
+        //};
+
+        let spawn_location = player.event.my_location;
+
+        info!(?name, ?new_player_data.ent_id, "Player Connected");
+
+        let event = EventToClient::SpawnUnit(SpawnUnit2 {
+            net_ent_id: NetEntId::random(),
+            components: vec![
+                PlayerName {
+                    name: name.clone(),
+                }.to_net_component(),
+                spawn_location.to_net_component(),
+                Health::default().to_net_component(),
+                PlayerCamera.to_net_component(),
+            ]
+        });
+
+        // The new player we just spawned is the first unit in the list that we send to the client.
+        let mut unit_list = vec![new_player_data.clone()];
+
+        for (c_tfm, c_net_client, &ent_id, PlayerName { name: c_name }) in
+            &clients
+        {
+            unit_list.push(SpawnUnit2 {
+                net_ent_id: ent_id,
+                components: vec![
+                    PlayerName {
+                        name: c_name.clone(),
+                    }.to_net_component(),
+                    *c_tfm.to_net_component(),
+                    health.to_net_component(),
+                    PlayerCamera.to_net_component(),
+                ],
+            });
+
+            // Tell all other clients,
+            // also notify their player data to send
+            send_event_to_server(&sr.handler, c_net_client.0, &event);
+        }
+
+        for (&transform, &ent_id) in &balls {
+            unit_list.push(SpawnUnit2 {
+                net_ent_id: ent_id,
+                components: vec![
+                    (*transform).to_net_component(),
+                    Ball, // Marker component for counting
+                    //Mesh3d(meshes.add(Sphere::new(0.5))),
+                    //MeshMaterial3d(materials.add(StandardMaterial {
+                        //base_color: color,
+                        //metallic: 0.0,
+                        //perceptual_roughness: 0.5,
+                        //..default()
+                    //})),
+                    NormalMeshMaterial3d.to_net_component(),
+                    Transform::from_translation(spawn_pos).to_net_component(),
+                    RigidBody::Dynamic.to_net_component(),
+                    Collider::sphere(0.5).to_net_component(),
+                    Mass(0.3).to_net_component(), // Lighter balls that will float (density ~0.57 of water)
+                    shared::ents::Ball.to_net_component(),
+                    // Add other ball components here as needed
+                ],
+            });
+        }
+
+        // Directly spawn the unit here, instead of sending a SpawnUnit event.
+        commands.spawn((
+            PlayerName { name },
+            new_player_data.ent_id,
+            new_player_data.health,
+            new_player_data.transform,
+            PlayerEndpoint(player.endpoint),
+            // Used as a target for some AI
+            MovementIntention(Vec2::ZERO),
+            // Transform component used for generic systems
+            shared::AnyUnit,
+        ));
+
+        // Each time we miss a heartbeat, we increment the Atomic counter.
+        // So, we initially set this to negative number to give extra time for the initial
+        // connection.
+        let hb_grace_period =
+            (HEARTBEAT_CONNECTION_GRACE_PERIOD - 1) * (HEARTBEAT_TIMEOUT / HEARTBEAT_MILLIS);
+
+        heartbeat_mapping.heartbeats.insert(
+            new_player_data.ent_id,
+            Arc::new(AtomicI16::new(-(hb_grace_period as i16))),
+        );
+
+        endpoint_to_net_id
+            .map
+            .insert(player.endpoint, new_player_data.ent_id);
+
+        // Finally, tell the client all this info.
+        let event = EventToClient::WorldData(WorldData2 {
+            your_unit_id: new_player_data.ent_id,
+            units: unit_list,
+        });
+        send_event_to_server(&sr.handler, player.endpoint, &event);
+    }
+}
+
+fn check_heartbeats(
+    heartbeat_mapping: Res<HeartbeatList>,
+    mut on_disconnect: MessageWriter<PlayerDisconnect>,
+) {
+    for (ent_id, beats_missed) in &heartbeat_mapping.heartbeats {
+        let beats = beats_missed.fetch_add(1, std::sync::atomic::Ordering::Acquire);
+        trace!(?ent_id, ?beats, "hb");
+        if beats >= (HEARTBEAT_TIMEOUT / HEARTBEAT_MILLIS) as i16 {
+            warn!("Missed {beats} beats, disconnecting {ent_id:?}");
+            on_disconnect.write(PlayerDisconnect { ent: *ent_id });
+        }
+    }
+}
+
+fn on_player_disconnect(
+    mut pd: MessageReader<PlayerDisconnect>,
+    clients: Query<(Entity, &PlayerEndpoint, &NetEntId), With<PlayerName>>,
+    mut commands: Commands,
+    mut heartbeat_mapping: ResMut<HeartbeatList>,
+    sr: Res<ServerResources<EventToServer>>,
+) {
+    for player in pd.read() {
+        heartbeat_mapping.heartbeats.remove(&player.ent);
+
+        let event = EventToClient::PlayerDisconnected(PlayerDisconnected { id: player.ent });
+        for (_c_ent, c_net_client, _c_net_ent) in &clients {
+            send_event_to_server(&sr.handler, c_net_client.0, &event);
+            if _c_net_ent == &player.ent {
+                commands.entity(_c_ent).despawn_recursive();
+            }
+        }
+    }
+}
+
+fn on_player_heartbeat(
+    mut pd: ERFE<Heartbeat>,
+    heartbeat_mapping: Res<HeartbeatList>,
+    endpoint_mapping: Res<EndpointToNetId>,
+) {
+    for hb in pd.read() {
+        // TODO tryblocks?
+        if let Some(id) = endpoint_mapping.map.get(&hb.endpoint) {
+            if let Some(hb) = heartbeat_mapping.heartbeats.get(id) {
+                hb.fetch_min(0, std::sync::atomic::Ordering::Release);
+            }
+        }
+    }
+}
+
+fn on_movement(
+    mut pd: ERFE<ChangeMovement>,
+    endpoint_mapping: Res<EndpointToNetId>,
+    mut clients: Query<
+        (
+            &PlayerEndpoint,
+            &NetEntId,
+            &mut Transform,
+        ),
+        With<PlayerName>,
+    >,
+    sr: Res<ServerResources<EventToServer>>,
+) {
+    for movement in pd.read() {
+        if let Some(moved_net_id) = endpoint_mapping.map.get(&movement.endpoint) {
+            let event = EventToClient::UpdateUnit2(UpdateUnit2 {
+                id: *moved_net_id,
+                movement: movement.event.clone(),
+            });
+
+            for (c_net_client, c_net_ent, mut c_tfm, mut intent) in &mut clients {
+                if moved_net_id == c_net_ent {
+                    //info!(?event);
+                    // If this person moved, update their transform serverside
+                    match movement.event {
+                        ChangeMovement::SetTransform(new_tfm) => *c_tfm = new_tfm,
+                        ChangeMovement::Move2d(new_intent) => {
+                            *intent = MovementIntention(new_intent)
+                        }
+                        _ => {}
+                    }
+                } else {
+                    // Else, just rebroadcast the packet to everyone else
+                    send_event_to_server(&sr.handler, c_net_client.0, &event);
+                }
+            }
+        }
+    }
+}

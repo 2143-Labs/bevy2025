@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::net_components::ToNetComponent;
+
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct Ball;
 
@@ -32,5 +34,23 @@ impl NetComponentEnts {
                 entity.insert(c);
             }
         }
+    }
+}
+
+impl ToNetComponent for Ball {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ents(NetComponentEnts::Ball(self))
+    }
+}
+
+impl ToNetComponent for Interactable {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ents(NetComponentEnts::Interactable(self))
+    }
+}
+
+impl ToNetComponent for PlayerCamera {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ents(NetComponentEnts::PlayerCamera(self))
     }
 }

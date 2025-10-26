@@ -1,10 +1,8 @@
 //!This is for events that are sent FROM the client TO the server.
-use crate::event::EventFromEndpoint;
-use crate::netlib::ServerResources;
+use crate::event::{EventFromEndpoint, NetEntId};
+use crate::netlib::NetworkingResources;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-
-use super::NetEntId;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct ConnectRequest {
@@ -24,6 +22,12 @@ pub struct Heartbeat {}
 pub struct SpawnCircle {
     pub position: Vec3,
     pub color: Color,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct ChangeMovement {
+    pub net_ent_id: NetEntId,
+    pub transform: Transform,
 }
 
 include!(concat!(env!("OUT_DIR"), "/server_event.rs"));

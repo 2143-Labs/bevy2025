@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::net_components::ToNetComponent;
+
 #[derive(Serialize, Deserialize, Component, Debug, Eq, PartialEq, Clone)]
 pub struct Health {
     pub hp: u32,
@@ -31,14 +33,14 @@ impl NetComponentOurs {
     }
 }
 
-impl Health {
-    pub fn to_net_component(self) -> super::NetComponent {
+impl ToNetComponent for Health {
+    fn to_net_component(self) -> super::NetComponent {
         super::NetComponent::Ours(NetComponentOurs::Health(self))
     }
 }
 
-impl PlayerName {
-    pub fn to_net_component(self) -> super::NetComponent {
+impl ToNetComponent for PlayerName {
+    fn to_net_component(self) -> super::NetComponent {
         super::NetComponent::Ours(NetComponentOurs::PlayerName(self))
     }
 }

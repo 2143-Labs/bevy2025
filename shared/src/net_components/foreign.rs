@@ -2,6 +2,8 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::net_components::ToNetComponent;
+
 pub struct UTransform(Transform);
 pub struct URigidBody(avian3d::prelude::RigidBody);
 pub struct UCollider(avian3d::prelude::Collider);
@@ -33,5 +35,29 @@ impl NetComponentForeign {
                 entity.insert(c);
             }
         }
+    }
+}
+
+impl ToNetComponent for Transform {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Foreign(NetComponentForeign::Transform(self))
+    }
+}
+
+impl ToNetComponent for avian3d::prelude::RigidBody {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Foreign(NetComponentForeign::RigidBody(self))
+    }
+}
+
+impl ToNetComponent for avian3d::prelude::Collider {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Foreign(NetComponentForeign::Collider(self))
+    }
+}
+
+impl ToNetComponent for avian3d::prelude::Mass {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Foreign(NetComponentForeign::Mass(self))
     }
 }

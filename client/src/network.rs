@@ -1,18 +1,12 @@
-use std::time::Duration;
+use std::{net::SocketAddr, time::Duration};
 
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
-    Config,
     event::{
-        ERFE,
-        client::{SpawnUnit2, WorldData2},
-        server::{ConnectRequest, Heartbeat},
-    },
-    net_components::ours::PlayerName,
-    netlib::{
-        EventToClient, EventToServer, MainServerEndpoint, ServerResources, send_event_to_server,
-        setup_client,
-    },
+        client::{SpawnUnit2, WorldData2}, server::{ConnectRequest, Heartbeat, SpawnCircle}, ERFE
+    }, net_components::ours::PlayerName, netlib::{
+        send_event_to_server, setup_client, ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, NetworkConnectionTarget, NetworkingResources
+    }, Config
 };
 
 use crate::{camera::FreeCam, game_state::NetworkGameState, notification::Notification};
@@ -32,6 +26,12 @@ impl Plugin for NetworkingPlugin {
                     },
                 ),
             )
+            .add_systems(
+                Update,
+                (check_connect_button).run_if(
+                    in_state(NetworkGameState::MainMenu)
+                ),
+            )
             // After sending the first packet, resend it every so often to see if the server comes
             // alive
             .add_systems(
@@ -48,16 +48,20 @@ impl Plugin for NetworkingPlugin {
                     .run_if(in_state(NetworkGameState::ClientSendRequestPacket)),
             )
             // Once we are connected, advance normally
+            .add_systems(
+            Update,
+            (
+            // TODO receive new world data at any time?
+            spawn_circle,
+            )
+            .run_if(in_state(NetworkGameState::ClientConnected)),
+            )
             //.add_systems(
-            //Update,
-            //(
-            //// TODO receive new world data at any time?
-            //on_connect,
-            //on_disconnect,
-            //on_someone_move,
-            //go_movement_intents,
-            //)
-            //.run_if(in_state(NetworkGameState::ClientConnected)),
+                //Update,
+                //cast_skill_1
+                    //.run_if(shared::GameAction::Fire1.just_pressed())
+                    ////.run_if(in_state(ChatState::NotChatting))
+                    ////.run_if(any_with_component::<Player>),
             //)
             //.add_systems(
             //Update,
@@ -70,12 +74,13 @@ impl Plugin for NetworkingPlugin {
                 send_heartbeat
                     .run_if(on_timer(Duration::from_millis(200)))
                     .run_if(in_state(NetworkGameState::ClientConnected)),
-            );
+            )
+            .add_message::<SpawnCircle>();
     }
 }
 
 fn send_connect_packet(
-    sr: Res<ServerResources<EventToClient>>,
+    sr: Res<NetworkingResources<EventToClient>>,
     //args: Res<CliArgs>,
     mse: Res<MainServerEndpoint>,
     config: Res<Config>,
@@ -223,7 +228,7 @@ fn receive_world_data(
     }
 }
 
-fn send_heartbeat(sr: Res<ServerResources<EventToClient>>, mse: Res<MainServerEndpoint>) {
+fn send_heartbeat(sr: Res<NetworkingResources<EventToClient>>, mse: Res<MainServerEndpoint>) {
     let event = EventToServer::Heartbeat(Heartbeat {});
     send_event_to_server(&sr.handler, mse.0, &event);
 }
@@ -328,4 +333,81 @@ fn send_heartbeat(sr: Res<ServerResources<EventToClient>>, mse: Res<MainServerEn
 ////notif.send(Notification(format!("{:?}", event.event)));
 //local_spawn_unit.send(event.event.clone());
 //}
+//}
+
+pub fn check_connect_button(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    //args: Res<CliArgs>,
+    config: Res<Config>,
+    mut commands: Commands,
+    mut game_state: ResMut<NextState<NetworkGameState>>,
+) {
+    if !config.just_pressed(&keyboard_input, shared::GameAction::Use) {
+        return;
+    }
+
+    warn!("Connecting to server due to user pressing connect button!");
+
+    let target = {
+        // Split this into ip and port and then connect
+        let addr: SocketAddr = "127.0.0.1:22143"
+            .parse()
+            .expect("--autoconnect was given an invalid ip and port to connect to");
+
+        NetworkConnectionTarget {
+            ip: addr.ip().to_string(),
+            port: addr.port(),
+        }
+    };
+
+    info!(
+        ?target,
+        "Using --autoconnect command line argument to setup connection."
+    );
+
+    commands.insert_resource(target);
+    game_state.set(NetworkGameState::ClientConnecting);
+}
+
+fn spawn_circle(
+    mut ev_sa: MessageReader<SpawnCircle>,
+    sr: Res<ClientNetworkingResources>,
+    mse: Res<MainServerEndpoint>,
+) {
+    for thing in ev_sa.read() {
+        let event = EventToServer::SpawnCircle(thing.clone());
+        info!("Sending spawn circle event to server");
+        send_event_to_server(&sr.handler, mse.0, &event);
+    }
+}
+
+//fn cast_skill_1(
+    //keyboard_input: Res<ButtonInput<KeyCode>>,
+    //config: Res<Config>,
+    //player: Query<&Transform, With<Player>>,
+    //aim_dir: Query<&ClientAimDirection>,
+    //mut ev_sa: EventWriter<StartLocalAnimation>,
+//) {
+    //if config.pressed(&keyboard_input, shared::GameAction::Mod1) {
+        //let event = Cast::Buff;
+        //ev_sa.send(StartLocalAnimation(event));
+    //} else {
+        //let transform = player.single();
+
+        //let aim_dir = aim_dir.single().0;
+
+        //let target = transform.translation
+            //+ Vec3 {
+                //x: aim_dir.cos(),
+                //y: 0.0,
+                //z: -aim_dir.sin(),
+            //};
+
+        //let shooting_data = ShootingData {
+            //shot_from: transform.translation,
+            //target,
+        //};
+        //let event = Cast::Shoot(shooting_data);
+        //ev_sa.send(StartLocalAnimation(event));
+    //}
 //}

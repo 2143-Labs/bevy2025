@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::net_components::ToNetComponent;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NormalMeshMaterial {
     pub mesh: super::MeshGenerator,
@@ -29,5 +31,11 @@ impl NetComponentGroups {
                 entity.insert((Mesh3d(mesh_handle), MeshMaterial3d(material_handle)));
             }
         }
+    }
+}
+
+impl ToNetComponent for NormalMeshMaterial {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Groups(NetComponentGroups::NormalMeshMaterial(self))
     }
 }

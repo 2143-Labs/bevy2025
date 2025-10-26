@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "client",
     "shared",
-    #"server",
+    "server",
 ]
 
 # Enable a small amount of optimization in debug mode

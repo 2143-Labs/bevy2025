@@ -1,0 +1,35 @@
+ip: 127.0.0.1
+port: 25565
+name: null
+sens: 0.003
+qe_sens: 3.0
+sound: false
+keybindings:
+  RotateRight:
+  - KeyE
+  MoveForward:
+  - KeyW
+  Use:
+  - KeyE
+  ChangeCamera:
+  - KeyC
+  UnlockCursor:
+  - KeyX
+  Chat:
+  - Enter
+  MoveBackward:
+  - KeyS
+  StrafeRight:
+  - KeyD
+  Jump:
+  - Space
+  RotateLeft:
+  - KeyQ
+  Mod1:
+  - ShiftLeft
+  Fire2:
+  - KeyQ
+  Fire1:
+  - KeyF
+  StrafeLeft:
+  - KeyA

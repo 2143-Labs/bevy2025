@@ -1,5 +1,6 @@
 use avian3d::prelude::*;
 use bevy::prelude::*;
+use shared::event::server::SpawnCircle;
 
 /// Marker component for spawned balls
 #[derive(Component)]
@@ -25,6 +26,7 @@ fn spawn_ball_on_space(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut spawn_ball_writer: MessageWriter<SpawnCircle>,
 ) {
     // Only spawn while space is held down
     if !keyboard.pressed(KeyCode::Space) {
@@ -39,6 +41,11 @@ fn spawn_ball_on_space(
 
         // Random color for the ball
         let color = Color::srgb(fastrand::f32(), fastrand::f32(), fastrand::f32());
+
+        spawn_ball_writer.write(SpawnCircle {
+            position: spawn_pos.clone(),
+            color: color.clone(),
+        });
 
         // Spawn ball with physics
         // Ball volume = (4/3) * π * r³ = (4/3) * π * 0.5³ ≈ 0.524 m³

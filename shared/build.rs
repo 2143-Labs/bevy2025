@@ -28,7 +28,7 @@ fn generate_code_for_event_queue(req: &GenerateRequest) -> String {
         }
 
         pub fn drain_events (
-            sr: Res<ServerResources<#typename>>,
+            sr: Res<NetworkingResources<#typename>>,
             #(
                 mut #all_types_lowercase: MessageWriter<EventFromEndpoint< #all_types >>
             ),*

@@ -7,10 +7,13 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
 #[derive(Resource, Clone)]
-pub struct ServerResources<T> {
+pub struct NetworkingResources<T> {
     pub event_list: Arc<Mutex<Vec<(Endpoint, T)>>>,
     pub handler: NodeHandler<()>,
 }
+
+pub type ClientNetworkingResources = NetworkingResources<EventToClient>;
+pub type ServerNetworkingResources = NetworkingResources<EventToServer>;
 
 #[derive(Resource, Clone)]
 pub struct MainServerEndpoint(pub Endpoint);
@@ -86,7 +89,7 @@ pub fn setup_shared<T: NetworkingEvent>(
 
     let (handler, listener) = message_io::node::split::<()>();
 
-    let res = ServerResources::<T> {
+    let res = NetworkingResources::<T> {
         handler: handler.clone(),
         event_list: Default::default(),
     };
@@ -96,8 +99,8 @@ pub fn setup_shared<T: NetworkingEvent>(
     commands.remove_resource::<NetworkConnectionTarget>();
 
     info!(
-        "Setup server resources for {}",
-        std::any::type_name::<ServerResources::<T>>()
+        "Setup networking resources for {}",
+        std::any::type_name::<NetworkingResources::<T>>()
     );
 
     let con_str = (ip, port);
@@ -115,7 +118,7 @@ pub fn setup_shared<T: NetworkingEvent>(
     });
 }
 
-pub fn on_node_event<T: NetworkingEvent>(res: &ServerResources<T>, event: NodeEvent<'_, ()>) {
+pub fn on_node_event<T: NetworkingEvent>(res: &NetworkingResources<T>, event: NodeEvent<'_, ()>) {
     let net_event = match event {
         NodeEvent::Network(n) => n,
         NodeEvent::Signal(_) => {
