@@ -3,6 +3,7 @@ mod physics;
 mod picking;
 mod terrain;
 mod water;
+mod network;
 
 use avian3d::prelude::*;
 use bevy::prelude::*;
@@ -22,6 +23,7 @@ fn main() {
             TerrainPlugin,
             PhysicsPlugin,
             PickingPlugin,
+            network::NetworkingPlugin,
             WaterPlugin,
         ))
         .insert_resource(Gravity(Vec3::new(0.0, -9.81, 0.0)))
