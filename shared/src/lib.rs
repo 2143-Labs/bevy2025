@@ -38,13 +38,6 @@ impl GameAction {
     }
 }
 
-/// Just a tag we have in the shared library for any controlled character
-#[derive(Component)]
-pub struct AnyUnit;
-
-#[derive(Component)]
-pub struct Controlled;
-
 #[derive(Reflect, Clone, Resource, Deserialize, Serialize, Debug)]
 pub struct Config {
     pub ip: String,
@@ -108,11 +101,11 @@ static DEFAULT_BINDS: Lazy<Keybinds> = Lazy::new(|| {
         (GameAction::RotateLeft, vec![KeyCode::KeyQ]),
         (GameAction::RotateRight, vec![KeyCode::KeyE]),
         (GameAction::Jump, vec![KeyCode::Space]),
-        (GameAction::Use, vec![KeyCode::KeyF]),
+        (GameAction::Use, vec![KeyCode::KeyE]),
         (GameAction::ChangeCamera, vec![KeyCode::KeyC]),
         (GameAction::UnlockCursor, vec![KeyCode::KeyX]),
-        (GameAction::Fire1, vec![KeyCode::KeyT]),
-        (GameAction::Fire2, vec![KeyCode::KeyE]),
+        (GameAction::Fire1, vec![KeyCode::KeyF]),
+        (GameAction::Fire2, vec![KeyCode::KeyQ]),
         (GameAction::Mod1, vec![KeyCode::ShiftLeft]),
         (GameAction::Chat, vec![KeyCode::Enter]),
     ])

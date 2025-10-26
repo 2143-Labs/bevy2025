@@ -9,4 +9,16 @@ noise = "0.9"
 fastrand = "2.0"
 avian3d = "0.4.0"
 
+serde = { version = "1.0.199", features = ["derive"] }
+rand = "0.9.2"
+message-io = "0.19.0"
+shared = { path = "../shared" }
+postcard = { version = "1.0.8", features = ["use-std", "alloc"] }
+
+bevy-inspector-egui = { version = "0.35.0", optional = true }
+clap = { version = "4.5.4", features = ["derive", "env"] }
+
 [features]
+inspector = ["dep:bevy-inspector-egui"]
+default = []
+

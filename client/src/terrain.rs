@@ -7,6 +7,7 @@ use bevy::{
 };
 use noise::{NoiseFn, Perlin};
 
+use crate::grass::{spawn_grass_on_terrain, GrassMaterial, WindSettings};
 use crate::water::{spawn_water, WaterMaterial};
 use bevy::pbr::ExtendedMaterial;
 
@@ -53,6 +54,8 @@ fn setup_terrain(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut water_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, WaterMaterial>>>,
+    mut grass_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, GrassMaterial>>>,
+    wind: Res<WindSettings>,
 ) {
     let terrain_params = TerrainParams::default();
 
@@ -66,11 +69,11 @@ fn setup_terrain(
     let terrain_mesh = generate_terrain_mesh(&terrain_params);
     let terrain_mesh_handle = meshes.add(terrain_mesh.clone());
 
-    // Create green material
+    // Create brown terrain material
     let terrain_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.2, 0.8, 0.2), // Green
+        base_color: Color::srgb(0.6, 0.4, 0.2), // Brown earth
         metallic: 0.0,
-        perceptual_roughness: 0.8,
+        perceptual_roughness: 0.9,
         ..default()
     });
 
@@ -94,6 +97,21 @@ fn setup_terrain(
         &mut water_materials,
         water_level,
         terrain_params.plane_size,
+    );
+
+    // Spawn grass on terrain - very dense grass with height-based variation
+    // Using mesh merging + LOD, we can handle extremely high density!
+    spawn_grass_on_terrain(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &mut grass_materials,
+        &wind,
+        terrain_params.plane_size,
+        8.0, // grass density: 8.0 blades per square meter base (LOD reduces in distance)
+        terrain_params.seed,
+        terrain_params.max_height_delta,
+        water_level,
     );
 
     // Add directional light (sun)

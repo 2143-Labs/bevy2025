@@ -1,15 +1,21 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Component, Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(Serialize, Deserialize, Component, Debug, Eq, PartialEq, Clone)]
 pub struct Health {
     pub hp: u32,
+}
+
+#[derive(Serialize, Deserialize, Component, Debug, Eq, PartialEq, Clone)]
+pub struct PlayerName {
+    pub name: String,
 }
 //include!(concat!(env!("OUT_DIR"), "/net_components_ours.rs"));
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NetComponentOurs {
     Health(Health),
+    PlayerName(PlayerName),
 }
 
 impl NetComponentOurs {
@@ -20,8 +26,23 @@ impl NetComponentOurs {
         match self {
             NetComponentOurs::Health(c) => {
                 entity.insert(c);
+            },
+            NetComponentOurs::PlayerName(c) => {
+                entity.insert(c);
             }
         }
+    }
+}
+
+impl Health {
+    pub fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::Health(self))
+    }
+}
+
+impl PlayerName {
+    pub fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::PlayerName(self))
     }
 }
 

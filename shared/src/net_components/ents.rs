@@ -7,12 +7,16 @@ pub struct Ball;
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct Interactable;
 
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct PlayerCamera;
+
 //include!(concat!(env!("OUT_DIR"), "/net_components_ents.rs"));
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NetComponentEnts {
     Ball(Ball),
     Interactable(Interactable),
+    PlayerCamera(PlayerCamera),
 }
 
 impl NetComponentEnts {
@@ -25,6 +29,9 @@ impl NetComponentEnts {
                 entity.insert(c);
             }
             NetComponentEnts::Interactable(c) => {
+                entity.insert(c);
+            }
+            NetComponentEnts::PlayerCamera(c) => {
                 entity.insert(c);
             }
         }

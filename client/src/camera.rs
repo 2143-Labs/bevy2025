@@ -36,7 +36,7 @@ impl Default for CameraTransition {
 
 /// Marker for FreeCam (playing mode, perspective)
 #[derive(Component)]
-struct FreeCam {
+pub struct FreeCam {
     yaw: f32,
     pitch: f32,
     move_speed: f32,
