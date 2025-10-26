@@ -47,11 +47,12 @@ pub struct GrassPlugin;
 impl Plugin for GrassPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WindSettings>()
-            .add_plugins(MaterialPlugin::<ExtendedMaterial<StandardMaterial, GrassMaterial>>::default())
+            .add_plugins(MaterialPlugin::<
+                ExtendedMaterial<StandardMaterial, GrassMaterial>,
+            >::default())
             .add_systems(Update, (update_wind_time, update_ball_interactions));
     }
 }
-
 
 /// Custom grass material extension
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
@@ -80,10 +81,7 @@ impl MaterialExtension for GrassMaterial {
 }
 
 /// Update wind time for animation
-fn update_wind_time(
-    mut wind: ResMut<WindSettings>,
-    time: Res<Time>,
-) {
+fn update_wind_time(mut wind: ResMut<WindSettings>, time: Res<Time>) {
     wind.time += time.delta_secs();
 }
 
@@ -120,7 +118,10 @@ fn update_ball_interactions(
     }
 
     // Get camera position to prioritize nearest balls
-    let camera_pos = camera_query.iter().find_map(|t| Some(t.translation)).unwrap_or(Vec3::ZERO);
+    let camera_pos = camera_query
+        .iter()
+        .find_map(|t| Some(t.translation))
+        .unwrap_or(Vec3::ZERO);
 
     // Collect balls sorted by distance to camera (prioritize nearest 8)
     let mut ball_data: Vec<(f32, Vec4)> = all_balls
@@ -258,16 +259,11 @@ pub fn spawn_grass_on_terrain(
             base_color: Color::srgb(0.25, 0.6, 0.15), // Natural grass green
             alpha_mode: AlphaMode::Opaque,
             cull_mode: None, // Render both sides
-            unlit: false, // Use lighting for better visuals
+            unlit: false,    // Use lighting for better visuals
             ..default()
         },
         extension: GrassMaterial {
-            wind_data: Vec4::new(
-                wind.direction.x,
-                wind.direction.y,
-                wind.strength,
-                wind.time,
-            ),
+            wind_data: Vec4::new(wind.direction.x, wind.direction.y, wind.strength, wind.time),
             ball_positions: [Vec4::ZERO; 8],
             ball_count: 0,
         },
@@ -278,9 +274,9 @@ pub fn spawn_grass_on_terrain(
     let chunks_per_side = (terrain_size / CHUNK_SIZE).ceil() as i32;
 
     // LOD configuration - distance-based density
-    const LOD_NEAR_DIST: f32 = 30.0;   // Full density within 30m
-    const LOD_MID_DIST: f32 = 60.0;    // Medium density 30-60m
-    const LOD_FAR_DIST: f32 = 80.0;    // Low density 60-80m
+    const LOD_NEAR_DIST: f32 = 30.0; // Full density within 30m
+    const LOD_MID_DIST: f32 = 60.0; // Medium density 30-60m
+    const LOD_FAR_DIST: f32 = 80.0; // Low density 60-80m
     // Beyond 80m: no grass (culled)
 
     // Spawn grass organized into chunks
@@ -296,7 +292,8 @@ pub fn spawn_grass_on_terrain(
             );
 
             // Calculate distance from origin (camera spawn point) for LOD
-            let dist_from_origin = (chunk_center.x * chunk_center.x + chunk_center.z * chunk_center.z).sqrt();
+            let dist_from_origin =
+                (chunk_center.x * chunk_center.x + chunk_center.z * chunk_center.z).sqrt();
 
             // Smooth LOD transitions with gradual falloff
             let density_multiplier = if dist_from_origin > LOD_FAR_DIST {
@@ -344,7 +341,8 @@ pub fn spawn_grass_on_terrain(
                     // Sample terrain height using same noise function as terrain
                     let noise_x = pos_x * 0.05; // Same scale as terrain
                     let noise_z = pos_z * 0.05;
-                    let terrain_height = noise.get([noise_x as f64, noise_z as f64]) as f32 * terrain_height_scale;
+                    let terrain_height =
+                        noise.get([noise_x as f64, noise_z as f64]) as f32 * terrain_height_scale;
 
                     // Skip grass below water level
                     if terrain_height < water_level {
@@ -360,7 +358,8 @@ pub fn spawn_grass_on_terrain(
                     let peak_threshold = 0.9;
                     if normalized_height > peak_threshold {
                         // No grass at very top, increasingly sparse as we approach peak
-                        let peak_factor = (normalized_height - peak_threshold) / (1.0 - peak_threshold);
+                        let peak_factor =
+                            (normalized_height - peak_threshold) / (1.0 - peak_threshold);
                         if fastrand::f32() < peak_factor * 0.95 {
                             // Skip this blade (95% chance to skip at max height)
                             continue;
@@ -385,9 +384,9 @@ pub fn spawn_grass_on_terrain(
                     let color_var = 0.85 + fastrand::f32() * 0.3; // 0.85 to 1.15
                     let green_boost = 0.95 + fastrand::f32() * 0.1; // Slightly more green
                     let color = Vec3::new(
-                        0.25 * color_var,           // Red channel
+                        0.25 * color_var,              // Red channel
                         0.6 * color_var * green_boost, // Green channel (boosted)
-                        0.15 * color_var,           // Blue channel
+                        0.15 * color_var,              // Blue channel
                     );
 
                     // Position grass at terrain height
@@ -470,7 +469,11 @@ fn create_merged_grass_mesh(
         for i in 0..verts_per_blade {
             let base_pos = base_positions[i];
             // Apply scale, rotation (around Y), and translation
-            let scaled = [base_pos[0] * scale, base_pos[1] * scale, base_pos[2] * scale];
+            let scaled = [
+                base_pos[0] * scale,
+                base_pos[1] * scale,
+                base_pos[2] * scale,
+            ];
             let rotated = [
                 scaled[0] * cos_r - scaled[2] * sin_r,
                 scaled[1],

@@ -152,5 +152,3 @@ pub fn on_node_event<T: NetworkingEvent>(res: &ServerResources<T>, event: NodeEv
         NetEvent::Disconnected(endpoint) => warn!(?endpoint, "Client disconnected"),
     }
 }
-
-

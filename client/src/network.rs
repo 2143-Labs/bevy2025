@@ -2,14 +2,17 @@ use std::time::Duration;
 
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
+    Config,
     event::{
+        ERFE,
         client::{SpawnUnit2, WorldData2},
         server::{ConnectRequest, Heartbeat},
-        ERFE,
-    }, net_components::ours::PlayerName, netlib::{
-        send_event_to_server, setup_client, EventToClient,
-        EventToServer, MainServerEndpoint, ServerResources,
-    }, Config
+    },
+    net_components::ours::PlayerName,
+    netlib::{
+        EventToClient, EventToServer, MainServerEndpoint, ServerResources, send_event_to_server,
+        setup_client,
+    },
 };
 
 use crate::{camera::FreeCam, game_state::NetworkGameState, notification::Notification};
@@ -18,8 +21,7 @@ pub struct NetworkingPlugin;
 impl Plugin for NetworkingPlugin {
     fn build(&self, app: &mut App) {
         shared::event::client::register_events(app);
-        app
-            .add_message::<SpawnUnit2>()
+        app.add_message::<SpawnUnit2>()
             .add_systems(
                 OnEnter(NetworkGameState::ClientConnecting),
                 (
@@ -47,21 +49,21 @@ impl Plugin for NetworkingPlugin {
             )
             // Once we are connected, advance normally
             //.add_systems(
-                //Update,
-                //(
-                    //// TODO receive new world data at any time?
-                    //on_connect,
-                    //on_disconnect,
-                    //on_someone_move,
-                    //go_movement_intents,
-                //)
-                    //.run_if(in_state(NetworkGameState::ClientConnected)),
+            //Update,
+            //(
+            //// TODO receive new world data at any time?
+            //on_connect,
+            //on_disconnect,
+            //on_someone_move,
+            //go_movement_intents,
+            //)
+            //.run_if(in_state(NetworkGameState::ClientConnected)),
             //)
             //.add_systems(
-                //Update,
-                //(send_movement, send_interp)
-                    //.run_if(on_timer(Duration::from_millis(25)))
-                    //.run_if(in_state(NetworkGameState::ClientConnected)),
+            //Update,
+            //(send_movement, send_interp)
+            //.run_if(on_timer(Duration::from_millis(25)))
+            //.run_if(in_state(NetworkGameState::ClientConnected)),
             //)
             .add_systems(
                 Update,
@@ -80,7 +82,9 @@ fn send_connect_packet(
     mut notif: MessageWriter<Notification>,
     local_player: Query<&Transform, With<FreeCam>>,
 ) {
-    let Ok(&my_location) = local_player.single() else { return };
+    let Ok(&my_location) = local_player.single() else {
+        return;
+    };
     //let name = args.name_override.clone().or(config.name.clone());
     let name = config.name.clone();
     let event = EventToServer::ConnectRequest(ConnectRequest {
@@ -96,28 +100,29 @@ fn send_connect_packet(
 }
 
 //fn build_healthbar(
-    //s: &mut ChildBuilder,
-    //meshes: &mut ResMut<Assets<Mesh>>,
-    //materials: &mut ResMut<Assets<StandardMaterial>>,
-    //offset: Vec3,
+//s: &mut ChildBuilder,
+//meshes: &mut ResMut<Assets<Mesh>>,
+//materials: &mut ResMut<Assets<StandardMaterial>>,
+//offset: Vec3,
 //) {
-    //let player_id = s.parent_entity();
-    //// spawn their hp bar
-    //let mut hp_bar = PbrBundle {
-        //mesh: meshes.add(Mesh::from(Cuboid {
-            //half_size: Vec3::splat(0.5),
-        //})),
-        //material: materials.add(Color::rgb(0.9, 0.3, 0.0)),
-        //transform: Transform::from_translation(Vec3::new(0.0, 0.4, 0.0) + offset),
-        //..Default::default()
-    //};
+//let player_id = s.parent_entity();
+//// spawn their hp bar
+//let mut hp_bar = PbrBundle {
+//mesh: meshes.add(Mesh::from(Cuboid {
+//half_size: Vec3::splat(0.5),
+//})),
+//material: materials.add(Color::rgb(0.9, 0.3, 0.0)),
+//transform: Transform::from_translation(Vec3::new(0.0, 0.4, 0.0) + offset),
+//..Default::default()
+//};
 
-    //// make it invisible until it's updated
-    //hp_bar.transform.scale = Vec3::ZERO;
+//// make it invisible until it's updated
+//hp_bar.transform.scale = Vec3::ZERO;
 
-    //s.spawn((hp_bar, crate::network::stats::HPBar(player_id)));
+//s.spawn((hp_bar, crate::network::stats::HPBar(player_id)));
 //}
 
+#[allow(unused)]
 fn receive_world_data(
     mut world_data: ERFE<WorldData2>,
     mut commands: Commands,
@@ -142,18 +147,18 @@ fn receive_world_data(
                 //p_tfm.translation = unit.transform.translation;
 
                 //notif.send(Notification(format!(
-                    //"Connected to server as {name} {my_id:?}"
+                //"Connected to server as {name} {my_id:?}"
                 //)));
 
                 //// Add our netentid + name
                 //commands
-                    //.entity(p_ent)
-                    //.insert(my_id)
-                    //.insert(PlayerName(name.clone()))
-                    //.insert(unit.health)
-                    //.with_children(|s| {
-                        //build_healthbar(s, &mut meshes, &mut materials, Vec3::ZERO)
-                    //});
+                //.entity(p_ent)
+                //.insert(my_id)
+                //.insert(PlayerName(name.clone()))
+                //.insert(unit.health)
+                //.with_children(|s| {
+                //build_healthbar(s, &mut meshes, &mut materials, Vec3::ZERO)
+                //});
 
                 // if this is us, skip the spawn units call cause we updated a local unit
                 // instead. TODO eventually fix this so when we fully despawn the menu
@@ -162,14 +167,14 @@ fn receive_world_data(
                 // TOOD do this gracefully?
                 for component in &unit.components {
                     match component {
-                        shared::net_components::NetComponent::Ours(ours) => {
-                            match ours {
-                                shared::net_components::ours::NetComponentOurs::PlayerName(PlayerName { name }) => {
-                                    notif.write(Notification(format!("Connected: {name}")));
-                                }
-                                _ => {}
+                        shared::net_components::NetComponent::Ours(ours) => match ours {
+                            shared::net_components::ours::NetComponentOurs::PlayerName(
+                                PlayerName { name },
+                            ) => {
+                                notif.write(Notification(format!("Connected: {name}")));
                             }
-                        }
+                            _ => {}
+                        },
                         _ => {}
                     }
                 }
@@ -180,40 +185,40 @@ fn receive_world_data(
         }
 
         //commands.spawn((
-            //HPIndicator::HP,
-            //TextBundle::from_section(
-                //"HP: #",
-                //TextStyle {
-                    //font: asset_server.load("fonts/ttf/JetBrainsMono-Regular.ttf"),
-                    //font_size: 45.0,
-                    //color: Color::rgb(0.4, 0.5, 0.75),
-                //},
-            //)
-            //.with_text_justify(JustifyText::Center)
-            //.with_style(Style {
-                //position_type: PositionType::Absolute,
-                //right: Val::Px(10.0),
-                //bottom: Val::Px(10.0),
-                //..default()
-            //}),
+        //HPIndicator::HP,
+        //TextBundle::from_section(
+        //"HP: #",
+        //TextStyle {
+        //font: asset_server.load("fonts/ttf/JetBrainsMono-Regular.ttf"),
+        //font_size: 45.0,
+        //color: Color::rgb(0.4, 0.5, 0.75),
+        //},
+        //)
+        //.with_text_justify(JustifyText::Center)
+        //.with_style(Style {
+        //position_type: PositionType::Absolute,
+        //right: Val::Px(10.0),
+        //bottom: Val::Px(10.0),
+        //..default()
+        //}),
         //));
         //commands.spawn((
-            //HPIndicator::Deaths,
-            //TextBundle::from_section(
-                //"",
-                //TextStyle {
-                    //font: asset_server.load("fonts/ttf/JetBrainsMono-Regular.ttf"),
-                    //font_size: 45.0,
-                    //color: Color::rgb(0.9, 0.2, 0.2),
-                //},
-            //)
-            //.with_text_justify(JustifyText::Center)
-            //.with_style(Style {
-                //position_type: PositionType::Absolute,
-                //right: Val::Px(10.0),
-                //bottom: Val::Px(50.0),
-                //..default()
-            //}),
+        //HPIndicator::Deaths,
+        //TextBundle::from_section(
+        //"",
+        //TextStyle {
+        //font: asset_server.load("fonts/ttf/JetBrainsMono-Regular.ttf"),
+        //font_size: 45.0,
+        //color: Color::rgb(0.9, 0.2, 0.2),
+        //},
+        //)
+        //.with_text_justify(JustifyText::Center)
+        //.with_style(Style {
+        //position_type: PositionType::Absolute,
+        //right: Val::Px(10.0),
+        //bottom: Val::Px(50.0),
+        //..default()
+        //}),
         //));
     }
 }
@@ -224,103 +229,103 @@ fn send_heartbeat(sr: Res<ServerResources<EventToClient>>, mse: Res<MainServerEn
 }
 
 //fn send_interp(
-    //sr: Res<ServerResources<EventToClient>>,
-    //mse: Res<MainServerEndpoint>,
-    //our_transform: Query<&MovementIntention, (With<Player>, Changed<MovementIntention>)>,
+//sr: Res<ServerResources<EventToClient>>,
+//mse: Res<MainServerEndpoint>,
+//our_transform: Query<&MovementIntention, (With<Player>, Changed<MovementIntention>)>,
 //) {
-    //if let Ok(intent) = our_transform.get_single() {
-        //// TODO add interp for `AttackIntent` here
-        //let event = EventToServer::ChangeMovement(ChangeMovement::Move2d(intent.0));
-        //send_event_to_server(&sr.handler, mse.0, &event);
-    //}
+//if let Ok(intent) = our_transform.get_single() {
+//// TODO add interp for `AttackIntent` here
+//let event = EventToServer::ChangeMovement(ChangeMovement::Move2d(intent.0));
+//send_event_to_server(&sr.handler, mse.0, &event);
+//}
 //}
 
 //fn send_movement(
-    //sr: Res<ServerResources<EventToClient>>,
-    //mse: Res<MainServerEndpoint>,
-    //our_transform: Query<
-        //(&Transform, Option<&MovementIntention>),
-        //(With<Player>, Changed<Transform>),
-    //>,
+//sr: Res<ServerResources<EventToClient>>,
+//mse: Res<MainServerEndpoint>,
+//our_transform: Query<
+//(&Transform, Option<&MovementIntention>),
+//(With<Player>, Changed<Transform>),
+//>,
 //) {
-    //if let Ok((transform, some_intent)) = our_transform.get_single() {
-        //let mut events = vec![];
-        //events.push(EventToServer::ChangeMovement(ChangeMovement::SetTransform(
-            //*transform,
-        //)));
+//if let Ok((transform, some_intent)) = our_transform.get_single() {
+//let mut events = vec![];
+//events.push(EventToServer::ChangeMovement(ChangeMovement::SetTransform(
+//*transform,
+//)));
 
-        //if let Some(intent) = some_intent {
-            //events.push(EventToServer::ChangeMovement(ChangeMovement::Move2d(
-                //intent.0,
-            //)));
-        //};
+//if let Some(intent) = some_intent {
+//events.push(EventToServer::ChangeMovement(ChangeMovement::Move2d(
+//intent.0,
+//)));
+//};
 
-        //send_event_to_server_batch(&sr.handler, mse.0, &events);
-    //}
+//send_event_to_server_batch(&sr.handler, mse.0, &events);
+//}
 //}
 
 //fn on_disconnect(
-    //mut dc_info: ERFE<PlayerDisconnected>,
-    //mut notif: MessageWriter<Notification>,
-    //mut commands: Commands,
-    //// TODO what if the server is disconnecting us?
-    //other_players: Query<(Entity, &NetEntId, &PlayerName), With<OtherPlayer>>,
+//mut dc_info: ERFE<PlayerDisconnected>,
+//mut notif: MessageWriter<Notification>,
+//mut commands: Commands,
+//// TODO what if the server is disconnecting us?
+//other_players: Query<(Entity, &NetEntId, &PlayerName), With<OtherPlayer>>,
 //) {
-    //for event in dc_info.read() {
-        //let disconnected_ent_id = event.event.id;
-        //for (player_ent, net_ent_id, PlayerName(player_name)) in &other_players {
-            //if net_ent_id == &disconnected_ent_id {
-                //notif.send(Notification(format!("{player_name} Disconnected.")));
-                //commands.entity(player_ent).despawn_recursive();
-            //}
-        //}
-        //info!(?disconnected_ent_id);
-    //}
+//for event in dc_info.read() {
+//let disconnected_ent_id = event.event.id;
+//for (player_ent, net_ent_id, PlayerName(player_name)) in &other_players {
+//if net_ent_id == &disconnected_ent_id {
+//notif.send(Notification(format!("{player_name} Disconnected.")));
+//commands.entity(player_ent).despawn_recursive();
+//}
+//}
+//info!(?disconnected_ent_id);
+//}
 //}
 
 //fn on_someone_move(
-    //mut someone_moved: ERFE<SomeoneMoved>,
-    //mut other_players: Query<(&NetEntId, &mut Transform, &mut MovementIntention, &mut AttackIntention), With<AnyUnit>>,
-    ////mut other_players: Query<(&NetEntId, &mut Transform, &mut MovementIntention), (With<AnyUnit>, Without<Player>)>,
+//mut someone_moved: ERFE<SomeoneMoved>,
+//mut other_players: Query<(&NetEntId, &mut Transform, &mut MovementIntention, &mut AttackIntention), With<AnyUnit>>,
+////mut other_players: Query<(&NetEntId, &mut Transform, &mut MovementIntention), (With<AnyUnit>, Without<Player>)>,
 //) {
-    //for movement in someone_moved.read() {
-        //for (ply_net, mut ply_tfm, mut ply_intent, mut ply_attack_intent,) in &mut other_players {
-            //if &movement.event.id == ply_net {
-                //match &movement.event.movement {
-                    //ChangeMovement::SetTransform(t) => *ply_tfm = *t,
-                    //ChangeMovement::StandStill => {}
-                    //ChangeMovement::AttackIntent(intent) => {
-                        //*ply_attack_intent = intent.clone();
-                    //}
-                    //ChangeMovement::Move2d(intent) => {
-                        //*ply_intent = MovementIntention(*intent);
-                    //}
-                //}
-            //}
-        //}
-    //}
+//for movement in someone_moved.read() {
+//for (ply_net, mut ply_tfm, mut ply_intent, mut ply_attack_intent,) in &mut other_players {
+//if &movement.event.id == ply_net {
+//match &movement.event.movement {
+//ChangeMovement::SetTransform(t) => *ply_tfm = *t,
+//ChangeMovement::StandStill => {}
+//ChangeMovement::AttackIntent(intent) => {
+//*ply_attack_intent = intent.clone();
+//}
+//ChangeMovement::Move2d(intent) => {
+//*ply_intent = MovementIntention(*intent);
+//}
+//}
+//}
+//}
+//}
 //}
 
 //fn go_movement_intents(
-    //mut other_players: Query<
-        //(&mut Transform, &MovementIntention),
-        //(With<AnyUnit>, Without<Player>),
-    //>,
-    //time: Res<Time>,
+//mut other_players: Query<
+//(&mut Transform, &MovementIntention),
+//(With<AnyUnit>, Without<Player>),
+//>,
+//time: Res<Time>,
 //) {
-    //for (mut ply_tfm, ply_intent) in &mut other_players {
-        //ply_tfm.translation +=
-            //Vec3::new(ply_intent.0.x, 0.0, ply_intent.0.y) * PLAYER_SPEED * time.delta_secs();
-    //}
+//for (mut ply_tfm, ply_intent) in &mut other_players {
+//ply_tfm.translation +=
+//Vec3::new(ply_intent.0.x, 0.0, ply_intent.0.y) * PLAYER_SPEED * time.delta_secs();
+//}
 //}
 
 //fn on_connect(
-    //mut c_info: ERFE<SpawnUnit2>,
-    ////mut notif: EventWriter<Notification>,
-    //mut local_spawn_unit: MessageWriter<SpawnUnit2>,
+//mut c_info: ERFE<SpawnUnit2>,
+////mut notif: EventWriter<Notification>,
+//mut local_spawn_unit: MessageWriter<SpawnUnit2>,
 //) {
-    //for event in c_info.read() {
-        ////notif.send(Notification(format!("{:?}", event.event)));
-        //local_spawn_unit.send(event.event.clone());
-    //}
+//for event in c_info.read() {
+////notif.send(Notification(format!("{:?}", event.event)));
+//local_spawn_unit.send(event.event.clone());
+//}
 //}

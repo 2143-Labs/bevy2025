@@ -20,10 +20,7 @@ pub enum NetComponentEnts {
 }
 
 impl NetComponentEnts {
-    pub fn insert_components(
-        self,
-        entity: &mut EntityCommands<'_>,
-    ) {
+    pub fn insert_components(self, entity: &mut EntityCommands<'_>) {
         match self {
             NetComponentEnts::Ball(c) => {
                 entity.insert(c);

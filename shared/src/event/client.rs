@@ -1,12 +1,10 @@
 //!This is for events that are sent FROM the server TO the client.
-use crate::{event::EventFromEndpoint, net_components::NetComponent};
 use crate::netlib::ServerResources;
+use crate::{event::EventFromEndpoint, net_components::NetComponent};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use super::{
-    NetEntId,
-};
+use super::NetEntId;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct SpawnUnit2 {

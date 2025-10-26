@@ -1,10 +1,10 @@
 //!This is for events that are sent FROM the client TO the server.
-use crate::{event::EventFromEndpoint};
+use crate::event::EventFromEndpoint;
 use crate::netlib::ServerResources;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use super::{NetEntId};
+use super::NetEntId;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct ConnectRequest {

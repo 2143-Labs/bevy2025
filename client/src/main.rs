@@ -1,12 +1,12 @@
 mod camera;
+pub mod game_state;
 mod grass;
+mod network;
+pub mod notification;
 mod physics;
 mod picking;
 mod terrain;
 mod water;
-mod network;
-pub mod notification;
-pub mod game_state;
 
 use avian3d::prelude::*;
 use bevy::{

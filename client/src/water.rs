@@ -24,7 +24,9 @@ pub struct WaterPlugin;
 
 impl Plugin for WaterPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(MaterialPlugin::<ExtendedMaterial<StandardMaterial, WaterMaterial>>::default())
+        app.add_plugins(MaterialPlugin::<
+            ExtendedMaterial<StandardMaterial, WaterMaterial>,
+        >::default())
             .register_type::<WaterMaterial>()
             .add_systems(Update, (check_water_immersion, apply_buoyancy).chain());
     }
@@ -128,10 +130,7 @@ fn check_water_immersion(
 }
 
 /// Apply buoyancy force to objects in water
-fn apply_buoyancy(
-    mut bodies: Query<(&mut LinearVelocity, &InWater, &Mass)>,
-    time: Res<Time>,
-) {
+fn apply_buoyancy(mut bodies: Query<(&mut LinearVelocity, &InWater, &Mass)>, time: Res<Time>) {
     // Water density for buoyancy calculation
     // Higher value = stronger upward force on submerged objects
     let water_density = 1.5; // Tuned for floating behavior

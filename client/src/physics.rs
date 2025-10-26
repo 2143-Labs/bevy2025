@@ -38,11 +38,7 @@ fn spawn_ball_on_space(
         let spawn_pos = transform.translation + *forward * 20.0;
 
         // Random color for the ball
-        let color = Color::srgb(
-            fastrand::f32(),
-            fastrand::f32(),
-            fastrand::f32(),
-        );
+        let color = Color::srgb(fastrand::f32(), fastrand::f32(), fastrand::f32());
 
         // Spawn ball with physics
         // Ball volume = (4/3) * π * r³ = (4/3) * π * 0.5³ ≈ 0.524 m³
@@ -67,24 +63,26 @@ fn spawn_ball_on_space(
 /// Setup UI for ball counter
 fn setup_ball_counter_ui(mut commands: Commands) {
     // Root UI node
-    commands.spawn(Node {
-        position_type: PositionType::Absolute,
-        top: Val::Px(10.0),
-        left: Val::Px(10.0),
-        padding: UiRect::all(Val::Px(10.0)),
-        ..default()
-    }).with_children(|parent| {
-        // Counter text
-        parent.spawn((
-            Text::new("Balls: 0"),
-            TextFont {
-                font_size: 24.0,
-                ..default()
-            },
-            TextColor(Color::WHITE),
-            BallCounterText,
-        ));
-    });
+    commands
+        .spawn(Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(10.0),
+            left: Val::Px(10.0),
+            padding: UiRect::all(Val::Px(10.0)),
+            ..default()
+        })
+        .with_children(|parent| {
+            // Counter text
+            parent.spawn((
+                Text::new("Balls: 0"),
+                TextFont {
+                    font_size: 24.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+                BallCounterText,
+            ));
+        });
 }
 
 /// Update ball counter UI

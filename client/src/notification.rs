@@ -32,19 +32,19 @@ fn setup_panel(mut commands: Commands) {
     // setup a flexbox container for notifications
     commands.spawn((
         //NodeBundle {
-            //style: Style {
-                //width: Val::Percent(50.0),
-                //top: Val::Px(10.0),
-                //left: Val::Px(10.0),
-                //height: Val::Percent(50.0),
+        //style: Style {
+        //width: Val::Percent(50.0),
+        //top: Val::Px(10.0),
+        //left: Val::Px(10.0),
+        //height: Val::Percent(50.0),
 
-                //display: Display::Flex,
-                //flex_direction: FlexDirection::Column,
-                //position_type: PositionType::Relative,
-                //..default()
-            //},
-            ////background_color: Color::WHITE.with_a(0.10).into(),
-            //..default()
+        //display: Display::Flex,
+        //flex_direction: FlexDirection::Column,
+        //position_type: PositionType::Relative,
+        //..default()
+        //},
+        ////background_color: Color::WHITE.with_a(0.10).into(),
+        //..default()
         //},
         NotificationContainer,
     ));
@@ -60,23 +60,24 @@ fn on_notification(
 ) {
     for e in er.read() {
         debug!("Got a notification... {}", e.0);
-        let Ok(parent) = parent.single() else { continue };
+        let Ok(parent) = parent.single() else {
+            continue;
+        };
         commands.entity(parent).with_children(|p| {
             p.spawn((
                 //TextBundle::from_section(
-                    //format!("{:03.3}: {}", time.elapsed_seconds(), e.0),
-                    //TextStyle {
-                        //font: asset_server.load("fonts/ttf/JetBrainsMono-Regular.ttf"),
-                        //font_size: 14.0,
-                        //color: Color::WHITE,
-                    //},
+                //format!("{:03.3}: {}", time.elapsed_seconds(), e.0),
+                //TextStyle {
+                //font: asset_server.load("fonts/ttf/JetBrainsMono-Regular.ttf"),
+                //font_size: 14.0,
+                //color: Color::WHITE,
+                //},
                 //)
                 //.with_text_justify(JustifyText::Right)
                 //.with_style(Style { ..default() }),
                 Notification(e.0.clone()),
-                NotificationDespawnTimer(Timer::new(Duration::from_millis(10000), TimerMode::Once))
+                NotificationDespawnTimer(Timer::new(Duration::from_millis(10000), TimerMode::Once)),
             ));
         });
     }
 }
-

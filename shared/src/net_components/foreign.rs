@@ -1,6 +1,6 @@
 #![allow(unused)]
-use serde::{Deserialize, Serialize};
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 pub struct UTransform(Transform);
 pub struct URigidBody(avian3d::prelude::RigidBody);
@@ -18,10 +18,7 @@ pub enum NetComponentForeign {
 }
 
 impl NetComponentForeign {
-    pub fn insert_components(
-        self,
-        entity: &mut EntityCommands<'_>,
-    ) {
+    pub fn insert_components(self, entity: &mut EntityCommands<'_>) {
         match self {
             NetComponentForeign::Transform(c) => {
                 entity.insert(c);

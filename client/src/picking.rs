@@ -80,8 +80,7 @@ fn update_pick_point(
 
     // Collect all boundary wall entities to exclude from raycast
     let excluded_entities: Vec<Entity> = boundary_walls.iter().collect();
-    let filter = SpatialQueryFilter::default()
-        .with_excluded_entities(excluded_entities);
+    let filter = SpatialQueryFilter::default().with_excluded_entities(excluded_entities);
 
     if let Some(hit) = spatial_query.cast_ray(
         ray.origin,

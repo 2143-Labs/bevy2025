@@ -90,10 +90,10 @@ fn main() {
     });
 
     //generate_systems_for_shared_components(GenerateRequest {
-        //source: "src/event/shared_components.rs",
-        //output_filename: "./shared_components.rs",
-        //output_type_name: "SharedComponents",
-        //struct_search_regex: &r,
+    //source: "src/event/shared_components.rs",
+    //output_filename: "./shared_components.rs",
+    //output_type_name: "SharedComponents",
+    //struct_search_regex: &r,
     //});
 
     println!("cargo:rerun-if-changed=build.rs");

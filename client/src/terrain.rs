@@ -1,14 +1,11 @@
 use avian3d::prelude::*;
 use bevy::{
-    asset::RenderAssetUsages,
-    mesh::Indices,
-    prelude::*,
-    render::render_resource::PrimitiveTopology,
+    asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
 };
 use noise::{NoiseFn, Perlin};
 
-use crate::grass::{spawn_grass_on_terrain, GrassMaterial, WindSettings};
-use crate::water::{spawn_water, WaterMaterial};
+use crate::grass::{GrassMaterial, WindSettings, spawn_grass_on_terrain};
+use crate::water::{WaterMaterial, spawn_water};
 use bevy::pbr::ExtendedMaterial;
 
 /// Marker for terrain entity

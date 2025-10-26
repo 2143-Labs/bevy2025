@@ -5,8 +5,8 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
 pub mod event;
-pub mod netlib;
 pub mod net_components;
+pub mod netlib;
 
 #[derive(Reflect, Hash, Eq, PartialEq, Clone, Deserialize, Serialize, Debug)]
 pub enum GameAction {

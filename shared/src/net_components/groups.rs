@@ -1,4 +1,3 @@
-
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -27,10 +26,7 @@ impl NetComponentGroups {
                 let mesh_handle = c.mesh.generate(meshes);
                 let material_handle = c.material.generate(materials);
 
-                entity.insert((
-                    Mesh3d(mesh_handle),
-                    MeshMaterial3d(material_handle),
-                ));
+                entity.insert((Mesh3d(mesh_handle), MeshMaterial3d(material_handle)));
             }
         }
     }

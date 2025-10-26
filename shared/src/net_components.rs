@@ -4,10 +4,10 @@
 //! - ours: components we defined ourselves that we want to add to the entity
 //! - groups: groups of components that we want to add to the entity
 //! - ents: Marker Compoenents to identify entities
-pub mod foreign;
-pub mod ours;
 pub mod ents;
+pub mod foreign;
 pub mod groups;
+pub mod ours;
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -39,7 +39,10 @@ impl MaterialGenerator {
         MaterialGenerator(name.as_ref().to_string(), color)
     }
 
-    pub fn generate(&self, materials: &mut ResMut<Assets<StandardMaterial>>) -> Handle<StandardMaterial> {
+    pub fn generate(
+        &self,
+        materials: &mut ResMut<Assets<StandardMaterial>>,
+    ) -> Handle<StandardMaterial> {
         let my_material = match self.0.as_str() {
             "basic" => StandardMaterial {
                 base_color: self.1,
@@ -79,7 +82,9 @@ impl NetComponent {
         match self {
             NetComponent::Foreign(foreign) => foreign.insert_components(ent_commands),
             NetComponent::Ours(ours) => ours.insert_components(ent_commands),
-            NetComponent::Groups(groups) => groups.insert_components(ent_commands, meshes, materials),
+            NetComponent::Groups(groups) => {
+                groups.insert_components(ent_commands, meshes, materials)
+            }
             NetComponent::Ents(ents) => ents.insert_components(ent_commands),
         }
     }
@@ -100,5 +105,4 @@ impl SpawnUnit2 {
 
         ent_commands.id()
     }
-
 }

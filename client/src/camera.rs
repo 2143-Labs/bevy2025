@@ -20,7 +20,7 @@ const TRANSITION_DURATION: f32 = 1.0;
 #[derive(Resource)]
 struct CameraTransition {
     active: bool,
-    progress: f32, // 0.0 to 1.0
+    progress: f32,     // 0.0 to 1.0
     from_paused: bool, // true if transitioning from paused to playing
 }
 
@@ -73,8 +73,14 @@ impl Plugin for CameraPlugin {
                 )
                     .chain(),
             )
-            .add_systems(OnEnter(GameState::Paused), (spawn_pause_ui, start_transition_to_paused))
-            .add_systems(OnExit(GameState::Paused), (despawn_pause_ui, start_transition_to_playing));
+            .add_systems(
+                OnEnter(GameState::Paused),
+                (spawn_pause_ui, start_transition_to_paused),
+            )
+            .add_systems(
+                OnExit(GameState::Paused),
+                (despawn_pause_ui, start_transition_to_playing),
+            );
     }
 }
 
@@ -170,9 +176,10 @@ fn freecam_controller(
         for motion in mouse_motion.read() {
             freecam.yaw -= motion.delta.x * sensitivity;
             freecam.pitch -= motion.delta.y * sensitivity;
-            freecam.pitch = freecam
-                .pitch
-                .clamp(-std::f32::consts::FRAC_PI_2 + 0.1, std::f32::consts::FRAC_PI_2 - 0.1);
+            freecam.pitch = freecam.pitch.clamp(
+                -std::f32::consts::FRAC_PI_2 + 0.1,
+                std::f32::consts::FRAC_PI_2 - 0.1,
+            );
         }
     }
 
@@ -227,9 +234,30 @@ fn start_transition_to_playing(mut transition: ResMut<CameraTransition>) {
 fn update_camera_transition(
     time: Res<Time>,
     mut transition: ResMut<CameraTransition>,
-    freecam_query: Query<(&Transform, &Projection), (With<FreeCam>, Without<InterpolationCam>, Without<BirdsEyeCam>)>,
-    birdseye_query: Query<(&Transform, &Projection), (With<BirdsEyeCam>, Without<InterpolationCam>, Without<FreeCam>)>,
-    mut interp_query: Query<(&mut Transform, &mut Projection), (With<InterpolationCam>, Without<FreeCam>, Without<BirdsEyeCam>)>,
+    freecam_query: Query<
+        (&Transform, &Projection),
+        (
+            With<FreeCam>,
+            Without<InterpolationCam>,
+            Without<BirdsEyeCam>,
+        ),
+    >,
+    birdseye_query: Query<
+        (&Transform, &Projection),
+        (
+            With<BirdsEyeCam>,
+            Without<InterpolationCam>,
+            Without<FreeCam>,
+        ),
+    >,
+    mut interp_query: Query<
+        (&mut Transform, &mut Projection),
+        (
+            With<InterpolationCam>,
+            Without<FreeCam>,
+            Without<BirdsEyeCam>,
+        ),
+    >,
 ) {
     if !transition.active {
         return;
@@ -256,9 +284,19 @@ fn update_camera_transition(
 
     // Determine interpolation direction
     let (from_transform, to_transform, from_proj, to_proj) = if transition.from_paused {
-        (birdseye_transform, freecam_transform, birdseye_proj, freecam_proj)
+        (
+            birdseye_transform,
+            freecam_transform,
+            birdseye_proj,
+            freecam_proj,
+        )
     } else {
-        (freecam_transform, birdseye_transform, freecam_proj, birdseye_proj)
+        (
+            freecam_transform,
+            birdseye_transform,
+            freecam_proj,
+            birdseye_proj,
+        )
     };
 
     // Interpolate position and rotation
@@ -281,9 +319,30 @@ fn update_camera_transition(
 fn manage_camera_visibility(
     transition: Res<CameraTransition>,
     game_state: Res<State<GameState>>,
-    mut freecam_query: Query<&mut Camera, (With<FreeCam>, Without<InterpolationCam>, Without<BirdsEyeCam>)>,
-    mut birdseye_query: Query<&mut Camera, (With<BirdsEyeCam>, Without<InterpolationCam>, Without<FreeCam>)>,
-    mut interp_query: Query<&mut Camera, (With<InterpolationCam>, Without<FreeCam>, Without<BirdsEyeCam>)>,
+    mut freecam_query: Query<
+        &mut Camera,
+        (
+            With<FreeCam>,
+            Without<InterpolationCam>,
+            Without<BirdsEyeCam>,
+        ),
+    >,
+    mut birdseye_query: Query<
+        &mut Camera,
+        (
+            With<BirdsEyeCam>,
+            Without<InterpolationCam>,
+            Without<FreeCam>,
+        ),
+    >,
+    mut interp_query: Query<
+        &mut Camera,
+        (
+            With<InterpolationCam>,
+            Without<FreeCam>,
+            Without<BirdsEyeCam>,
+        ),
+    >,
 ) {
     let Ok(mut freecam) = freecam_query.single_mut() else {
         return;
