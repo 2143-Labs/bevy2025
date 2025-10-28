@@ -63,10 +63,6 @@ fn main() {
         .insert_resource(HeartbeatList::default())
         .add_message::<PlayerDisconnected>()
         .add_plugins(DefaultPlugins)
-        .add_plugins(LogPlugin {
-            //level: bevy::log::Level::TRACE,
-            ..Default::default()
-        })
         .add_plugins((avian3d::PhysicsPlugins::default(),))
         .add_plugins((
             ConfigPlugin,
