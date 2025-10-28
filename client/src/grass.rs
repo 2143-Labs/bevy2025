@@ -10,6 +10,7 @@ use bevy::{
     shader::ShaderRef,
 };
 use noise::{NoiseFn, Perlin};
+use shared::net_components::ents::Ball;
 
 /// Marker for grass entities
 #[derive(Component)]
@@ -104,7 +105,7 @@ impl Default for BallInteractionTimer {
 fn update_ball_interactions(
     time: Res<Time>,
     mut update_timer: Local<Option<BallInteractionTimer>>,
-    all_balls: Query<&Transform, With<crate::physics::Ball>>,
+    all_balls: Query<&Transform, With<Ball>>,
     camera_query: Query<&Transform, With<Camera>>,
     mut grass_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, GrassMaterial>>>,
 ) {

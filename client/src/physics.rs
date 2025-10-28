@@ -1,11 +1,8 @@
 use bevy::prelude::*;
 use shared::{event::{client::SpawnUnit2, server::SpawnCircle}};
+use shared::net_components::ents::Ball;
 
 use crate::game_state::NetworkGameState;
-
-/// Marker component for spawned balls
-#[derive(Component)]
-pub struct Ball;
 
 /// UI component for the ball counter text
 #[derive(Component)]

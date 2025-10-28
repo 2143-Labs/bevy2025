@@ -6,10 +6,11 @@ use std::{
 
 use avian3d::prelude::{Collider, Mass, RigidBody};
 use bevy::{log::LogPlugin, prelude::*};
+use bevy_mesh::MeshPlugin;
 use bevy_time::common_conditions::on_timer;
 use message_io::network::Endpoint;
 use rand::Rng;
-use bevy_state::prelude::*;
+use bevy_state::{app::StatesPlugin, prelude::*};
 use shared::{
     event::{
         client::{PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2},
@@ -67,11 +68,18 @@ fn main() {
     app.insert_resource(EndpointToNetId::default())
         .insert_resource(HeartbeatList::default())
         .add_message::<PlayerDisconnected>()
-        .add_plugins(MinimalPlugins)
+        .add_plugins(DefaultPlugins)
         .add_plugins(LogPlugin {
             //level: bevy::log::Level::TRACE,
             ..Default::default()
         })
+        .add_plugins((
+            StatesPlugin,
+            MeshPlugin,
+            avian3d::PhysicsPlugins::default(),
+            PickingPlugin,
+            bevy_asset::AssetPlugin::default(),
+        ))
         .add_plugins((
             ConfigPlugin,
             //chat::ChatPlugin,
@@ -140,8 +148,6 @@ fn on_player_connect(
         ),
         With<shared::net_components::ents::Ball>,
     >,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<bevy_pbr::StandardMaterial>>,
     sr: Res<ServerNetworkingResources>,
     _config: Res<Config>,
     mut commands: Commands,
@@ -223,7 +229,7 @@ fn on_player_connect(
         ));
 
         // Add the camera entity here
-        spawn_camera_unit.clone().spawn_entity(&mut commands, &mut meshes, &mut materials);
+        spawn_camera_unit.clone().spawn_entity_srv(&mut commands);
 
         // Each time we miss a heartbeat, we increment the Atomic counter.
         // So, we initially set this to negative number to give extra time for the initial
