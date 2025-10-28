@@ -206,10 +206,11 @@ fn on_player_connect(
                 ],
             );
         }
+        let mut unit_list_to_new_client_balls = vec![];
 
         // gather the balls in the unit list
         for (&transform, &ent_id, has_color) in &balls {
-            unit_list_to_new_client.push(make_ball(ent_id, transform, has_color.0));
+            unit_list_to_new_client_balls.push(make_ball(ent_id, transform, has_color.0));
         }
 
         // Add the connected player ent here
@@ -246,6 +247,15 @@ fn on_player_connect(
             units: unit_list_to_new_client,
         });
         send_event_to_server(&sr.handler, player.endpoint, &event);
+
+        for ball_unit in unit_list_to_new_client_balls.chunks(100) {
+            let events = ball_unit.iter().map(|u| EventToClient::SpawnUnit2(u.clone())).collect::<Vec<_>>();
+            send_event_to_server_batch(
+                &sr.handler,
+                player.endpoint,
+                &events
+            );
+        }
     }
 }
 
