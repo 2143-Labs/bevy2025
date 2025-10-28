@@ -31,6 +31,7 @@ fn on_circle_spawn(
     clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
 ) {
     for spawn_ev in spawns.read() {
+        info!(?spawn_ev.event, "Spawning circle from event");
         let spawn = &spawn_ev.event;
         let transform = Transform::from_translation(spawn.position);
         let ent_id = NetEntId::random();
@@ -41,7 +42,9 @@ fn on_circle_spawn(
 
         // Notify all clients about the new unit
         let event = EventToClient::SpawnUnit2(unit);
+        info!("Notifying clients of new unit: {:?}", event);
         for endpoint in &clients {
+            info!("Sending spawn event to endpoint: {:?}", endpoint.0);
             send_event_to_server(&sr.handler, endpoint.0, &event);
         }
     }

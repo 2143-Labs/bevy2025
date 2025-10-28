@@ -36,6 +36,7 @@ fn generate_code_for_event_queue(req: &GenerateRequest) -> String {
             let mut new_events = sr.event_list.lock().unwrap();
             let new_events = std::mem::replace(new_events.as_mut(), vec![]);
             for (endpoint, event) in new_events {
+                trace!(?event, "Received event from endpoint {:?}", endpoint);
                 match event {
                     #(
                         #typename :: #all_types (data) => {
