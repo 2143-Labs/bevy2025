@@ -17,6 +17,19 @@ impl Plugin for NetworkingPlugin {
         shared::event::client::register_events(app);
         app.add_message::<SpawnUnit2>()
             .add_systems(
+                Startup,
+                (|mut commands: Commands, config: Res<Config>| {
+                    // Setup networking resources
+                    commands.insert_resource(NetworkConnectionTarget {
+                        ip: config.ip.clone(),
+                        port: config.port,
+                    });
+                },
+                |mut state: ResMut<NextState<NetworkGameState>>| {
+                    state.set(NetworkGameState::ClientConnecting)
+                }),
+            )
+            .add_systems(
                 OnEnter(NetworkGameState::ClientConnecting),
                 (
                     // Setup the client and immediatly advance the state
@@ -226,7 +239,7 @@ fn receive_world_data(
     }
 }
 
-fn send_heartbeat(sr: Res<NetworkingResources<EventToClient>>, mse: Res<MainServerEndpoint>) {
+fn send_heartbeat(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoint>) {
     let event = EventToServer::Heartbeat(Heartbeat {});
     send_event_to_server(&sr.handler, mse.0, &event);
 }

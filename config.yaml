@@ -1,6 +1,6 @@
-ip: 0.0.0.0
+ip: 192.168.1.206
 port: 25565
-name: null
+name: John
 sens: 0.003
 qe_sens: 3.0
 sound: false
