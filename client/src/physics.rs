@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use shared::event::ERFE;
 use shared::event::{client::SpawnUnit2, server::SpawnCircle};
 use shared::net_components::ents::Ball;
 
@@ -56,7 +57,7 @@ fn spawn_ball_on_space(
 }
 
 fn spawn_ball_network(
-    mut unit_spawns: MessageReader<SpawnUnit2>,
+    mut unit_spawns: ERFE<SpawnUnit2>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -64,6 +65,7 @@ fn spawn_ball_network(
     for spawn in unit_spawns.read() {
         // Spawn ball with physics
         spawn
+            .event
             .clone()
             .spawn_entity(&mut commands, &mut meshes, &mut materials);
         info!("Spawned from networked SpawnUnit2");
