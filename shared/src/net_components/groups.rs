@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_pbr::StandardMaterial;
 use serde::{Deserialize, Serialize};
 
 use crate::net_components::ToNetComponent;
@@ -28,7 +29,7 @@ impl NetComponentGroups {
                 let mesh_handle = c.mesh.generate(meshes);
                 let material_handle = c.material.generate(materials);
 
-                entity.insert((Mesh3d(mesh_handle), MeshMaterial3d(material_handle)));
+                entity.insert((Mesh3d(mesh_handle), bevy_pbr::MeshMaterial3d(material_handle)));
             }
         }
     }

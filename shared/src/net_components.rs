@@ -10,6 +10,7 @@ pub mod groups;
 pub mod ours;
 
 use bevy::prelude::*;
+use bevy_pbr::StandardMaterial;
 use serde::{Deserialize, Serialize};
 
 use crate::event::client::SpawnUnit2;
@@ -107,6 +108,6 @@ impl SpawnUnit2 {
     }
 }
 
-trait ToNetComponent {
+pub trait ToNetComponent {
     fn to_net_component(self) -> NetComponent;
 }

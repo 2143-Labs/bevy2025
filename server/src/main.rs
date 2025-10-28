@@ -13,7 +13,7 @@ use shared::{
         client::{PlayerDisconnected, SpawnUnit2, WorldData2},
         server::{ChangeMovement, Heartbeat},
         NetEntId, ERFE,
-    }, net_components::ents::PlayerCamera, netlib::{
+    }, net_components::{ents::PlayerCamera, ours::PlayerName}, netlib::{
         send_event_to_server, EventToClient, EventToServer, NetworkConnectionTarget, ServerNetworkingResources, ServerResources
     }, Config, ConfigPlugin
 };
@@ -58,7 +58,7 @@ fn main() {
     shared::event::server::register_events(&mut app);
     app.insert_resource(EndpointToNetId::default())
         .insert_resource(HeartbeatList::default())
-        .add_message::<PlayerDisconnect>()
+        .add_message::<PlayerDisconnected>()
         .add_plugins(MinimalPlugins)
         .add_plugins(LogPlugin {
             //level: bevy::log::Level::TRACE,
@@ -259,20 +259,20 @@ fn on_player_connect(
 
 fn check_heartbeats(
     heartbeat_mapping: Res<HeartbeatList>,
-    mut on_disconnect: MessageWriter<PlayerDisconnect>,
+    mut on_disconnect: MessageWriter<PlayerDisconnected>,
 ) {
     for (ent_id, beats_missed) in &heartbeat_mapping.heartbeats {
         let beats = beats_missed.fetch_add(1, std::sync::atomic::Ordering::Acquire);
         trace!(?ent_id, ?beats, "hb");
         if beats >= (HEARTBEAT_TIMEOUT / HEARTBEAT_MILLIS) as i16 {
             warn!("Missed {beats} beats, disconnecting {ent_id:?}");
-            on_disconnect.write(PlayerDisconnect { ent: *ent_id });
+            on_disconnect.write(PlayerDisconnected { id: *ent_id });
         }
     }
 }
 
 fn on_player_disconnect(
-    mut pd: MessageReader<PlayerDisconnect>,
+    mut pd: MessageReader<PlayerDisconnected>,
     clients: Query<(Entity, &PlayerEndpoint, &NetEntId), With<PlayerName>>,
     mut commands: Commands,
     mut heartbeat_mapping: ResMut<HeartbeatList>,

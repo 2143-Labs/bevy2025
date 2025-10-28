@@ -501,23 +501,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy2025"
-version = "0.1.2"
-dependencies = [
- "avian3d",
- "bevy",
- "bevy-inspector-egui",
- "clap",
- "fastrand",
- "message-io",
- "noise",
- "postcard",
- "rand 0.9.2",
- "serde",
- "shared",
-]
-
-[[package]]
 name = "bevy_a11y"
 version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2046,6 +2029,23 @@ name = "clap_lex"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1d728cc89cf3aee9ff92b05e62b19ee65a02b5702cff7d5a377e32c6ae29d8d"
+
+[[package]]
+name = "client"
+version = "0.1.2"
+dependencies = [
+ "avian3d",
+ "bevy",
+ "bevy-inspector-egui",
+ "clap",
+ "fastrand",
+ "message-io",
+ "noise",
+ "postcard",
+ "rand 0.9.2",
+ "serde",
+ "shared",
+]
 
 [[package]]
 name = "clipboard-win"
