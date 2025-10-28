@@ -98,10 +98,7 @@ impl NetComponent {
         }
     }
 
-    pub fn insert_components_srv(
-        self,
-        ent_commands: &mut EntityCommands,
-    ) {
+    pub fn insert_components_srv(self, ent_commands: &mut EntityCommands) {
         match self {
             NetComponent::Foreign(foreign) => foreign.insert_components(ent_commands),
             NetComponent::Ours(ours) => ours.insert_components(ent_commands),
@@ -146,10 +143,7 @@ impl SpawnUnit2 {
         ent_commands.id()
     }
 
-    pub fn spawn_entity_srv(
-        self,
-        commands: &mut Commands,
-    ) -> Entity {
+    pub fn spawn_entity_srv(self, commands: &mut Commands) -> Entity {
         let mut ent_commands = commands.spawn(self.net_ent_id);
 
         for net_comp in self.components {
@@ -179,7 +173,7 @@ pub fn make_ball(net_ent_id: NetEntId, transform: Transform, color: Color) -> Sp
             avian3d::prelude::RigidBody::Dynamic.to_net_component(),
             avian3d::prelude::Collider::sphere(sphere_size).to_net_component(),
             avian3d::prelude::Mass(0.3).to_net_component(), // Lighter balls that will float (density ~0.57 of water)
-                                           // Add other ball components here as needed
+                                                            // Add other ball components here as needed
         ],
     }
 }

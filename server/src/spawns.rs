@@ -47,45 +47,45 @@ fn on_circle_spawn(
 }
 
 //fn send_networked_Spawn_move(
-    //Spawns: Query<
-        //(&Transform, &MovementIntention, &AttackIntention, &NetEntId),
-        //(
-            //With<AIType>,
-            //Or<(
-                //Changed<Transform>,
-                //Changed<MovementIntention>,
-                //Changed<AttackIntention>,
-            //)>,
-        //),
-    //>,
-    //clients: Query<&PlayerEndpoint, With<ConnectedPlayerName>>,
-    //sr: Res<ServerResources<EventToServer>>,
+//Spawns: Query<
+//(&Transform, &MovementIntention, &AttackIntention, &NetEntId),
+//(
+//With<AIType>,
+//Or<(
+//Changed<Transform>,
+//Changed<MovementIntention>,
+//Changed<AttackIntention>,
+//)>,
+//),
+//>,
+//clients: Query<&PlayerEndpoint, With<ConnectedPlayerName>>,
+//sr: Res<ServerResources<EventToServer>>,
 //) {
-    //let mut all_events = vec![];
-    //for (&movement, mi, attack_intent, &id) in &Spawns {
-        //all_events.extend([
-            //EventToClient::SomeoneMoved(SomeoneMoved {
-                //id,
-                //movement: shared::event::server::ChangeMovement::SetTransform(movement),
-            //}),
-            //EventToClient::SomeoneMoved(SomeoneMoved {
-                //id,
-                //movement: shared::event::server::ChangeMovement::Move2d(mi.0),
-            //}),
-            //EventToClient::SomeoneMoved(SomeoneMoved {
-                //id,
-                //movement: shared::event::server::ChangeMovement::AttackIntent(
-                    //attack_intent.clone(),
-                //),
-            //}),
-        //]);
-    //}
+//let mut all_events = vec![];
+//for (&movement, mi, attack_intent, &id) in &Spawns {
+//all_events.extend([
+//EventToClient::SomeoneMoved(SomeoneMoved {
+//id,
+//movement: shared::event::server::ChangeMovement::SetTransform(movement),
+//}),
+//EventToClient::SomeoneMoved(SomeoneMoved {
+//id,
+//movement: shared::event::server::ChangeMovement::Move2d(mi.0),
+//}),
+//EventToClient::SomeoneMoved(SomeoneMoved {
+//id,
+//movement: shared::event::server::ChangeMovement::AttackIntent(
+//attack_intent.clone(),
+//),
+//}),
+//]);
+//}
 
-    //if !all_events.is_empty() {
-        //for event_list in all_events.chunks(250) {
-            //for endpoint in &clients {
-                //send_event_to_server_batch(&sr.handler, endpoint.0, event_list);
-            //}
-        //}
-    //}
+//if !all_events.is_empty() {
+//for event_list in all_events.chunks(250) {
+//for endpoint in &clients {
+//send_event_to_server_batch(&sr.handler, endpoint.0, event_list);
+//}
+//}
+//}
 //}

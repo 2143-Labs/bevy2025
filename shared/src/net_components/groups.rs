@@ -37,10 +37,7 @@ impl NetComponentGroups {
         }
     }
 
-    pub fn insert_components_srv(
-        self,
-        entity: &mut EntityCommands<'_>,
-    ) {
+    pub fn insert_components_srv(self, entity: &mut EntityCommands<'_>) {
         match self {
             NetComponentGroups::NormalMeshMaterial(c) => {
                 entity.insert(c);

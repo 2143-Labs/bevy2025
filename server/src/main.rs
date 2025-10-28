@@ -13,9 +13,7 @@ use shared::{
         server::{ChangeMovement, Heartbeat},
         MyNetEntParentId, NetEntId, ERFE,
     },
-    net_components::{
-        ents::PlayerCamera, make_ball, ours::PlayerName, ToNetComponent
-    },
+    net_components::{ents::PlayerCamera, make_ball, ours::PlayerName, ToNetComponent},
     netlib::{
         send_event_to_server, send_event_to_server_batch, EventToClient, EventToServer,
         NetworkConnectionTarget, ServerNetworkingResources,
@@ -69,9 +67,7 @@ fn main() {
             //level: bevy::log::Level::TRACE,
             ..Default::default()
         })
-        .add_plugins((
-            avian3d::PhysicsPlugins::default(),
-        ))
+        .add_plugins((avian3d::PhysicsPlugins::default(),))
         .add_plugins((
             ConfigPlugin,
             //chat::ChatPlugin,
@@ -107,7 +103,9 @@ fn main() {
         )
         .add_systems(
             Update,
-            check_heartbeats.run_if(bevy::time::common_conditions::on_timer(Duration::from_millis(200))),
+            check_heartbeats.run_if(bevy::time::common_conditions::on_timer(
+                Duration::from_millis(200),
+            )),
         );
 
     app.run();
@@ -132,14 +130,7 @@ fn on_player_connect(
     mut endpoint_to_net_id: ResMut<EndpointToNetId>,
     clients: Query<(&PlayerEndpoint, &NetEntId, &PlayerName), With<ConnectedPlayer>>,
     cameras: Query<(&NetEntId, &MyNetEntParentId, &Transform, &PlayerName), With<PlayerCamera>>,
-    balls: Query<
-        (
-            &Transform,
-            &NetEntId,
-            &HasColor,
-        ),
-        With<shared::net_components::ents::Ball>,
-    >,
+    balls: Query<(&Transform, &NetEntId, &HasColor), With<shared::net_components::ents::Ball>>,
     sr: Res<ServerNetworkingResources>,
     _config: Res<Config>,
     mut commands: Commands,
@@ -274,17 +265,20 @@ fn on_player_disconnect(
         heartbeat_mapping.heartbeats.remove(&player.id);
 
         let mut events = vec![];
-        events.push(EventToClient::PlayerDisconnected(PlayerDisconnected { id: player.id }));
+        events.push(EventToClient::PlayerDisconnected(PlayerDisconnected {
+            id: player.id,
+        }));
 
         for (owned_ent, net_ent_id, owner_id) in &clients_owned_items {
             if owner_id.0 == player.id.0 {
-                events.push(EventToClient::DespawnUnit2(shared::event::client::DespawnUnit2 {
-                    net_ent_id: *net_ent_id,
-                }));
+                events.push(EventToClient::DespawnUnit2(
+                    shared::event::client::DespawnUnit2 {
+                        net_ent_id: *net_ent_id,
+                    },
+                ));
 
                 commands.entity(owned_ent).despawn();
             }
-
         }
 
         for (c_ent, net_client, net_ent_id) in &clients {
@@ -328,20 +322,20 @@ fn on_movement(
             //todo!();
 
             //for (c_net_client, c_net_ent) in &mut clients {
-                //if moved_net_id == c_net_ent {
-                    ////info!(?event);
-                    //// If this person moved, update their transform serverside
-                    //match movement.event {
-                        //ChangeMovement::SetTransform(new_tfm) => *c_tfm = new_tfm,
-                        //ChangeMovement::Move2d(new_intent) => {
-                            //*intent = MovementIntention(new_intent)
-                        //}
-                        //_ => {}
-                    //}
-                //} else {
-                    //// Else, just rebroadcast the packet to everyone else
-                    //send_event_to_server(&sr.handler, c_net_client.0, &event);
-                //}
+            //if moved_net_id == c_net_ent {
+            ////info!(?event);
+            //// If this person moved, update their transform serverside
+            //match movement.event {
+            //ChangeMovement::SetTransform(new_tfm) => *c_tfm = new_tfm,
+            //ChangeMovement::Move2d(new_intent) => {
+            //*intent = MovementIntention(new_intent)
+            //}
+            //_ => {}
+            //}
+            //} else {
+            //// Else, just rebroadcast the packet to everyone else
+            //send_event_to_server(&sr.handler, c_net_client.0, &event);
+            //}
             //}
         }
     }
