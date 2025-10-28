@@ -2,11 +2,17 @@ use std::{net::SocketAddr, time::Duration};
 
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
+    Config,
     event::{
-        client::{SpawnUnit2, WorldData2}, server::{ConnectRequest, Heartbeat, SpawnCircle}, ERFE
-    }, net_components::ours::PlayerName, netlib::{
-        send_event_to_server, setup_client, ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, NetworkConnectionTarget, NetworkingResources
-    }, Config
+        ERFE,
+        client::{SpawnUnit2, WorldData2},
+        server::{ConnectRequest, Heartbeat, SpawnCircle},
+    },
+    net_components::ours::PlayerName,
+    netlib::{
+        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint,
+        NetworkConnectionTarget, NetworkingResources, send_event_to_server, setup_client,
+    },
 };
 
 use crate::{camera::FreeCam, game_state::NetworkGameState, notification::Notification};
@@ -28,9 +34,7 @@ impl Plugin for NetworkingPlugin {
             )
             .add_systems(
                 Update,
-                (check_connect_button).run_if(
-                    in_state(NetworkGameState::MainMenu)
-                ),
+                (check_connect_button).run_if(in_state(NetworkGameState::MainMenu)),
             )
             // After sending the first packet, resend it every so often to see if the server comes
             // alive
@@ -49,19 +53,19 @@ impl Plugin for NetworkingPlugin {
             )
             // Once we are connected, advance normally
             .add_systems(
-            Update,
-            (
-            // TODO receive new world data at any time?
-            spawn_circle,
-            )
-            .run_if(in_state(NetworkGameState::ClientConnected)),
+                Update,
+                (
+                    // TODO receive new world data at any time?
+                    spawn_circle,
+                )
+                    .run_if(in_state(NetworkGameState::ClientConnected)),
             )
             //.add_systems(
-                //Update,
-                //cast_skill_1
-                    //.run_if(shared::GameAction::Fire1.just_pressed())
-                    ////.run_if(in_state(ChatState::NotChatting))
-                    ////.run_if(any_with_component::<Player>),
+            //Update,
+            //cast_skill_1
+            //.run_if(shared::GameAction::Fire1.just_pressed())
+            ////.run_if(in_state(ChatState::NotChatting))
+            ////.run_if(any_with_component::<Player>),
             //)
             //.add_systems(
             //Update,
@@ -382,32 +386,32 @@ fn spawn_circle(
 }
 
 //fn cast_skill_1(
-    //keyboard_input: Res<ButtonInput<KeyCode>>,
-    //config: Res<Config>,
-    //player: Query<&Transform, With<Player>>,
-    //aim_dir: Query<&ClientAimDirection>,
-    //mut ev_sa: EventWriter<StartLocalAnimation>,
+//keyboard_input: Res<ButtonInput<KeyCode>>,
+//config: Res<Config>,
+//player: Query<&Transform, With<Player>>,
+//aim_dir: Query<&ClientAimDirection>,
+//mut ev_sa: EventWriter<StartLocalAnimation>,
 //) {
-    //if config.pressed(&keyboard_input, shared::GameAction::Mod1) {
-        //let event = Cast::Buff;
-        //ev_sa.send(StartLocalAnimation(event));
-    //} else {
-        //let transform = player.single();
+//if config.pressed(&keyboard_input, shared::GameAction::Mod1) {
+//let event = Cast::Buff;
+//ev_sa.send(StartLocalAnimation(event));
+//} else {
+//let transform = player.single();
 
-        //let aim_dir = aim_dir.single().0;
+//let aim_dir = aim_dir.single().0;
 
-        //let target = transform.translation
-            //+ Vec3 {
-                //x: aim_dir.cos(),
-                //y: 0.0,
-                //z: -aim_dir.sin(),
-            //};
+//let target = transform.translation
+//+ Vec3 {
+//x: aim_dir.cos(),
+//y: 0.0,
+//z: -aim_dir.sin(),
+//};
 
-        //let shooting_data = ShootingData {
-            //shot_from: transform.translation,
-            //target,
-        //};
-        //let event = Cast::Shoot(shooting_data);
-        //ev_sa.send(StartLocalAnimation(event));
-    //}
+//let shooting_data = ShootingData {
+//shot_from: transform.translation,
+//target,
+//};
+//let event = Cast::Shoot(shooting_data);
+//ev_sa.send(StartLocalAnimation(event));
+//}
 //}

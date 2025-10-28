@@ -22,7 +22,6 @@ impl MyNetEntParentId {
     pub fn new(id: NetEntId) -> Self {
         MyNetEntParentId(id.0)
     }
-
 }
 
 #[derive(Debug, Clone, Message)]

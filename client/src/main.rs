@@ -33,7 +33,6 @@ struct ClapArgs {
     autoconnect: Option<String>,
 }
 
-
 fn main() {
     let mut args = ClapArgs::parse();
 

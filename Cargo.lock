@@ -5366,6 +5366,7 @@ dependencies = [
  "bevy_ecs",
  "bevy_log",
  "bevy_pbr",
+ "bevy_state",
  "bevy_time",
  "bevy_transform",
  "clap",

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::net_components::ToNetComponent;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Component, Serialize, Deserialize, Debug, Clone)]
 pub struct NormalMeshMaterial {
     pub mesh: super::MeshGenerator,
     pub material: super::MaterialGenerator,
@@ -29,7 +29,21 @@ impl NetComponentGroups {
                 let mesh_handle = c.mesh.generate(meshes);
                 let material_handle = c.material.generate(materials);
 
-                entity.insert((Mesh3d(mesh_handle), bevy_pbr::MeshMaterial3d(material_handle)));
+                entity.insert((
+                    Mesh3d(mesh_handle),
+                    bevy_pbr::MeshMaterial3d(material_handle),
+                ));
+            }
+        }
+    }
+
+    pub fn insert_components_srv(
+        self,
+        entity: &mut EntityCommands<'_>,
+    ) {
+        match self {
+            NetComponentGroups::NormalMeshMaterial(c) => {
+                entity.insert(c);
             }
         }
     }

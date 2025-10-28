@@ -11,7 +11,6 @@ pub struct ConnectRequest {
     pub my_location: Transform,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct SendChat {
     pub text: String,
@@ -28,9 +27,8 @@ pub struct SpawnCircle {
 
 //#[derive(Debug, Clone, Serialize, Deserialize, Message)]
 //pub struct RequestSpawnUnit2 //{
-    //pub components: Vec<NetComponent>,
+//pub components: Vec<NetComponent>,
 //}
-
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct ChangeMovement {

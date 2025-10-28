@@ -4,16 +4,26 @@ use std::{
     time::Duration,
 };
 
+use avian3d::prelude::{Collider, Mass, RigidBody};
 use bevy::{log::LogPlugin, prelude::*};
 use bevy_time::common_conditions::on_timer;
 use message_io::network::Endpoint;
 use rand::Rng;
+use bevy_state::prelude::*;
 use shared::{
     event::{
-        client::{PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2}, server::{ChangeMovement, Heartbeat}, MyNetEntParentId, NetEntId, ERFE
-    }, net_components::{ents::{Ball, PlayerCamera}, groups::NormalMeshMaterial, ours::PlayerName, MaterialGenerator, ToNetComponent}, netlib::{
-        send_event_to_server, send_event_to_server_batch, EventToClient, EventToServer, NetworkConnectionTarget, ServerNetworkingResources
-    }, Config, ConfigPlugin
+        client::{PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2},
+        server::{ChangeMovement, Heartbeat},
+        MyNetEntParentId, NetEntId, ERFE,
+    },
+    net_components::{
+        ents::{Ball, PlayerCamera}, groups::NormalMeshMaterial, make_ball, ours::PlayerName, MaterialGenerator, ToNetComponent
+    },
+    netlib::{
+        send_event_to_server, send_event_to_server_batch, EventToClient, EventToServer,
+        NetworkConnectionTarget, ServerNetworkingResources,
+    },
+    Config, ConfigPlugin,
 };
 
 /// How often to run the system
@@ -46,7 +56,7 @@ struct EndpointToNetId {
 struct PlayerEndpoint(Endpoint);
 
 //pub mod chat;
-pub mod game_manager;
+//pub mod game_manager;
 pub mod spawns;
 
 fn main() {
@@ -65,7 +75,7 @@ fn main() {
         .add_plugins((
             ConfigPlugin,
             //chat::ChatPlugin,
-            game_manager::GamePlugin,
+            //game_manager::GamePlugin,
             spawns::SpawnPlugin,
             //StatusPlugin,
         ))
@@ -113,25 +123,25 @@ fn add_network_connection_info_from_config(config: Res<Config>, mut commands: Co
 #[derive(Component)]
 pub struct ConnectedPlayer;
 
+#[derive(Component)]
+pub struct HasColor(pub Color);
+
 fn on_player_connect(
     mut new_players: ERFE<shared::event::server::ConnectRequest>,
     mut heartbeat_mapping: ResMut<HeartbeatList>,
     mut endpoint_to_net_id: ResMut<EndpointToNetId>,
-    clients: Query<(
-        &PlayerEndpoint,
-        &NetEntId,
-        &PlayerName,
-    ), With<ConnectedPlayer>,>,
-    cameras: Query<(
-        &NetEntId,
-        &MyNetEntParentId,
-        &Transform,
-        &PlayerName,
-    ), With<PlayerCamera>>,
+    clients: Query<(&PlayerEndpoint, &NetEntId, &PlayerName), With<ConnectedPlayer>>,
+    cameras: Query<(&NetEntId, &MyNetEntParentId, &Transform, &PlayerName), With<PlayerCamera>>,
     balls: Query<
-        (&Transform, &NetEntId, &MeshMaterial3d<bevy_pbr::StandardMaterial>),
+        (
+            &Transform,
+            &NetEntId,
+            &HasColor,
+        ),
         With<shared::net_components::ents::Ball>,
     >,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<bevy_pbr::StandardMaterial>>,
     sr: Res<ServerNetworkingResources>,
     _config: Res<Config>,
     mut commands: Commands,
@@ -152,19 +162,17 @@ fn on_player_connect(
         let spawn_camera_unit = SpawnUnit2 {
             net_ent_id: NetEntId::random(),
             components: vec![
-                PlayerName {
-                    name: name.clone(),
-                }.to_net_component(),
+                PlayerName { name: name.clone() }.to_net_component(),
                 spawn_location.to_net_component(),
                 PlayerCamera.to_net_component(),
                 MyNetEntParentId::new(new_player_ent_id).to_net_component(),
-            ]
+            ],
         };
 
         let mut unit_list_to_new_client = vec![];
 
         // Add all existing cameras from other players to unit list as spawnunit2s
-        for (c_net_ent, c_parent_id, c_tfm, c_name) in &cameras {
+        for (c_net_ent, _c_parent_id, c_tfm, c_name) in &cameras {
             unit_list_to_new_client.push(SpawnUnit2 {
                 net_ent_id: *c_net_ent,
                 components: vec![
@@ -179,56 +187,33 @@ fn on_player_connect(
         for (_c_net_client, c_net_ent, c_name) in &clients {
             unit_list_to_new_client.push(SpawnUnit2 {
                 net_ent_id: *c_net_ent,
-                components: vec![
-                    c_name.clone().to_net_component(),
-                ],
+                components: vec![c_name.clone().to_net_component()],
             });
         }
 
         // Tell all other clients about your new player
-        for (c_net_client, c_net_ent, c_name) in &clients {
-            send_event_to_server_batch(&sr.handler, c_net_client.0, &[
-                // their camera
-                EventToClient::SpawnUnit2(
-                    spawn_camera_unit.clone(),
-                ),
-                // their player unit
-                EventToClient::SpawnUnit2(SpawnUnit2 {
-                    net_ent_id: new_player_ent_id.clone(),
-                    components: vec![
-                        c_name.clone().to_net_component(),
-                    ],
-                }),
-            ]);
-        }
-
-        let sphere_size = 0.5;
-        // gather the balls in the unit list
-        for (&transform, &ent_id) in &balls {
-            unit_list_to_new_client.push(SpawnUnit2 {
-                net_ent_id: ent_id,
-                components: vec![
-                    transform.to_net_component(),
-                    Ball.to_net_component(),
-                    //Mesh3d(meshes.add(Sphere::new(0.5))),
-                    //MeshMaterial3d(materials.add(StandardMaterial {
-                        //base_color: color,
-                        //metallic: 0.0,
-                        //perceptual_roughness: 0.5,
-                        //..default()
-                    //})),
-                    NormalMeshMaterial { mesh: shared::net_components::MeshGenerator("sphere".to_string(), sphere_size), material: MaterialGenerator }.to_net_component(),
-                    Transform::from_translation(spawn_pos).to_net_component(),
-                    RigidBody::Dynamic.to_net_component(),
-                    Collider::sphere(sphere_size).to_net_component(),
-                    Mass(0.3).to_net_component(), // Lighter balls that will float (density ~0.57 of water)
-                    shared::ents::Ball.to_net_component(),
-                    // Add other ball components here as needed
+        for (c_net_client, _c_net_ent, c_name) in &clients {
+            send_event_to_server_batch(
+                &sr.handler,
+                c_net_client.0,
+                &[
+                    // their camera
+                    EventToClient::SpawnUnit2(spawn_camera_unit.clone()),
+                    // their player unit
+                    EventToClient::SpawnUnit2(SpawnUnit2 {
+                        net_ent_id: new_player_ent_id.clone(),
+                        components: vec![c_name.clone().to_net_component()],
+                    }),
                 ],
-            });
+            );
         }
 
-        // Directly connected player here
+        // gather the balls in the unit list
+        for (&transform, &ent_id, has_color) in &balls {
+            unit_list_to_new_client.push(make_ball(ent_id, transform, has_color.0));
+        }
+
+        // Add the connected player ent here
         commands.spawn((
             PlayerName { name },
             new_player_ent_id.clone(),
@@ -236,6 +221,9 @@ fn on_player_connect(
             ConnectedPlayer,
             // Used as a target for some AI
         ));
+
+        // Add the camera entity here
+        spawn_camera_unit.clone().spawn_entity(&mut commands, &mut meshes, &mut materials);
 
         // Each time we miss a heartbeat, we increment the Atomic counter.
         // So, we initially set this to negative number to give extra time for the initial
@@ -256,7 +244,7 @@ fn on_player_connect(
         let event = EventToClient::WorldData2(WorldData2 {
             your_unit_id: new_player_ent_id.clone(),
             your_camera_unit_id: spawn_camera_unit.net_ent_id.clone(),
-            units: unit_list,
+            units: unit_list_to_new_client,
         });
         send_event_to_server(&sr.handler, player.endpoint, &event);
     }
@@ -279,18 +267,32 @@ fn check_heartbeats(
 fn on_player_disconnect(
     mut pd: MessageReader<PlayerDisconnected>,
     clients: Query<(Entity, &PlayerEndpoint, &NetEntId), With<PlayerName>>,
+    clients_owned_items: Query<(Entity, &NetEntId, &MyNetEntParentId)>,
     mut commands: Commands,
     mut heartbeat_mapping: ResMut<HeartbeatList>,
-    sr: Res<ServerResources<EventToServer>>,
+    sr: Res<ServerNetworkingResources>,
 ) {
     for player in pd.read() {
-        heartbeat_mapping.heartbeats.remove(&player.ent);
+        heartbeat_mapping.heartbeats.remove(&player.id);
 
-        let event = EventToClient::PlayerDisconnected(PlayerDisconnected { id: player.ent });
-        for (_c_ent, c_net_client, _c_net_ent) in &clients {
-            send_event_to_server(&sr.handler, c_net_client.0, &event);
-            if _c_net_ent == &player.ent {
-                commands.entity(_c_ent).despawn_recursive();
+        let mut events = vec![];
+        events.push(EventToClient::PlayerDisconnected(PlayerDisconnected { id: player.id }));
+
+        for (owned_ent, net_ent_id, owner_id) in &clients_owned_items {
+            if owner_id.0 == player.id.0 {
+                events.push(EventToClient::DespawnUnit2(shared::event::client::DespawnUnit2 {
+                    net_ent_id: *net_ent_id,
+                }));
+
+                commands.entity(owned_ent).despawn();
+            }
+
+        }
+
+        for (c_ent, net_client, net_ent_id) in &clients {
+            send_event_to_server_batch(&sr.handler, net_client.0, &events);
+            if net_ent_id == &player.id {
+                commands.entity(c_ent).despawn();
             }
         }
     }
@@ -314,48 +316,35 @@ fn on_player_heartbeat(
 fn on_movement(
     mut pd: ERFE<ChangeMovement>,
     endpoint_mapping: Res<EndpointToNetId>,
-    mut clients: Query<
-        (
-            &PlayerEndpoint,
-            &NetEntId,
-        ),
-        With<ConnectedPlayer>,
-    >,
-    mut cameras: Query<
-        (
-            &NetEntId,
-            &MyNetEntParentId,
-            &mut Transform,
-        ),
-        With<PlayerCamera>,
-    >,
+    mut clients: Query<(&PlayerEndpoint, &NetEntId), With<ConnectedPlayer>>,
+    mut cameras: Query<(&NetEntId, &MyNetEntParentId, &mut Transform), With<PlayerCamera>>,
     sr: Res<ServerNetworkingResources>,
 ) {
     for movement in pd.read() {
         if let Some(moved_net_id) = endpoint_mapping.map.get(&movement.endpoint) {
             let event = EventToClient::UpdateUnit2(UpdateUnit2 {
                 net_ent_id: *moved_net_id,
-                components: vec![
-                    movement.event.transform.to_net_component(),
-                ],
+                components: vec![movement.event.transform.to_net_component()],
             });
 
-            for (c_net_client, c_net_ent) in &mut clients {
-                if moved_net_id == c_net_ent {
-                    //info!(?event);
-                    // If this person moved, update their transform serverside
-                    match movement.event {
-                        ChangeMovement::SetTransform(new_tfm) => *c_tfm = new_tfm,
-                        ChangeMovement::Move2d(new_intent) => {
-                            *intent = MovementIntention(new_intent)
-                        }
-                        _ => {}
-                    }
-                } else {
-                    // Else, just rebroadcast the packet to everyone else
-                    send_event_to_server(&sr.handler, c_net_client.0, &event);
-                }
-            }
+            //todo!();
+
+            //for (c_net_client, c_net_ent) in &mut clients {
+                //if moved_net_id == c_net_ent {
+                    ////info!(?event);
+                    //// If this person moved, update their transform serverside
+                    //match movement.event {
+                        //ChangeMovement::SetTransform(new_tfm) => *c_tfm = new_tfm,
+                        //ChangeMovement::Move2d(new_intent) => {
+                            //*intent = MovementIntention(new_intent)
+                        //}
+                        //_ => {}
+                    //}
+                //} else {
+                    //// Else, just rebroadcast the packet to everyone else
+                    //send_event_to_server(&sr.handler, c_net_client.0, &event);
+                //}
+            //}
         }
     }
 }

@@ -1,6 +1,7 @@
-use avian3d::prelude::*;
 use bevy::prelude::*;
-use shared::event::server::SpawnCircle;
+use shared::{event::{client::SpawnUnit2, server::SpawnCircle}};
+
+use crate::game_state::NetworkGameState;
 
 /// Marker component for spawned balls
 #[derive(Component)]
@@ -15,6 +16,14 @@ pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_ball_counter_ui)
+            .add_systems(
+                Update,
+                (
+                    // TODO receive new world data at any time?
+                    spawn_ball_network,
+                )
+                    .run_if(in_state(NetworkGameState::ClientConnected)),
+            )
             .add_systems(Update, (spawn_ball_on_space, update_ball_counter));
     }
 }
@@ -23,9 +32,9 @@ impl Plugin for PhysicsPlugin {
 fn spawn_ball_on_space(
     keyboard: Res<ButtonInput<KeyCode>>,
     camera_query: Query<(&Camera, &Transform)>,
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    //mut commands: Commands,
+    //mut meshes: ResMut<Assets<Mesh>>,
+    //mut materials: ResMut<Assets<StandardMaterial>>,
     mut spawn_ball_writer: MessageWriter<SpawnCircle>,
 ) {
     // Only spawn while space is held down
@@ -46,26 +55,22 @@ fn spawn_ball_on_space(
             position: spawn_pos.clone(),
             color: color.clone(),
         });
-
-        // Spawn ball with physics
-        // Ball volume = (4/3) * π * r³ = (4/3) * π * 0.5³ ≈ 0.524 m³
-        // With density ~0.5, mass = 0.524 * 0.5 ≈ 0.26 kg (light, floaty balls)
-        commands.spawn((
-            Ball, // Marker component for counting
-            Mesh3d(meshes.add(Sphere::new(0.5))),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: color,
-                metallic: 0.0,
-                perceptual_roughness: 0.5,
-                ..default()
-            })),
-            Transform::from_translation(spawn_pos),
-            RigidBody::Dynamic,
-            Collider::sphere(0.5),
-            Mass(0.3), // Lighter balls that will float (density ~0.57 of water)
-        ));
     }
 }
+
+fn spawn_ball_network(
+    mut unit_spawns: MessageReader<SpawnUnit2>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for spawn in unit_spawns.read() {
+        // Spawn ball with physics
+        spawn.clone().spawn_entity(&mut commands, &mut meshes, &mut materials);
+        info!("Spawned from networked SpawnUnit2");
+    }
+}
+
 
 /// Setup UI for ball counter
 fn setup_ball_counter_ui(mut commands: Commands) {

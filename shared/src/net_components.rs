@@ -97,6 +97,26 @@ impl NetComponent {
             }
         }
     }
+
+    pub fn insert_components_srv(
+        self,
+        ent_commands: &mut EntityCommands,
+    ) {
+        match self {
+            NetComponent::Foreign(foreign) => foreign.insert_components(ent_commands),
+            NetComponent::Ours(ours) => ours.insert_components(ent_commands),
+            NetComponent::Groups(groups) => {
+                groups.insert_components_srv(ent_commands);
+            }
+            NetComponent::Ents(ents) => ents.insert_components(ent_commands),
+            NetComponent::MyNetEntParentId(my_net_ent_parent_id) => {
+                ent_commands.insert(my_net_ent_parent_id);
+            }
+            NetComponent::NetEntId(net_ent_id) => {
+                ent_commands.insert(net_ent_id);
+            }
+        }
+    }
 }
 
 impl ToNetComponent for MyNetEntParentId {
@@ -125,8 +145,41 @@ impl SpawnUnit2 {
 
         ent_commands.id()
     }
+
+    pub fn spawn_entity_srv(
+        self,
+        commands: &mut Commands,
+    ) -> Entity {
+        let mut ent_commands = commands.spawn(self.net_ent_id);
+
+        for net_comp in self.components {
+            net_comp.insert_components_srv(&mut ent_commands);
+        }
+
+        ent_commands.id()
+    }
 }
 
 pub trait ToNetComponent {
     fn to_net_component(self) -> NetComponent;
+}
+
+pub fn make_ball(net_ent_id: NetEntId, transform: Transform, color: Color) -> SpawnUnit2 {
+    let sphere_size = 0.5;
+    SpawnUnit2 {
+        net_ent_id,
+        components: vec![
+            ents::Ball.to_net_component(),
+            transform.to_net_component(),
+            groups::NormalMeshMaterial {
+                mesh: MeshGenerator("sphere".to_string(), sphere_size),
+                material: MaterialGenerator("basic".to_string(), color),
+            }
+            .to_net_component(),
+            avian3d::prelude::RigidBody::Dynamic.to_net_component(),
+            avian3d::prelude::Collider::sphere(sphere_size).to_net_component(),
+            avian3d::prelude::Mass(0.3).to_net_component(), // Lighter balls that will float (density ~0.57 of water)
+                                           // Add other ball components here as needed
+        ],
+    }
 }
