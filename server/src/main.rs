@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use bevy::{log::LogPlugin, prelude::*, time::common_conditions::on_timer};
+use bevy::{log::LogPlugin, prelude::*};
 use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
@@ -304,8 +304,8 @@ fn on_player_heartbeat(
 fn on_movement(
     mut pd: ERFE<ChangeMovement>,
     endpoint_mapping: Res<EndpointToNetId>,
-    mut clients: Query<(&PlayerEndpoint, &NetEntId), With<ConnectedPlayer>>,
-    mut cameras: Query<(&NetEntId, &MyNetEntParentId, &mut Transform), With<PlayerCamera>>,
+    clients: Query<(&PlayerEndpoint, &NetEntId), With<ConnectedPlayer>>,
+    cameras: Query<(&NetEntId, &MyNetEntParentId, &mut Transform), With<PlayerCamera>>,
     sr: Res<ServerNetworkingResources>,
 ) {
     for movement in pd.read() {
