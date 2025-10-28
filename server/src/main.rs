@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use bevy::{log::LogPlugin, prelude::*};
+use bevy::{app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, time::common_conditions::on_timer};
 use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
@@ -63,7 +63,10 @@ fn main() {
         .insert_resource(HeartbeatList::default())
         .add_message::<PlayerDisconnected>()
         .add_plugins(DefaultPlugins)
-        .add_plugins((avian3d::PhysicsPlugins::default(),))
+        .add_plugins((
+            ScheduleRunnerPlugin::run_loop(Duration::from_millis(1)),
+            avian3d::PhysicsPlugins::default(),
+        ))
         .add_plugins((
             ConfigPlugin,
             //chat::ChatPlugin,
@@ -83,7 +86,18 @@ fn main() {
             OnEnter(ServerState::Starting),
             (
                 shared::netlib::setup_server::<EventToServer>,
-                |mut state: ResMut<NextState<ServerState>>| state.set(ServerState::Running),
+                |mut state: ResMut<NextState<ServerState>>| {
+                    info!("Server started, switching to running state");
+                    state.set(ServerState::Running)
+                },
+            ),
+        )
+        .add_systems(
+            OnEnter(ServerState::Running),
+            (
+                || {
+                    info!("We are fully Running!");
+                },
             ),
         )
         .add_systems(

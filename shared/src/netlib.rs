@@ -122,7 +122,8 @@ pub fn on_node_event<T: NetworkingEvent>(res: &NetworkingResources<T>, event: No
     let net_event = match event {
         NodeEvent::Network(n) => n,
         NodeEvent::Signal(_) => {
-            panic!("MESSAGE SERVER SHUTDOWN SIGNAL RECEIVED!!!");
+            error!("MESSAGE SERVER SHUTDOWN SIGNAL RECEIVED!!!");
+            panic!("Not implemented");
             // TODO graceful shutdown
         }
     };
