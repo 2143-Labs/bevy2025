@@ -1,5 +1,6 @@
 //!This is for events that are sent FROM the client TO the server.
 use crate::event::{EventFromEndpoint, NetEntId};
+//use crate::net_components::NetComponent;
 use crate::netlib::NetworkingResources;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -9,6 +10,7 @@ pub struct ConnectRequest {
     pub name: Option<String>,
     pub my_location: Transform,
 }
+
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct SendChat {
@@ -23,6 +25,12 @@ pub struct SpawnCircle {
     pub position: Vec3,
     pub color: Color,
 }
+
+//#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+//pub struct RequestSpawnUnit2 //{
+    //pub components: Vec<NetComponent>,
+//}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct ChangeMovement {

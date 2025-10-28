@@ -2,26 +2,17 @@
 use std::time::Duration;
 
 use bevy::prelude::*;
-use bevy_time::common_conditions::on_timer;
-use shared::{
-    animations::DoCast, event::{
-        client::{SomeoneCast, SomeoneMoved, SpawnUnit}, server::Cast, spells::AIType, NetEntId
-    }, netlib::{
-        send_event_to_server, send_event_to_server_batch, EventToClient, EventToServer,
-        ServerResources,
-    }, unit::{AttackIntention, MovementIntention}, AnyUnit, Controlled
-};
+use shared::{event::{client::SpawnUnit2, server::SpawnCircle}, net_components::ents::PlayerCamera, netlib::ServerNetworkingResources};
 
-use crate::{ConnectedPlayerName, PlayerEndpoint, ServerState};
+use crate::{PlayerEndpoint, ServerState};
 
 pub struct SpawnPlugin;
 impl Plugin for SpawnPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<SpawnUnit>()
-            .add_event::<AIFinishAttack>()
+        app.add_message::<SpawnCircle>()
             .add_systems(
                 Update,
-                (on_unit_spawn)
+                (on_circle_spawn)
                     //.run_if(on_timer(Duration::from_millis(10)))
                     .run_if(in_state(ServerState::Running)),
             )
@@ -34,21 +25,18 @@ impl Plugin for SpawnPlugin {
     }
 }
 
-fn on_unit_spawn(
-    mut spawns: EventReader<SpawnUnit2>,
+fn on_circle_spawn(
+    mut spawns: MessageReader<SpawnCircle>,
     mut commands: Commands,
     //players: Query<(Entity, &Transform, &NetEntId, &ConnectedPlayerName)>,
-    sr: Res<ServerResources<EventToServer>>,
-    clients: Query<&PlayerEndpoint, With<AnyUnit>>,
+    sr: Res<ServerNetworkingResources>,
+    clients: Query<&PlayerEndpoint, With<PlayerName>>,
 ) {
     for spawn in spawns.read() {
+        
         let mut base = commands.spawn((
-            AnyUnit,
-            MovementIntention(Vec2::ZERO),
-            AttackIntention::None,
+            PlayerCamera,
             spawn.data.ent_id,
-            spawn.data.health,
-            spawn.data.transform,
         ));
 
         match &spawn.data.unit {

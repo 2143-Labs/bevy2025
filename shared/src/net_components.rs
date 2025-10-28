@@ -13,7 +13,7 @@ use bevy::prelude::*;
 use bevy_pbr::StandardMaterial;
 use serde::{Deserialize, Serialize};
 
-use crate::event::client::SpawnUnit2;
+use crate::event::{client::SpawnUnit2, MyNetEntParentId, NetEntId};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MeshGenerator(pub String, pub f32);
@@ -71,6 +71,8 @@ pub enum NetComponent {
     Ours(ours::NetComponentOurs),
     Groups(groups::NetComponentGroups),
     Ents(ents::NetComponentEnts),
+    MyNetEntParentId(MyNetEntParentId),
+    NetEntId(NetEntId),
 }
 
 impl NetComponent {
@@ -87,7 +89,24 @@ impl NetComponent {
                 groups.insert_components(ent_commands, meshes, materials)
             }
             NetComponent::Ents(ents) => ents.insert_components(ent_commands),
+            NetComponent::MyNetEntParentId(my_net_ent_parent_id) => {
+                ent_commands.insert(my_net_ent_parent_id);
+            }
+            NetComponent::NetEntId(net_ent_id) => {
+                ent_commands.insert(net_ent_id);
+            }
         }
+    }
+}
+
+impl ToNetComponent for MyNetEntParentId {
+    fn to_net_component(self) -> NetComponent {
+        NetComponent::MyNetEntParentId(self)
+    }
+}
+impl ToNetComponent for NetEntId {
+    fn to_net_component(self) -> NetComponent {
+        NetComponent::NetEntId(self)
     }
 }
 

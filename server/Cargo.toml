@@ -23,6 +23,7 @@ bevy_ecs = "0.17.2"
 bevy_app = "0.17.2"
 bevy_log = "0.17.2"
 bevy_time = "0.17.2"
+bevy_pbr = "0.17.2"
 bevy_transform = "0.17.2"
 bevy_diagnostic = "0.17.2"
 phf = { version = "0.13.1", features = ["macros"] }
@@ -33,3 +34,7 @@ clap = { version = "4.5.50", features = ["derive"] }
 
 [dev-dependencies]
 tungstenite = "0.28.0"
+
+noise = "0.9"
+fastrand = "2.0"
+avian3d = "0.4.0"

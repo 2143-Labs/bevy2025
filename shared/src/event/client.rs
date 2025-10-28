@@ -15,6 +15,7 @@ pub struct SpawnUnit2 {
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct WorldData2 {
     pub your_unit_id: NetEntId,
+    pub your_camera_unit_id: NetEntId,
     pub units: Vec<SpawnUnit2>,
 }
 
