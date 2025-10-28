@@ -2,17 +2,11 @@ use std::{net::SocketAddr, time::Duration};
 
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
-    Config,
     event::{
-        ERFE,
-        client::{SpawnUnit2, WorldData2},
-        server::{ConnectRequest, Heartbeat, SpawnCircle},
-    },
-    net_components::ours::PlayerName,
-    netlib::{
-        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint,
-        NetworkConnectionTarget, NetworkingResources, send_event_to_server, setup_client,
-    },
+        client::{SpawnUnit2, WorldData2}, server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle}, NetEntId, ERFE
+    }, net_components::{ents::PlayerCamera, ours::PlayerName}, netlib::{
+        send_event_to_server, send_event_to_server_batch, setup_client, ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, NetworkConnectionTarget, NetworkingResources
+    }, Config
 };
 
 use crate::{camera::FreeCam, game_state::NetworkGameState, notification::Notification};
@@ -67,12 +61,12 @@ impl Plugin for NetworkingPlugin {
             ////.run_if(in_state(ChatState::NotChatting))
             ////.run_if(any_with_component::<Player>),
             //)
-            //.add_systems(
-            //Update,
-            //(send_movement, send_interp)
-            //.run_if(on_timer(Duration::from_millis(25)))
-            //.run_if(in_state(NetworkGameState::ClientConnected)),
-            //)
+            .add_systems(
+            Update,
+                (send_movement)
+                .run_if(on_timer(Duration::from_millis(25)))
+                .run_if(in_state(NetworkGameState::ClientConnected)),
+            )
             .add_systems(
                 Update,
                 send_heartbeat
@@ -249,29 +243,24 @@ fn send_heartbeat(sr: Res<NetworkingResources<EventToClient>>, mse: Res<MainServ
 //}
 //}
 
-//fn send_movement(
-//sr: Res<ServerResources<EventToClient>>,
-//mse: Res<MainServerEndpoint>,
-//our_transform: Query<
-//(&Transform, Option<&MovementIntention>),
-//(With<Player>, Changed<Transform>),
-//>,
-//) {
-//if let Ok((transform, some_intent)) = our_transform.get_single() {
-//let mut events = vec![];
-//events.push(EventToServer::ChangeMovement(ChangeMovement::SetTransform(
-//*transform,
-//)));
+fn send_movement(
+    sr: Res<ClientNetworkingResources>,
+    mse: Res<MainServerEndpoint>,
+    our_transform: Query<
+        (&Transform, &NetEntId),
+        (With<PlayerCamera>, Changed<Transform>),
+    >,
+) {
+    if let Ok((transform, ent_id)) = our_transform.single() {
+        let mut events = vec![];
+        events.push(EventToServer::ChangeMovement(ChangeMovement {
+            net_ent_id: *ent_id,
+            transform: *transform,
+        }));
 
-//if let Some(intent) = some_intent {
-//events.push(EventToServer::ChangeMovement(ChangeMovement::Move2d(
-//intent.0,
-//)));
-//};
-
-//send_event_to_server_batch(&sr.handler, mse.0, &events);
-//}
-//}
+        send_event_to_server_batch(&sr.handler, mse.0, &events);
+    }
+}
 
 //fn on_disconnect(
 //mut dc_info: ERFE<PlayerDisconnected>,

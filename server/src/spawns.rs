@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use shared::{
-    event::{server::SpawnCircle, NetEntId},
+    event::{server::SpawnCircle, NetEntId, ERFE},
     netlib::{send_event_to_server, EventToClient, ServerNetworkingResources},
 };
 
@@ -9,7 +9,7 @@ use crate::{make_ball, ConnectedPlayer, HasColor, PlayerEndpoint, ServerState};
 pub struct SpawnPlugin;
 impl Plugin for SpawnPlugin {
     fn build(&self, app: &mut App) {
-        app.add_message::<SpawnCircle>().add_systems(
+        app.add_systems(
             Update,
             (on_circle_spawn)
                 //.run_if(on_timer(Duration::from_millis(10)))
@@ -25,12 +25,13 @@ impl Plugin for SpawnPlugin {
 }
 
 fn on_circle_spawn(
-    mut spawns: MessageReader<SpawnCircle>,
+    mut spawns: ERFE<SpawnCircle>,
     mut commands: Commands,
     sr: Res<ServerNetworkingResources>,
     clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
 ) {
-    for spawn in spawns.read() {
+    for spawn_ev in spawns.read() {
+        let spawn = &spawn_ev.event;
         let transform = Transform::from_translation(spawn.position);
         let ent_id = NetEntId::random();
 
