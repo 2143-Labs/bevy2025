@@ -4,13 +4,9 @@ use std::{
     time::Duration,
 };
 
-use avian3d::prelude::{Collider, Mass, RigidBody};
-use bevy::{log::LogPlugin, prelude::*};
-use bevy_mesh::MeshPlugin;
-use bevy_time::common_conditions::on_timer;
+use bevy::{log::LogPlugin, prelude::*, time::common_conditions::on_timer};
 use message_io::network::Endpoint;
 use rand::Rng;
-use bevy_state::{app::StatesPlugin, prelude::*};
 use shared::{
     event::{
         client::{PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2},
@@ -18,7 +14,7 @@ use shared::{
         MyNetEntParentId, NetEntId, ERFE,
     },
     net_components::{
-        ents::{Ball, PlayerCamera}, groups::NormalMeshMaterial, make_ball, ours::PlayerName, MaterialGenerator, ToNetComponent
+        ents::PlayerCamera, make_ball, ours::PlayerName, ToNetComponent
     },
     netlib::{
         send_event_to_server, send_event_to_server_batch, EventToClient, EventToServer,
@@ -74,11 +70,7 @@ fn main() {
             ..Default::default()
         })
         .add_plugins((
-            StatesPlugin,
-            MeshPlugin,
             avian3d::PhysicsPlugins::default(),
-            PickingPlugin,
-            bevy_asset::AssetPlugin::default(),
         ))
         .add_plugins((
             ConfigPlugin,
@@ -115,7 +107,7 @@ fn main() {
         )
         .add_systems(
             Update,
-            check_heartbeats.run_if(on_timer(Duration::from_millis(200))),
+            check_heartbeats.run_if(bevy::time::common_conditions::on_timer(Duration::from_millis(200))),
         );
 
     app.run();
