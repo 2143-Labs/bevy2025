@@ -1,7 +1,6 @@
 use avian3d::prelude::*;
 use bevy::prelude::*;
-
-use crate::terrain::BoundaryWall;
+use shared::physics::terrain::BoundaryWall;
 
 /// Marker for the cursor indicator orb
 #[derive(Component)]

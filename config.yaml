@@ -1,4 +1,5 @@
-ip: john2143.com
+ip: 0.0.0.0
+#ip: john2143.com
 #ip: 192.168.1.206
 port: 25555
 name: John

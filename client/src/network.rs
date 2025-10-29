@@ -6,10 +6,13 @@ use shared::{
         client::{SpawnUnit2, WorldData2}, server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle}, NetEntId, ERFE
     }, net_components::{ents::PlayerCamera, ours::PlayerName}, netlib::{
         send_event_to_server, send_event_to_server_batch, setup_client, ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, NetworkConnectionTarget, NetworkingResources
-    }, Config
+    }, physics::terrain::TerrainParams, Config
 };
 
-use crate::{camera::FreeCam, game_state::NetworkGameState, notification::Notification};
+use crate::{camera::FreeCam, game_state::NetworkGameState, notification::Notification, terrain::SetupTerrain};
+
+#[derive(Component)]
+pub struct DespawnOnWorldData;
 
 pub struct NetworkingPlugin;
 impl Plugin for NetworkingPlugin {
@@ -149,10 +152,17 @@ fn receive_world_data(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut game_state: ResMut<NextState<NetworkGameState>>,
     asset_server: ResMut<AssetServer>,
+    mut terrain_data: ResMut<TerrainParams>,
+    mut msg_terrain_events: MessageWriter<SetupTerrain>,
 ) {
     for event in world_data.read() {
         game_state.set(NetworkGameState::ClientConnected);
         info!(?event, "Server has returned world data!");
+
+        // Tell the client to update the terrain with the server's seed
+        *terrain_data = event.event.terrain_params.clone();
+        msg_terrain_events.write(SetupTerrain);
+        info!(?terrain_data, "Updated terrain params from server.");
 
         let my_id = event.event.your_unit_id;
         for unit in &event.event.units {

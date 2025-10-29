@@ -54,6 +54,10 @@ struct InterpolationCam;
 #[derive(Component)]
 struct PauseUI;
 
+/// Marker for the player camera that we control
+#[derive(Component)]
+pub struct LocalCamera;
+
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
@@ -91,6 +95,7 @@ fn setup_cameras(mut commands: Commands) {
         Camera3d::default(),
         Transform::from_xyz(50.0, 30.0, 50.0).looking_at(Vec3::ZERO, Vec3::Y),
         Projection::Perspective(PerspectiveProjection::default()),
+        LocalCamera,
         FreeCam {
             yaw: -std::f32::consts::FRAC_PI_4,
             pitch: -0.6,

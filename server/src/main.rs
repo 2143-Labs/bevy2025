@@ -12,13 +12,10 @@ use shared::{
         client::{PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2},
         server::{ChangeMovement, Heartbeat},
         MyNetEntParentId, NetEntId, ERFE,
-    },
-    net_components::{ents::PlayerCamera, make_ball, ours::PlayerName, ToNetComponent},
-    netlib::{
+    }, net_components::{ents::PlayerCamera, make_ball, ours::PlayerName, ToNetComponent}, netlib::{
         send_event_to_server, send_event_to_server_batch, EventToClient, EventToServer,
         NetworkConnectionTarget, ServerNetworkingResources,
-    },
-    Config, ConfigPlugin,
+    }, physics::terrain::TerrainParams, Config, ConfigPlugin
 };
 
 /// How often to run the system
@@ -72,6 +69,8 @@ fn main() {
             //chat::ChatPlugin,
             //game_manager::GamePlugin,
             spawns::SpawnPlugin,
+            shared::physics::water::SharedWaterPlugin,
+            shared::physics::terrain::SharedTerrainPlugin,
             //StatusPlugin,
         ))
         .init_state::<ServerState>()
@@ -142,6 +141,7 @@ fn on_player_connect(
     cameras: Query<(&NetEntId, &MyNetEntParentId, &Transform, &PlayerName), With<PlayerCamera>>,
     balls: Query<(&Transform, &NetEntId, &HasColor), With<shared::net_components::ents::Ball>>,
     sr: Res<ServerNetworkingResources>,
+    terrain: Res<TerrainParams>,
     _config: Res<Config>,
     mut commands: Commands,
 ) {
@@ -244,6 +244,7 @@ fn on_player_connect(
         let event = EventToClient::WorldData2(WorldData2 {
             your_unit_id: new_player_ent_id.clone(),
             your_camera_unit_id: spawn_camera_unit.net_ent_id.clone(),
+            terrain_params: terrain.clone(),
             units: unit_list_to_new_client,
         });
         send_event_to_server(&sr.handler, player.endpoint, &event);
