@@ -153,6 +153,7 @@ fn receive_world_data(
     mut game_state: ResMut<NextState<NetworkGameState>>,
     asset_server: ResMut<AssetServer>,
     mut terrain_data: ResMut<TerrainParams>,
+    ents_to_despawn: Query<Entity, With<DespawnOnWorldData>>,
     mut msg_terrain_events: MessageWriter<SetupTerrain>,
 ) {
     for event in world_data.read() {
@@ -163,6 +164,10 @@ fn receive_world_data(
         *terrain_data = event.event.terrain_params.clone();
         msg_terrain_events.write(SetupTerrain);
         info!(?terrain_data, "Updated terrain params from server.");
+
+        for ent in ents_to_despawn.iter() {
+            commands.entity(ent).despawn();
+        }
 
         let my_id = event.event.your_unit_id;
         for unit in &event.event.units {
