@@ -73,7 +73,7 @@ impl Plugin for CameraPlugin {
                     freecam_controller,
                     update_camera_transition,
                     manage_camera_visibility,
-                    manage_physics_pause,
+                    //manage_physics_pause,
                 )
                     .chain(),
             )
@@ -423,21 +423,21 @@ fn despawn_pause_ui(mut commands: Commands, ui_query: Query<Entity, With<PauseUI
     }
 }
 
-/// Manage physics pause state based on game state
-fn manage_physics_pause(
-    game_state: Res<State<GameState>>,
-    mut physics_time: ResMut<Time<Physics>>,
-) {
-    match game_state.get() {
-        GameState::Paused => {
-            if !physics_time.is_paused() {
-                physics_time.pause();
-            }
-        }
-        GameState::Playing => {
-            if physics_time.is_paused() {
-                physics_time.unpause();
-            }
-        }
-    }
-}
+// Manage physics pause state based on game state
+//fn manage_physics_pause(
+    //game_state: Res<State<GameState>>,
+    //mut physics_time: ResMut<Time<Physics>>,
+//) {
+    //match game_state.get() {
+        //GameState::Paused => {
+            //if !physics_time.is_paused() {
+                //physics_time.pause();
+            //}
+        //}
+        //GameState::Playing => {
+            //if physics_time.is_paused() {
+                //physics_time.unpause();
+            //}
+        //}
+    //}
+//}
