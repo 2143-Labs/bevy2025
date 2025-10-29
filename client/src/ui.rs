@@ -1,8 +1,10 @@
 use bevy::{
     color::palettes::basic::*,
     input_focus::InputFocus,
+    math::Rot2,
     prelude::*,
-    image::{ImageSampler, ImageSamplerDescriptor},
+    image::ImageSampler,
+    ui::UiTransform,
 };
 
 
@@ -14,7 +16,7 @@ impl Plugin for UIPlugin {
         app
             .init_resource::<InputFocus>()
             .add_systems(Startup, setup)
-            .add_systems(Update, (button_system, setup_logo_texture));
+            .add_systems(Update, (button_system, setup_logo_texture, animate_logo));
     }
 }
 
@@ -31,6 +33,12 @@ pub struct JoinLobbyButton;
 
 #[derive(Component)]
 pub struct SettingsButton;
+
+/// Marker for the animated logo
+#[derive(Component)]
+struct AnimatedLogo {
+    time: f32,
+}
 
 fn setup(mut commands: Commands, assets: Res<AssetServer>) {
     commands.spawn((
@@ -72,6 +80,8 @@ fn setup(mut commands: Commands, assets: Res<AssetServer>) {
                     margin: UiRect::bottom(px(60)),
                     ..default()
                 },
+                UiTransform::default(),
+                AnimatedLogo { time: 0.0 },
             ));
 
             // Play button
@@ -125,6 +135,26 @@ fn button_system(
                 *border_color = BorderColor::all(NORMAL_BORDER);
             }
         }
+    }
+}
+
+/// Animate the logo with rotation and subtle floating motion
+fn animate_logo(
+    time: Res<Time>,
+    mut query: Query<(&mut AnimatedLogo, &mut UiTransform)>,
+) {
+    for (mut logo, mut ui_transform) in query.iter_mut() {
+        logo.time += time.delta_secs();
+
+        // Rotation: gentle swing left and right (-5 to +5 degrees)
+        let rotation_angle = (logo.time * 1.5).sin() * 0.087; // 0.087 rad ≈ 5 degrees
+
+        // Floating motion: subtle diagonal drift from top-right to bottom-left
+        let float_x = (logo.time * 0.8).sin() * 8.0; // Horizontal movement
+        let float_y = (logo.time * 0.8).cos() * 8.0; // Vertical movement
+
+        ui_transform.rotation = Rot2::radians(rotation_angle);
+        ui_transform.translation = Val2::px(float_x, float_y);
     }
 }
 
