@@ -1,6 +1,6 @@
 use avian3d::prelude::*;
 use bevy::{pbr::ExtendedMaterial, prelude::*};
-use shared::physics::terrain::{generate_terrain_mesh, BoundaryWall, SharedTerrainPlugin, Terrain, TerrainParams};
+use shared::physics::terrain::{generate_terrain_mesh, BoundaryWall, Terrain, TerrainParams};
 
 use crate::{grass::{spawn_grass_on_terrain, GrassMaterial, WindSettings}, network::DespawnOnWorldData, water::{spawn_water_client, WaterMaterial}};
 
@@ -15,9 +15,11 @@ impl Plugin for TerrainPlugin {
             // this can also be sent by world net connect
             setup_events.write(SetupTerrain);
         })
+        .add_message::<SetupTerrain>()
             .add_systems(Update, draw_boundary_debug)
             .add_systems(Update, setup_terrain_client.run_if(on_message::<SetupTerrain>))
-            .add_plugins(SharedTerrainPlugin);
+            .insert_resource(TerrainParams::default());
+            //.add_plugins(SharedTerrainPlugin);
     }
 }
 

@@ -4,7 +4,7 @@ use bevy::{
     render::render_resource::AsBindGroup,
     shader::ShaderRef,
 };
-use shared::physics::water::Water;
+use shared::physics::water::{spawn_water_shared, Water};
 
 use crate::network::DespawnOnWorldData;
 
@@ -46,6 +46,8 @@ pub fn spawn_water_client(
     water_level: f32,
     size: f32,
 ) {
+    spawn_water_shared(commands, water_level, size);
+
     // Create a large plane for water
     let water_mesh = Rectangle::new(size, size);
 

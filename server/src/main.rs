@@ -50,6 +50,7 @@ struct PlayerEndpoint(Endpoint);
 //pub mod chat;
 //pub mod game_manager;
 pub mod spawns;
+pub mod terrain;
 
 fn main() {
     info!("Main Start");
@@ -70,7 +71,7 @@ fn main() {
             //game_manager::GamePlugin,
             spawns::SpawnPlugin,
             shared::physics::water::SharedWaterPlugin,
-            shared::physics::terrain::SharedTerrainPlugin,
+            terrain::TerrainPlugin,
             //StatusPlugin,
         ))
         .init_state::<ServerState>()
