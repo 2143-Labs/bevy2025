@@ -1,6 +1,6 @@
 use avian3d::prelude::*;
 use bevy::{pbr::ExtendedMaterial, prelude::*};
-use shared::physics::terrain::{BoundaryWall, Terrain, TerrainParams, generate_terrain_mesh};
+use shared::physics::terrain::{generate_terrain_mesh, spawn_boundary_walls, BoundaryWall, Terrain, TerrainParams};
 
 use crate::{
     grass::{GrassMaterial, WindSettings, spawn_grass_on_terrain},
@@ -114,6 +114,11 @@ fn setup_terrain_client(
         terrain_params.max_height_delta,
         water_level,
     );
+
+    let ents = spawn_boundary_walls(&mut commands, &terrain_params);
+    for e in ents {
+        commands.entity(e).insert(DespawnOnWorldData);
+    }
 
     // Add directional light (sun)
     commands.spawn((

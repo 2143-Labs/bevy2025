@@ -35,7 +35,7 @@ impl Default for TerrainParams {
 }
 
 /// Spawn invisible boundary walls around the terrain to keep balls from falling off
-pub fn spawn_boundary_walls(commands: &mut Commands, params: &TerrainParams) {
+pub fn spawn_boundary_walls(commands: &mut Commands, params: &TerrainParams) -> [Entity; 4] {
     let size = params.plane_size;
     let wall_height = size; // Height matches terrain size (100 units)
     let wall_thickness = 0.1; // Very thin planes
@@ -46,36 +46,38 @@ pub fn spawn_boundary_walls(commands: &mut Commands, params: &TerrainParams) {
     let center_y = base_y + wall_height / 2.0;
 
     // North wall (positive Z) - plane perpendicular to Z axis
-    commands.spawn((
+    let e1 = commands.spawn((
         Transform::from_xyz(0.0, center_y, half_size),
         RigidBody::Static,
         Collider::cuboid(size, wall_height, wall_thickness),
         BoundaryWall,
-    ));
+    )).id();
 
     // South wall (negative Z) - plane perpendicular to Z axis
-    commands.spawn((
+    let e2 = commands.spawn((
         Transform::from_xyz(0.0, center_y, -half_size),
         RigidBody::Static,
         Collider::cuboid(size, wall_height, wall_thickness),
         BoundaryWall,
-    ));
+    )).id();
 
     // East wall (positive X) - plane perpendicular to X axis
-    commands.spawn((
+    let e3 = commands.spawn((
         Transform::from_xyz(half_size, center_y, 0.0),
         RigidBody::Static,
         Collider::cuboid(wall_thickness, wall_height, size),
         BoundaryWall,
-    ));
+    )).id();
 
     // West wall (negative X) - plane perpendicular to X axis
-    commands.spawn((
+    let e4 = commands.spawn((
         Transform::from_xyz(-half_size, center_y, 0.0),
         RigidBody::Static,
         Collider::cuboid(wall_thickness, wall_height, size),
         BoundaryWall,
-    ));
+    )).id();
+
+    [e1, e2, e3, e4]
 }
 
 /// Generate procedural terrain mesh using Perlin noise
