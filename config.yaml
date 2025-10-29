@@ -1,5 +1,6 @@
 #ip: 0.0.0.0
 ip: john2143.com
+host_ip: 0.0.0.0
 #ip: 192.168.1.206
 port: 25555
 name: John

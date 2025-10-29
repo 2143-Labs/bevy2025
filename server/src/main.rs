@@ -4,7 +4,9 @@ use std::{
     time::Duration,
 };
 
-use bevy::{app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, time::common_conditions::on_timer};
+use bevy::{
+    app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, time::common_conditions::on_timer,
+};
 use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
@@ -12,10 +14,14 @@ use shared::{
         client::{PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2},
         server::{ChangeMovement, Heartbeat},
         MyNetEntParentId, NetEntId, ERFE,
-    }, net_components::{ents::PlayerCamera, make_ball, ours::PlayerName, ToNetComponent}, netlib::{
+    },
+    net_components::{ents::PlayerCamera, make_ball, ours::PlayerName, ToNetComponent},
+    netlib::{
         send_event_to_server, send_event_to_server_batch, EventToClient, EventToServer,
         NetworkConnectionTarget, ServerNetworkingResources,
-    }, physics::terrain::TerrainParams, Config, ConfigPlugin
+    },
+    physics::terrain::TerrainParams,
+    Config, ConfigPlugin,
 };
 
 /// How often to run the system
@@ -94,11 +100,9 @@ fn main() {
         )
         .add_systems(
             OnEnter(ServerState::Running),
-            (
-                || {
-                    info!("We are fully Running!");
-                },
-            ),
+            (|| {
+                info!("We are fully Running!");
+            },),
         )
         .add_systems(
             Update,
@@ -123,7 +127,7 @@ fn main() {
 
 fn add_network_connection_info_from_config(config: Res<Config>, mut commands: Commands) {
     commands.insert_resource(NetworkConnectionTarget {
-        ip: config.ip.clone(),
+        ip: config.host_ip.as_ref().unwrap_or(&config.ip).clone(),
         port: config.port,
     });
 }
@@ -251,12 +255,11 @@ fn on_player_connect(
         send_event_to_server(&sr.handler, player.endpoint, &event);
 
         for ball_unit in unit_list_to_new_client_balls.chunks(100) {
-            let events = ball_unit.iter().map(|u| EventToClient::SpawnUnit2(u.clone())).collect::<Vec<_>>();
-            send_event_to_server_batch(
-                &sr.handler,
-                player.endpoint,
-                &events
-            );
+            let events = ball_unit
+                .iter()
+                .map(|u| EventToClient::SpawnUnit2(u.clone()))
+                .collect::<Vec<_>>();
+            send_event_to_server_batch(&sr.handler, player.endpoint, &events);
         }
     }
 }

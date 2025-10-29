@@ -2,14 +2,25 @@ use std::{net::SocketAddr, time::Duration};
 
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
+    Config,
     event::{
-        client::{SpawnUnit2, WorldData2}, server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle}, NetEntId, ERFE
-    }, net_components::{ents::PlayerCamera, ours::PlayerName}, netlib::{
-        send_event_to_server, send_event_to_server_batch, setup_client, ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, NetworkConnectionTarget, NetworkingResources
-    }, physics::terrain::TerrainParams, Config
+        ERFE, NetEntId,
+        client::{SpawnUnit2, WorldData2},
+        server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle},
+    },
+    net_components::{ents::PlayerCamera, ours::PlayerName},
+    netlib::{
+        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint,
+        NetworkConnectionTarget, NetworkingResources, send_event_to_server,
+        send_event_to_server_batch, setup_client,
+    },
+    physics::terrain::TerrainParams,
 };
 
-use crate::{camera::FreeCam, game_state::NetworkGameState, notification::Notification, terrain::SetupTerrain};
+use crate::{
+    camera::FreeCam, game_state::NetworkGameState, notification::Notification,
+    terrain::SetupTerrain,
+};
 
 #[derive(Component)]
 pub struct DespawnOnWorldData;
@@ -21,16 +32,18 @@ impl Plugin for NetworkingPlugin {
         app.add_message::<SpawnUnit2>()
             .add_systems(
                 Startup,
-                (|mut commands: Commands, config: Res<Config>| {
-                    // Setup networking resources
-                    commands.insert_resource(NetworkConnectionTarget {
-                        ip: config.ip.clone(),
-                        port: config.port,
-                    });
-                },
-                |mut state: ResMut<NextState<NetworkGameState>>| {
-                    state.set(NetworkGameState::ClientConnecting)
-                }),
+                (
+                    |mut commands: Commands, config: Res<Config>| {
+                        // Setup networking resources
+                        commands.insert_resource(NetworkConnectionTarget {
+                            ip: config.ip.clone(),
+                            port: config.port,
+                        });
+                    },
+                    |mut state: ResMut<NextState<NetworkGameState>>| {
+                        state.set(NetworkGameState::ClientConnecting)
+                    },
+                ),
             )
             .add_systems(
                 OnEnter(NetworkGameState::ClientConnecting),
@@ -78,10 +91,10 @@ impl Plugin for NetworkingPlugin {
             ////.run_if(any_with_component::<Player>),
             //)
             .add_systems(
-            Update,
+                Update,
                 (send_movement)
-                .run_if(on_timer(Duration::from_millis(25)))
-                .run_if(in_state(NetworkGameState::ClientConnected)),
+                    .run_if(on_timer(Duration::from_millis(25)))
+                    .run_if(in_state(NetworkGameState::ClientConnected)),
             )
             .add_systems(
                 Update,
@@ -274,10 +287,7 @@ fn send_heartbeat(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoin
 fn send_movement(
     sr: Res<ClientNetworkingResources>,
     mse: Res<MainServerEndpoint>,
-    our_transform: Query<
-        (&Transform, &NetEntId),
-        (With<PlayerCamera>, Changed<Transform>),
-    >,
+    our_transform: Query<(&Transform, &NetEntId), (With<PlayerCamera>, Changed<Transform>)>,
 ) {
     if let Ok((transform, ent_id)) = our_transform.single() {
         let mut events = vec![];

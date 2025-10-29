@@ -1,8 +1,12 @@
 use avian3d::prelude::*;
 use bevy::{pbr::ExtendedMaterial, prelude::*};
-use shared::physics::terrain::{generate_terrain_mesh, BoundaryWall, Terrain, TerrainParams};
+use shared::physics::terrain::{BoundaryWall, Terrain, TerrainParams, generate_terrain_mesh};
 
-use crate::{grass::{spawn_grass_on_terrain, GrassMaterial, WindSettings}, network::DespawnOnWorldData, water::{spawn_water_client, WaterMaterial}};
+use crate::{
+    grass::{GrassMaterial, WindSettings, spawn_grass_on_terrain},
+    network::DespawnOnWorldData,
+    water::{WaterMaterial, spawn_water_client},
+};
 
 #[derive(Message)]
 pub struct SetupTerrain;
@@ -11,15 +15,18 @@ pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, |mut setup_events: MessageWriter<SetupTerrain>| {
-            // this can also be sent by world net connect
-            setup_events.write(SetupTerrain);
-        })
-        .add_message::<SetupTerrain>()
+        app.add_message::<SetupTerrain>()
+            .add_systems(Startup, |mut setup_events: MessageWriter<SetupTerrain>| {
+                // this can also be sent by world net connect
+                setup_events.write(SetupTerrain);
+            })
             .add_systems(Update, draw_boundary_debug)
-            .add_systems(Update, setup_terrain_client.run_if(on_message::<SetupTerrain>))
+            .add_systems(
+                Update,
+                setup_terrain_client.run_if(on_message::<SetupTerrain>),
+            )
             .insert_resource(TerrainParams::default());
-            //.add_plugins(SharedTerrainPlugin);
+        //.add_plugins(SharedTerrainPlugin);
     }
 }
 

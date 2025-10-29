@@ -35,10 +35,7 @@ impl Default for TerrainParams {
 }
 
 /// Spawn invisible boundary walls around the terrain to keep balls from falling off
-pub fn spawn_boundary_walls(
-    commands: &mut Commands,
-    params: &TerrainParams,
-) {
+pub fn spawn_boundary_walls(commands: &mut Commands, params: &TerrainParams) {
     let size = params.plane_size;
     let wall_height = size; // Height matches terrain size (100 units)
     let wall_thickness = 0.1; // Very thin planes

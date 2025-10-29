@@ -4,7 +4,7 @@ use bevy::{
     render::render_resource::AsBindGroup,
     shader::ShaderRef,
 };
-use shared::physics::water::{spawn_water_shared, Water};
+use shared::physics::water::{Water, spawn_water_shared};
 
 use crate::network::DespawnOnWorldData;
 

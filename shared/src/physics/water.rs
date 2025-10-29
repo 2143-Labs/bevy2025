@@ -21,21 +21,20 @@ pub struct SharedWaterPlugin;
 
 impl Plugin for SharedWaterPlugin {
     fn build(&self, app: &mut App) {
-        app
-        .add_systems(Update, (check_water_immersion, apply_buoyancy).chain());
+        app.add_systems(
+            Update,
+            (check_water_immersion, apply_buoyancy)
+                .chain()
+                .run_if(resource_exists::<WaterLevel>),
+        );
     }
 }
 
 /// Setup water plane at specified level
-pub fn spawn_water_shared(
-    commands: &mut Commands,
-    water_level: f32,
-    size: f32,
-) {
+pub fn spawn_water_shared(commands: &mut Commands, water_level: f32, size: f32) {
     // Store water level as resource
     commands.insert_resource(WaterLevel(water_level));
 }
-
 
 /// Check which rigid bodies are in water
 fn check_water_immersion(
