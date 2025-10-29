@@ -1,5 +1,6 @@
 use avian3d::prelude::*;
 use bevy::prelude::*;
+use shared::{Config, GameAction};
 
 /// Master game state
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
@@ -160,6 +161,7 @@ fn freecam_controller(
     time: Res<Time>,
     mut camera_query: Query<(&mut Transform, &mut FreeCam)>,
     game_state: Res<State<GameState>>,
+    config: Res<Config>,
 ) {
     // Only control FreeCam when in Playing state
     if *game_state.get() != GameState::Playing {
@@ -194,22 +196,23 @@ fn freecam_controller(
     let forward = transform.forward();
     let right = transform.right();
 
-    if keyboard.pressed(KeyCode::KeyW) {
+    // Check if key pressed is in keybindings vector for gameaction
+    if config.pressed(&keyboard, GameAction::MoveForward) {
         movement += *forward * speed * time.delta_secs();
     }
-    if keyboard.pressed(KeyCode::KeyS) {
+    if config.pressed(&keyboard, GameAction::MoveBackward) {
         movement -= *forward * speed * time.delta_secs();
     }
-    if keyboard.pressed(KeyCode::KeyA) {
+    if config.pressed(&keyboard, GameAction::StrafeLeft) {
         movement -= *right * speed * time.delta_secs();
     }
-    if keyboard.pressed(KeyCode::KeyD) {
+    if config.pressed(&keyboard, GameAction::StrafeRight) {
         movement += *right * speed * time.delta_secs();
     }
-    if keyboard.pressed(KeyCode::ShiftLeft) {
+    if config.pressed(&keyboard, GameAction::Ascend) {
         movement.y += speed * time.delta_secs();
     }
-    if keyboard.pressed(KeyCode::ControlLeft) {
+    if config.pressed(&keyboard, GameAction::Descend) {
         movement.y -= speed * time.delta_secs();
     }
 

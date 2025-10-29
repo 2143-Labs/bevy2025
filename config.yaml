@@ -1,4 +1,4 @@
-ip: john2143.com
+ip: 127.0.0.1
 #ip: 192.168.1.206
 port: 25555
 name: John
@@ -34,3 +34,7 @@ keybindings:
   - KeyF
   StrafeLeft:
   - KeyA
+  Ascend:
+  - ShiftLeft
+  Descend:
+  - ControlLeft

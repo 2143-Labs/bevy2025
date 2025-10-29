@@ -20,11 +20,12 @@ pub enum GameAction {
     Jump,
     ChangeCamera,
     UnlockCursor,
-
     Fire1,
     Fire2,
     Mod1,
     Special1,
+    Ascend,
+    Descend,
 
     Chat,
 }
