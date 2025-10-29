@@ -7,6 +7,7 @@ mod physics;
 mod picking;
 mod terrain;
 mod water;
+mod ui;
 
 use avian3d::prelude::*;
 use bevy::{
@@ -22,6 +23,7 @@ use picking::PickingPlugin;
 use shared::Config;
 use terrain::TerrainPlugin;
 use water::WaterPlugin;
+use ui::UIPlugin;
 
 #[derive(Parser, Resource, Debug)]
 struct ClapArgs {
@@ -55,6 +57,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins,
             PhysicsPlugins::default(),
+            UIPlugin,
             CameraPlugin,
             TerrainPlugin,
             PhysicsPlugin,

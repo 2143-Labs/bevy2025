@@ -90,6 +90,11 @@ fn setup_cameras(mut commands: Commands) {
     // FreeCam - Perspective, active by default
     commands.spawn((
         Camera3d::default(),
+        Camera {
+            is_active: true,
+            order: 0,
+            ..default()
+        },
         Transform::from_xyz(50.0, 30.0, 50.0).looking_at(Vec3::ZERO, Vec3::Y),
         Projection::Perspective(PerspectiveProjection::default()),
         FreeCam {

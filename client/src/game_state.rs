@@ -9,7 +9,7 @@ pub enum NetworkGameState {
     ClientConnecting,
     ClientSendRequestPacket,
     ClientConnected,
-
+    Paused,
     Quit,
 }
 

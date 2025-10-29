@@ -39,10 +39,11 @@ impl Plugin for NetworkingPlugin {
                     },
                 ),
             )
-            .add_systems(
-                Update,
-                (check_connect_button).run_if(in_state(NetworkGameState::MainMenu)),
-            )
+            // .add_systems(
+            //     Update,
+            //     (check_connect_button).run_if(in_state(NetworkGameState::MainMenu)),
+            // )
+
             // After sending the first packet, resend it every so often to see if the server comes
             // alive
             .add_systems(
