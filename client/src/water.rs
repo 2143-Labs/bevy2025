@@ -6,6 +6,8 @@ use bevy::{
     shader::ShaderRef,
 };
 
+use crate::game_state::{GameState, WorldEntity};
+
 /// Marker for water entity
 #[derive(Component)]
 pub struct Water;
@@ -28,7 +30,13 @@ impl Plugin for WaterPlugin {
             ExtendedMaterial<StandardMaterial, WaterMaterial>,
         >::default())
             .register_type::<WaterMaterial>()
-            .add_systems(Update, (check_water_immersion, apply_buoyancy).chain());
+            .insert_resource(WaterLevel(0.0)) // Initialize with default value
+            .add_systems(
+                Update,
+                (check_water_immersion, apply_buoyancy)
+                    .chain()
+                    .run_if(in_state(GameState::Playing)),
+            );
     }
 }
 
@@ -62,6 +70,7 @@ pub fn spawn_water(
         Transform::from_xyz(0.0, water_level, 0.0)
             .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)), // Rotate to be horizontal
         Water,
+        WorldEntity,
     ));
 }
 

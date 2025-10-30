@@ -1,6 +1,7 @@
 use avian3d::prelude::*;
 use bevy::prelude::*;
 
+use crate::game_state::GameState;
 use crate::terrain::BoundaryWall;
 
 /// Marker for the cursor indicator orb
@@ -19,8 +20,14 @@ pub struct PickingPlugin;
 impl Plugin for PickingPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(PickPoint::default())
-            .add_systems(Startup, setup_cursor_indicator)
-            .add_systems(Update, (update_pick_point, handle_click_impulse).chain());
+            .add_systems(OnEnter(GameState::Playing), setup_cursor_indicator)
+            .add_systems(OnEnter(GameState::MainMenu), despawn_cursor_indicator)
+            .add_systems(
+                Update,
+                (update_pick_point, handle_click_impulse)
+                    .chain()
+                    .run_if(in_state(GameState::Playing)),
+            );
     }
 }
 
@@ -41,6 +48,16 @@ fn setup_cursor_indicator(
         Transform::from_xyz(0.0, -1000.0, 0.0), // Start off-screen
         CursorIndicator,
     ));
+}
+
+/// Despawn cursor indicator when leaving Playing state
+fn despawn_cursor_indicator(
+    mut commands: Commands,
+    indicator_query: Query<Entity, With<CursorIndicator>>,
+) {
+    for entity in indicator_query.iter() {
+        commands.entity(entity).despawn();
+    }
 }
 
 /// Update the pick point by raycasting from the cursor
@@ -82,13 +99,9 @@ fn update_pick_point(
     let excluded_entities: Vec<Entity> = boundary_walls.iter().collect();
     let filter = SpatialQueryFilter::default().with_excluded_entities(excluded_entities);
 
-    if let Some(hit) = spatial_query.cast_ray(
-        ray.origin,
-        ray.direction.into(),
-        max_distance,
-        true,
-        &filter,
-    ) {
+    if let Some(hit) =
+        spatial_query.cast_ray(ray.origin, ray.direction, max_distance, true, &filter)
+    {
         let hit_point = ray.origin + *ray.direction * hit.distance;
         pick_point.position = Some(hit_point);
         pick_point.normal = Some(hit.normal);

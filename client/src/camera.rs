@@ -2,17 +2,15 @@ use avian3d::prelude::*;
 use bevy::prelude::*;
 use shared::{Config, GameAction};
 
-/// Master game state
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
-pub enum GameState {
-    #[default]
-    Playing,
-    Paused,
-}
+use crate::game_state::GameState;
 
 /// Resource for global time scaling
 #[derive(Resource)]
 pub struct GameTimeScale(pub f32);
+
+/// Resource to track if cameras are spawned
+#[derive(Resource, Default)]
+struct CamerasSpawned(bool);
 
 /// Transition duration in seconds
 const TRANSITION_DURATION: f32 = 1.0;
@@ -51,42 +49,41 @@ struct BirdsEyeCam;
 #[derive(Component)]
 struct InterpolationCam;
 
-/// Marker component for pause UI
-#[derive(Component)]
-struct PauseUI;
-
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.init_state::<GameState>()
-            .insert_resource(GameTimeScale(1.0))
+        app.insert_resource(GameTimeScale(1.0))
             .insert_resource(CameraTransition::default())
-            .add_systems(Startup, setup_cameras)
+            .insert_resource(CamerasSpawned(false))
+            .add_systems(OnEnter(GameState::Playing), setup_cameras)
+            .add_systems(OnEnter(GameState::MainMenu), despawn_cameras)
             .add_systems(
                 Update,
                 (
-                    handle_pause_input,
+                    handle_pause_input
+                        .run_if(in_state(GameState::Playing).or(in_state(GameState::Paused))),
                     freecam_controller,
                     update_camera_transition,
                     manage_camera_visibility,
                     manage_physics_pause,
                 )
-                    .chain(),
+                    .chain()
+                    .run_if(in_state(GameState::Playing).or(in_state(GameState::Paused))),
             )
-            .add_systems(
-                OnEnter(GameState::Paused),
-                (spawn_pause_ui, start_transition_to_paused),
-            )
-            .add_systems(
-                OnExit(GameState::Paused),
-                (despawn_pause_ui, start_transition_to_playing),
-            );
+            .add_systems(OnEnter(GameState::Paused), start_transition_to_paused)
+            .add_systems(OnExit(GameState::Paused), start_transition_to_playing);
     }
 }
 
 /// Setup all three cameras
-fn setup_cameras(mut commands: Commands) {
+fn setup_cameras(mut commands: Commands, mut cameras_spawned: ResMut<CamerasSpawned>) {
+    // Only spawn if not already spawned
+    if cameras_spawned.0 {
+        return;
+    }
+    cameras_spawned.0 = true;
+
     // FreeCam - Perspective, active by default
     commands.spawn((
         Camera3d::default(),
@@ -137,6 +134,28 @@ fn setup_cameras(mut commands: Commands) {
     ));
 }
 
+/// Despawn all 3D cameras when leaving Playing state
+fn despawn_cameras(
+    mut commands: Commands,
+    freecam_query: Query<Entity, With<FreeCam>>,
+    birdseye_query: Query<Entity, With<BirdsEyeCam>>,
+    interp_query: Query<Entity, With<InterpolationCam>>,
+    mut cameras_spawned: ResMut<CamerasSpawned>,
+) {
+    // Reset flag
+    cameras_spawned.0 = false;
+
+    for entity in freecam_query.iter() {
+        commands.entity(entity).despawn();
+    }
+    for entity in birdseye_query.iter() {
+        commands.entity(entity).despawn();
+    }
+    for entity in interp_query.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
 /// Handle pause toggling (Escape key)
 fn handle_pause_input(
     keyboard: Res<ButtonInput<KeyCode>>,
@@ -154,6 +173,7 @@ fn handle_pause_input(
                 next_state.set(GameState::Paused);
                 time_scale.0 = 0.0;
             }
+            _ => {}
         }
     }
 }
@@ -379,6 +399,7 @@ fn manage_camera_visibility(
                 freecam.is_active = false;
                 birdseye.is_active = true;
             }
+            _ => {} // Game camera not active in other states
         }
     }
 }
@@ -392,47 +413,13 @@ fn ease_in_out_cubic(t: f32) -> f32 {
     }
 }
 
-/// Spawn pause UI overlay
-fn spawn_pause_ui(mut commands: Commands) {
-    commands
-        .spawn((
-            Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                position_type: PositionType::Absolute,
-                ..default()
-            },
-            PauseUI,
-            ZIndex(1000),
-        ))
-        .with_children(|parent| {
-            parent.spawn((
-                Text::new("PAUSED"),
-                TextFont {
-                    font_size: 100.0,
-                    ..default()
-                },
-                TextColor(Color::WHITE),
-            ));
-        });
-}
-
-/// Despawn pause UI when unpausing
-fn despawn_pause_ui(mut commands: Commands, ui_query: Query<Entity, With<PauseUI>>) {
-    for entity in ui_query.iter() {
-        commands.entity(entity).despawn();
-    }
-}
-
 /// Manage physics pause state based on game state
 fn manage_physics_pause(
     game_state: Res<State<GameState>>,
     mut physics_time: ResMut<Time<Physics>>,
 ) {
     match game_state.get() {
-        GameState::Paused => {
+        GameState::Paused | GameState::MainMenu => {
             if !physics_time.is_paused() {
                 physics_time.pause();
             }

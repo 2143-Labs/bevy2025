@@ -4,9 +4,11 @@ use bevy::{
 };
 use noise::{NoiseFn, Perlin};
 
-use crate::grass::{GrassMaterial, WindSettings, spawn_grass_on_terrain};
-use crate::water::{WaterMaterial, spawn_water};
+use crate::game_state::{GameState, WorldEntity};
+use crate::grass::{Grass, GrassMaterial, WindSettings, spawn_grass_on_terrain};
+use crate::water::{Water, WaterMaterial, spawn_water};
 use bevy::pbr::ExtendedMaterial;
+use shared::net_components::ents::Ball;
 
 /// Marker for terrain entity
 #[derive(Component)]
@@ -15,6 +17,14 @@ pub struct Terrain;
 /// Marker for boundary walls
 #[derive(Component)]
 pub struct BoundaryWall;
+
+/// Marker for world light
+#[derive(Component)]
+struct WorldLight;
+
+/// Resource to track if world is currently spawned
+#[derive(Resource, Default)]
+struct WorldSpawned(bool);
 
 /// Terrain generation parameters
 #[derive(Resource)]
@@ -40,7 +50,9 @@ pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_terrain)
+        app.insert_resource(WorldSpawned(false))
+            .add_systems(OnEnter(GameState::Playing), setup_terrain)
+            .add_systems(OnEnter(GameState::MainMenu), despawn_terrain)
             .add_systems(Update, draw_boundary_debug);
     }
 }
@@ -53,7 +65,14 @@ fn setup_terrain(
     mut water_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, WaterMaterial>>>,
     mut grass_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, GrassMaterial>>>,
     wind: Res<WindSettings>,
+    mut world_spawned: ResMut<WorldSpawned>,
 ) {
+    // Only spawn if not already spawned
+    if world_spawned.0 {
+        return;
+    }
+    world_spawned.0 = true;
+
     let terrain_params = TerrainParams::default();
 
     // Calculate water level: 30% between min and max terrain height
@@ -82,6 +101,7 @@ fn setup_terrain(
         RigidBody::Static,
         Collider::trimesh_from_mesh(&terrain_mesh).unwrap(),
         Terrain,
+        WorldEntity,
     ));
 
     // Add boundary walls around the terrain
@@ -119,7 +139,54 @@ fn setup_terrain(
             ..default()
         },
         Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.7, 0.3, 0.0)),
+        WorldLight,
+        WorldEntity,
     ));
+}
+
+/// Despawn all terrain and world entities when leaving Playing state
+fn despawn_terrain(
+    mut commands: Commands,
+    terrain_query: Query<Entity, With<Terrain>>,
+    boundary_query: Query<Entity, With<BoundaryWall>>,
+    light_query: Query<Entity, With<WorldLight>>,
+    grass_query: Query<Entity, With<Grass>>,
+    water_query: Query<Entity, With<Water>>,
+    ball_query: Query<Entity, With<Ball>>,
+    mut world_spawned: ResMut<WorldSpawned>,
+) {
+    // Reset flag
+    world_spawned.0 = false;
+
+    // Despawn terrain
+    for entity in terrain_query.iter() {
+        commands.entity(entity).despawn();
+    }
+
+    // Despawn boundary walls
+    for entity in boundary_query.iter() {
+        commands.entity(entity).despawn();
+    }
+
+    // Despawn light
+    for entity in light_query.iter() {
+        commands.entity(entity).despawn();
+    }
+
+    // Despawn grass
+    for entity in grass_query.iter() {
+        commands.entity(entity).despawn();
+    }
+
+    // Despawn water
+    for entity in water_query.iter() {
+        commands.entity(entity).despawn();
+    }
+
+    // Despawn all balls
+    for entity in ball_query.iter() {
+        commands.entity(entity).despawn();
+    }
 }
 
 /// Spawn invisible boundary walls around the terrain to keep balls from falling off
@@ -144,6 +211,7 @@ fn spawn_boundary_walls(
         RigidBody::Static,
         Collider::cuboid(size, wall_height, wall_thickness),
         BoundaryWall,
+        WorldEntity,
     ));
 
     // South wall (negative Z) - plane perpendicular to Z axis
@@ -152,6 +220,7 @@ fn spawn_boundary_walls(
         RigidBody::Static,
         Collider::cuboid(size, wall_height, wall_thickness),
         BoundaryWall,
+        WorldEntity,
     ));
 
     // East wall (positive X) - plane perpendicular to X axis
@@ -160,6 +229,7 @@ fn spawn_boundary_walls(
         RigidBody::Static,
         Collider::cuboid(wall_thickness, wall_height, size),
         BoundaryWall,
+        WorldEntity,
     ));
 
     // West wall (negative X) - plane perpendicular to X axis
@@ -168,6 +238,7 @@ fn spawn_boundary_walls(
         RigidBody::Static,
         Collider::cuboid(wall_thickness, wall_height, size),
         BoundaryWall,
+        WorldEntity,
     ));
 }
 

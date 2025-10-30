@@ -3,7 +3,11 @@ use shared::event::ERFE;
 use shared::event::{client::SpawnUnit2, server::SpawnCircle};
 use shared::net_components::ents::Ball;
 
-use crate::game_state::NetworkGameState;
+use crate::game_state::{GameState, NetworkGameState};
+
+/// UI component for the ball counter parent
+#[derive(Component)]
+struct BallCounterUI;
 
 /// UI component for the ball counter text
 #[derive(Component)]
@@ -13,7 +17,8 @@ pub struct PhysicsPlugin;
 
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_ball_counter_ui)
+        app.add_systems(OnEnter(GameState::Playing), setup_ball_counter_ui)
+            .add_systems(OnEnter(GameState::MainMenu), despawn_ball_counter_ui)
             .add_systems(
                 Update,
                 (
@@ -22,7 +27,10 @@ impl Plugin for PhysicsPlugin {
                 )
                     .run_if(in_state(NetworkGameState::ClientConnected)),
             )
-            .add_systems(Update, (spawn_ball_on_space, update_ball_counter));
+            .add_systems(
+                Update,
+                (spawn_ball_on_space, update_ball_counter).run_if(in_state(GameState::Playing)),
+            );
     }
 }
 
@@ -50,8 +58,8 @@ fn spawn_ball_on_space(
         let color = Color::srgb(fastrand::f32(), fastrand::f32(), fastrand::f32());
 
         spawn_ball_writer.write(SpawnCircle {
-            position: spawn_pos.clone(),
-            color: color.clone(),
+            position: spawn_pos,
+            color,
         });
     }
 }
@@ -76,13 +84,16 @@ fn spawn_ball_network(
 fn setup_ball_counter_ui(mut commands: Commands) {
     // Root UI node
     commands
-        .spawn(Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(10.0),
-            left: Val::Px(10.0),
-            padding: UiRect::all(Val::Px(10.0)),
-            ..default()
-        })
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(10.0),
+                left: Val::Px(10.0),
+                padding: UiRect::all(Val::Px(10.0)),
+                ..default()
+            },
+            BallCounterUI,
+        ))
         .with_children(|parent| {
             // Counter text
             parent.spawn((
@@ -97,6 +108,13 @@ fn setup_ball_counter_ui(mut commands: Commands) {
         });
 }
 
+/// Despawn ball counter UI when leaving Playing state
+fn despawn_ball_counter_ui(mut commands: Commands, ui_query: Query<Entity, With<BallCounterUI>>) {
+    for entity in ui_query.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
 /// Update ball counter UI
 fn update_ball_counter(
     balls: Query<&Ball>,
@@ -105,6 +123,6 @@ fn update_ball_counter(
     let ball_count = balls.iter().count();
 
     if let Ok(mut text) = counter_text.single_mut() {
-        text.0 = format!("Balls: {}", ball_count);
+        text.0 = format!("Balls: {ball_count}");
     }
 }

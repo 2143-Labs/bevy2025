@@ -2,11 +2,18 @@ use std::{net::SocketAddr, time::Duration};
 
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
+    Config,
     event::{
-        client::{SpawnUnit2, WorldData2}, server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle}, NetEntId, ERFE
-    }, net_components::{ents::PlayerCamera, ours::PlayerName}, netlib::{
-        send_event_to_server, send_event_to_server_batch, setup_client, ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, NetworkConnectionTarget, NetworkingResources
-    }, Config
+        ERFE, NetEntId,
+        client::{SpawnUnit2, WorldData2},
+        server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle},
+    },
+    net_components::{ents::PlayerCamera, ours::PlayerName},
+    netlib::{
+        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint,
+        NetworkConnectionTarget, NetworkingResources, send_event_to_server,
+        send_event_to_server_batch, setup_client,
+    },
 };
 
 use crate::{camera::FreeCam, game_state::NetworkGameState, notification::Notification};
@@ -18,16 +25,18 @@ impl Plugin for NetworkingPlugin {
         app.add_message::<SpawnUnit2>()
             .add_systems(
                 Startup,
-                (|mut commands: Commands, config: Res<Config>| {
-                    // Setup networking resources
-                    commands.insert_resource(NetworkConnectionTarget {
-                        ip: config.ip.clone(),
-                        port: config.port,
-                    });
-                },
-                |mut state: ResMut<NextState<NetworkGameState>>| {
-                    state.set(NetworkGameState::ClientConnecting)
-                }),
+                (
+                    |mut commands: Commands, config: Res<Config>| {
+                        // Setup networking resources
+                        commands.insert_resource(NetworkConnectionTarget {
+                            ip: config.ip.clone(),
+                            port: config.port,
+                        });
+                    },
+                    |mut state: ResMut<NextState<NetworkGameState>>| {
+                        state.set(NetworkGameState::ClientConnecting)
+                    },
+                ),
             )
             .add_systems(
                 OnEnter(NetworkGameState::ClientConnecting),
@@ -43,7 +52,6 @@ impl Plugin for NetworkingPlugin {
             //     Update,
             //     (check_connect_button).run_if(in_state(NetworkGameState::MainMenu)),
             // )
-
             // After sending the first packet, resend it every so often to see if the server comes
             // alive
             .add_systems(
@@ -76,10 +84,10 @@ impl Plugin for NetworkingPlugin {
             ////.run_if(any_with_component::<Player>),
             //)
             .add_systems(
-            Update,
+                Update,
                 (send_movement)
-                .run_if(on_timer(Duration::from_millis(25)))
-                .run_if(in_state(NetworkGameState::ClientConnected)),
+                    .run_if(on_timer(Duration::from_millis(25)))
+                    .run_if(in_state(NetworkGameState::ClientConnected)),
             )
             .add_systems(
                 Update,
@@ -123,7 +131,7 @@ fn send_connect_packet(
 //offset: Vec3,
 //) {
 //let player_id = s.parent_entity();
-//// spawn their hp bar
+/// spawn their hp bar
 //let mut hp_bar = PbrBundle {
 //mesh: meshes.add(Mesh::from(Cuboid {
 //half_size: Vec3::splat(0.5),
@@ -133,7 +141,7 @@ fn send_connect_packet(
 //..Default::default()
 //};
 
-//// make it invisible until it's updated
+/// make it invisible until it's updated
 //hp_bar.transform.scale = Vec3::ZERO;
 
 //s.spawn((hp_bar, crate::network::stats::HPBar(player_id)));
@@ -183,16 +191,13 @@ fn receive_world_data(
             } else {
                 // TOOD do this gracefully?
                 for component in &unit.components {
-                    match component {
-                        shared::net_components::NetComponent::Ours(ours) => match ours {
-                            shared::net_components::ours::NetComponentOurs::PlayerName(
-                                PlayerName { name },
-                            ) => {
-                                notif.write(Notification(format!("Connected: {name}")));
-                            }
-                            _ => {}
-                        },
-                        _ => {}
+                    if let shared::net_components::NetComponent::Ours(ours) = component {
+                        if let shared::net_components::ours::NetComponentOurs::PlayerName(
+                            PlayerName { name },
+                        ) = ours
+                        {
+                            notif.write(Notification(format!("Connected: {name}")));
+                        }
                     }
                 }
 
@@ -251,7 +256,7 @@ fn send_heartbeat(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoin
 //our_transform: Query<&MovementIntention, (With<Player>, Changed<MovementIntention>)>,
 //) {
 //if let Ok(intent) = our_transform.get_single() {
-//// TODO add interp for `AttackIntent` here
+/// TODO add interp for `AttackIntent` here
 //let event = EventToServer::ChangeMovement(ChangeMovement::Move2d(intent.0));
 //send_event_to_server(&sr.handler, mse.0, &event);
 //}
@@ -260,10 +265,7 @@ fn send_heartbeat(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoin
 fn send_movement(
     sr: Res<ClientNetworkingResources>,
     mse: Res<MainServerEndpoint>,
-    our_transform: Query<
-        (&Transform, &NetEntId),
-        (With<PlayerCamera>, Changed<Transform>),
-    >,
+    our_transform: Query<(&Transform, &NetEntId), (With<PlayerCamera>, Changed<Transform>)>,
 ) {
     if let Ok((transform, ent_id)) = our_transform.single() {
         let mut events = vec![];
@@ -280,7 +282,7 @@ fn send_movement(
 //mut dc_info: ERFE<PlayerDisconnected>,
 //mut notif: MessageWriter<Notification>,
 //mut commands: Commands,
-//// TODO what if the server is disconnecting us?
+/// TODO what if the server is disconnecting us?
 //other_players: Query<(Entity, &NetEntId, &PlayerName), With<OtherPlayer>>,
 //) {
 //for event in dc_info.read() {
@@ -298,7 +300,7 @@ fn send_movement(
 //fn on_someone_move(
 //mut someone_moved: ERFE<SomeoneMoved>,
 //mut other_players: Query<(&NetEntId, &mut Transform, &mut MovementIntention, &mut AttackIntention), With<AnyUnit>>,
-////mut other_players: Query<(&NetEntId, &mut Transform, &mut MovementIntention), (With<AnyUnit>, Without<Player>)>,
+///mut other_players: Query<(&NetEntId, &mut Transform, &mut MovementIntention), (With<AnyUnit>, Without<Player>)>,
 //) {
 //for movement in someone_moved.read() {
 //for (ply_net, mut ply_tfm, mut ply_intent, mut ply_attack_intent,) in &mut other_players {
@@ -333,11 +335,11 @@ fn send_movement(
 
 //fn on_connect(
 //mut c_info: ERFE<SpawnUnit2>,
-////mut notif: EventWriter<Notification>,
+///mut notif: EventWriter<Notification>,
 //mut local_spawn_unit: MessageWriter<SpawnUnit2>,
 //) {
 //for event in c_info.read() {
-////notif.send(Notification(format!("{:?}", event.event)));
+///notif.send(Notification(format!("{:?}", event.event)));
 //local_spawn_unit.send(event.event.clone());
 //}
 //}

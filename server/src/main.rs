@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use bevy::{app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, time::common_conditions::on_timer};
+use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
@@ -94,11 +94,9 @@ fn main() {
         )
         .add_systems(
             OnEnter(ServerState::Running),
-            (
-                || {
-                    info!("We are fully Running!");
-                },
-            ),
+            (|| {
+                info!("We are fully Running!");
+            },),
         )
         .add_systems(
             Update,
@@ -200,7 +198,7 @@ fn on_player_connect(
                     EventToClient::SpawnUnit2(spawn_camera_unit.clone()),
                     // their player unit
                     EventToClient::SpawnUnit2(SpawnUnit2 {
-                        net_ent_id: new_player_ent_id.clone(),
+                        net_ent_id: new_player_ent_id,
                         components: vec![c_name.clone().to_net_component()],
                     }),
                 ],
@@ -216,7 +214,7 @@ fn on_player_connect(
         // Add the connected player ent here
         commands.spawn((
             PlayerName { name },
-            new_player_ent_id.clone(),
+            new_player_ent_id,
             PlayerEndpoint(player.endpoint),
             ConnectedPlayer,
             // Used as a target for some AI
@@ -232,29 +230,28 @@ fn on_player_connect(
             (HEARTBEAT_CONNECTION_GRACE_PERIOD - 1) * (HEARTBEAT_TIMEOUT / HEARTBEAT_MILLIS);
 
         heartbeat_mapping.heartbeats.insert(
-            new_player_ent_id.clone(),
+            new_player_ent_id,
             Arc::new(AtomicI16::new(-(hb_grace_period as i16))),
         );
 
         endpoint_to_net_id
             .map
-            .insert(player.endpoint, new_player_ent_id.clone());
+            .insert(player.endpoint, new_player_ent_id);
 
         // Finally, tell the client all this info.
         let event = EventToClient::WorldData2(WorldData2 {
-            your_unit_id: new_player_ent_id.clone(),
-            your_camera_unit_id: spawn_camera_unit.net_ent_id.clone(),
+            your_unit_id: new_player_ent_id,
+            your_camera_unit_id: spawn_camera_unit.net_ent_id,
             units: unit_list_to_new_client,
         });
         send_event_to_server(&sr.handler, player.endpoint, &event);
 
         for ball_unit in unit_list_to_new_client_balls.chunks(100) {
-            let events = ball_unit.iter().map(|u| EventToClient::SpawnUnit2(u.clone())).collect::<Vec<_>>();
-            send_event_to_server_batch(
-                &sr.handler,
-                player.endpoint,
-                &events
-            );
+            let events = ball_unit
+                .iter()
+                .map(|u| EventToClient::SpawnUnit2(u.clone()))
+                .collect::<Vec<_>>();
+            send_event_to_server_batch(&sr.handler, player.endpoint, &events);
         }
     }
 }

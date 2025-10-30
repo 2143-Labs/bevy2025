@@ -6,8 +6,8 @@ pub mod notification;
 mod physics;
 mod picking;
 mod terrain;
-mod water;
 mod ui;
+mod water;
 
 use avian3d::prelude::*;
 use bevy::{
@@ -22,8 +22,8 @@ use physics::PhysicsPlugin;
 use picking::PickingPlugin;
 use shared::Config;
 use terrain::TerrainPlugin;
-use water::WaterPlugin;
 use ui::UIPlugin;
+use water::WaterPlugin;
 
 #[derive(Parser, Resource, Debug)]
 struct ClapArgs {
