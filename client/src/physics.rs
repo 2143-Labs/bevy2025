@@ -1,3 +1,4 @@
+use avian3d::prelude::Gravity;
 use bevy::prelude::*;
 use shared::event::ERFE;
 use shared::event::{client::SpawnUnit2, server::SpawnCircle};
@@ -17,7 +18,9 @@ pub struct PhysicsPlugin;
 
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Playing), setup_ball_counter_ui)
+        app
+            .add_plugins(avian3d::PhysicsPlugins::default())
+            .add_systems(OnEnter(GameState::Playing), setup_ball_counter_ui)
             .add_systems(OnEnter(GameState::MainMenu), despawn_ball_counter_ui)
             .add_systems(
                 Update,
@@ -30,7 +33,8 @@ impl Plugin for PhysicsPlugin {
             .add_systems(
                 Update,
                 (spawn_ball_on_space, update_ball_counter).run_if(in_state(GameState::Playing)),
-            );
+            )
+        .insert_resource(Gravity(Vec3::new(0.0, -9.81, 0.0)));
     }
 }
 

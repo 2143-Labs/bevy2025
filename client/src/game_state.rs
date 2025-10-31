@@ -8,6 +8,7 @@ pub struct WorldEntity;
 #[derive(States, Reflect, PartialEq, Eq, Debug, Clone, Hash, Default)]
 pub enum GameState {
     #[default]
+    AssetLoading,
     MainMenu,
     Playing,
     Paused,
@@ -39,6 +40,7 @@ impl Plugin for StatePlugin {
 
 /// Despawn all world entities when entering MainMenu
 fn despawn_world(mut commands: Commands, world_entities: Query<Entity, With<WorldEntity>>) {
+    info!("Entering MainMenu, despawning world entities");
     for entity in world_entities.iter() {
         commands.entity(entity).despawn();
     }

@@ -429,5 +429,6 @@ fn manage_physics_pause(
                 physics_time.unpause();
             }
         }
+        _ => {}
     }
 }

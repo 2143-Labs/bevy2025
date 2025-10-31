@@ -8,6 +8,7 @@ mod picking;
 mod terrain;
 mod ui;
 mod water;
+mod assets;
 
 use avian3d::prelude::*;
 use bevy::{
@@ -24,6 +25,7 @@ use shared::Config;
 use terrain::TerrainPlugin;
 use ui::UIPlugin;
 use water::WaterPlugin;
+use assets::AssetsPlugin;
 
 #[derive(Parser, Resource, Debug)]
 struct ClapArgs {
@@ -56,7 +58,8 @@ fn main() {
     App::new()
         .add_plugins((
             DefaultPlugins,
-            PhysicsPlugins::default(),
+            game_state::StatePlugin,
+            AssetsPlugin,
             UIPlugin,
             CameraPlugin,
             TerrainPlugin,
@@ -65,14 +68,12 @@ fn main() {
             network::NetworkingPlugin,
             shared::ConfigPlugin,
             notification::NotificationPlugin,
-            game_state::StatePlugin,
             WaterPlugin,
             GrassPlugin,
             // Diagnostics
             FrameTimeDiagnosticsPlugin::default(),
             LogDiagnosticsPlugin::default(),
         ))
-        .insert_resource(Gravity(Vec3::new(0.0, -9.81, 0.0)))
         .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue
         .insert_resource(args)
         .run();

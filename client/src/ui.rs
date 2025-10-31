@@ -6,7 +6,7 @@ use bevy::{
     ui::UiTransform,
 };
 
-use crate::game_state::GameState;
+use crate::{assets::ImageAssets, game_state::GameState};
 
 pub struct UIPlugin;
 
@@ -25,7 +25,6 @@ impl Plugin for UIPlugin {
                     animate_logo,
                     handle_menu_buttons,
                     handle_paused_menu_buttons,
-                    setup_logo_texture.run_if(in_state(GameState::MainMenu)),
                 ),
             );
     }
@@ -75,7 +74,7 @@ fn setup_ui_camera(mut commands: Commands) {
 }
 
 /// Spawn the main menu when entering MainMenu state
-fn spawn_main_menu(mut commands: Commands, assets: Res<AssetServer>) {
+fn spawn_main_menu(mut commands: Commands, image_assets: Res<ImageAssets>, assets: Res<AssetServer>) {
     // Main menu container
     commands
         .spawn((
@@ -96,7 +95,7 @@ fn spawn_main_menu(mut commands: Commands, assets: Res<AssetServer>) {
             // Using nearest neighbor filtering for crisp pixel art
             parent.spawn((
                 ImageNode {
-                    image: assets.load("Logo.png"),
+                    image: image_assets.logo.clone(),
                     image_mode: NodeImageMode::Stretch,
                     ..default()
                 },
@@ -284,33 +283,6 @@ fn animate_logo(time: Res<Time>, mut query: Query<(&mut AnimatedLogo, &mut UiTra
     }
 }
 
-/// System to apply nearest neighbor filtering to the logo texture
-/// Runs continuously in MainMenu state to ensure pixel-perfect scaling
-fn setup_logo_texture(
-    asset_server: Res<AssetServer>,
-    mut images: ResMut<Assets<Image>>,
-    mut applied: Local<bool>,
-) {
-    if *applied {
-        return;
-    }
-
-    let logo_handle: Handle<Image> = asset_server.load("Logo.png");
-
-    // Try to apply nearest neighbor filtering
-    if let Some(image) = images.get_mut(logo_handle.id()) {
-        // Create a custom sampler with nearest filtering
-        let sampler_desc = ImageSamplerDescriptor {
-            mag_filter: ImageFilterMode::Nearest,
-            min_filter: ImageFilterMode::Nearest,
-            ..default()
-        };
-
-        image.sampler = ImageSampler::Descriptor(sampler_desc);
-        *applied = true;
-        info!("Applied nearest neighbor filtering to logo");
-    }
-}
 
 /// Creates a styled menu button with a marker component
 fn menu_button(asset_server: &AssetServer, label: &str, marker: impl Component) -> impl Bundle {
