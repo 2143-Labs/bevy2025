@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 pub mod event;
 pub mod net_components;
 pub mod netlib;
+pub mod physics;
 
 #[derive(Reflect, Hash, Eq, PartialEq, Clone, Deserialize, Serialize, Debug)]
 pub enum GameAction {
@@ -42,6 +43,7 @@ impl GameAction {
 #[derive(Reflect, Clone, Resource, Deserialize, Serialize, Debug)]
 pub struct Config {
     pub ip: String,
+    pub host_ip: Option<String>,
     pub port: u16,
     pub name: Option<String>,
     //#[serde(default="default_sens")]
@@ -116,6 +118,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             ip: "127.0.0.1".into(),
+            host_ip: None,
             port: 25565,
             sens: 0.003,
             qe_sens: 3.0,

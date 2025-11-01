@@ -1,5 +1,6 @@
 //!This is for events that are sent FROM the server TO the client.
 use crate::netlib::NetworkingResources;
+use crate::physics::terrain::TerrainParams;
 use crate::{event::EventFromEndpoint, net_components::NetComponent};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,7 @@ pub struct SpawnUnit2 {
 pub struct WorldData2 {
     pub your_unit_id: NetEntId,
     pub your_camera_unit_id: NetEntId,
+    pub terrain_params: TerrainParams,
     pub units: Vec<SpawnUnit2>,
 }
 

@@ -1,4 +1,4 @@
-use avian3d::prelude::Gravity;
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use shared::event::ERFE;
 use shared::event::{client::SpawnUnit2, server::SpawnCircle};
@@ -35,6 +35,25 @@ impl Plugin for PhysicsPlugin {
                 (spawn_ball_on_space, update_ball_counter).run_if(in_state(GameState::Playing)),
             )
         .insert_resource(Gravity(Vec3::new(0.0, -9.81, 0.0)));
+    }
+}
+/// Manage physics pause state based on game state
+fn manage_physics_pause(
+    game_state: Res<State<GameState>>,
+    mut physics_time: ResMut<Time<Physics>>,
+) {
+    match game_state.get() {
+        GameState::Paused | GameState::MainMenu => {
+            if !physics_time.is_paused() {
+                physics_time.pause();
+            }
+        }
+        GameState::Playing => {
+            if physics_time.is_paused() {
+                physics_time.unpause();
+            }
+        }
+        _ => {}
     }
 }
 

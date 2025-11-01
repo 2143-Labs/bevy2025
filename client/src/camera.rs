@@ -49,6 +49,14 @@ struct BirdsEyeCam;
 #[derive(Component)]
 struct InterpolationCam;
 
+/// Marker component for pause UI
+#[derive(Component)]
+struct PauseUI;
+
+/// Marker for the player camera that we control
+#[derive(Component)]
+pub struct LocalCamera;
+
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
@@ -66,7 +74,7 @@ impl Plugin for CameraPlugin {
                     freecam_controller,
                     update_camera_transition,
                     manage_camera_visibility,
-                    manage_physics_pause,
+                    //manage_physics_pause,
                 )
                     .chain()
                     .run_if(in_state(GameState::Playing).or(in_state(GameState::Paused))),
@@ -94,6 +102,7 @@ fn setup_cameras(mut commands: Commands, mut cameras_spawned: ResMut<CamerasSpaw
         },
         Transform::from_xyz(50.0, 30.0, 50.0).looking_at(Vec3::ZERO, Vec3::Y),
         Projection::Perspective(PerspectiveProjection::default()),
+        LocalCamera,
         FreeCam {
             yaw: -std::f32::consts::FRAC_PI_4,
             pitch: -0.6,
@@ -413,22 +422,36 @@ fn ease_in_out_cubic(t: f32) -> f32 {
     }
 }
 
-/// Manage physics pause state based on game state
-fn manage_physics_pause(
-    game_state: Res<State<GameState>>,
-    mut physics_time: ResMut<Time<Physics>>,
-) {
-    match game_state.get() {
-        GameState::Paused | GameState::MainMenu => {
-            if !physics_time.is_paused() {
-                physics_time.pause();
-            }
-        }
-        GameState::Playing => {
-            if physics_time.is_paused() {
-                physics_time.unpause();
-            }
-        }
-        _ => {}
+/// Spawn pause UI overlay
+fn spawn_pause_ui(mut commands: Commands) {
+    commands
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                position_type: PositionType::Absolute,
+                ..default()
+            },
+            PauseUI,
+            ZIndex(1000),
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new("PAUSED"),
+                TextFont {
+                    font_size: 100.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+            ));
+        });
+}
+
+/// Despawn pause UI when unpausing
+fn despawn_pause_ui(mut commands: Commands, ui_query: Query<Entity, With<PauseUI>>) {
+    for entity in ui_query.iter() {
+        commands.entity(entity).despawn();
     }
 }

@@ -12,6 +12,8 @@ use bevy::{
 use noise::{NoiseFn, Perlin};
 use shared::net_components::ents::Ball;
 
+use crate::{camera::LocalCamera, network::DespawnOnWorldData};
+
 /// Marker for grass entities
 #[derive(Component)]
 pub struct Grass;
@@ -106,7 +108,8 @@ fn update_ball_interactions(
     time: Res<Time>,
     mut update_timer: Local<Option<BallInteractionTimer>>,
     all_balls: Query<&Transform, With<Ball>>,
-    camera_query: Query<&Transform, With<Camera>>,
+    // TODO make this change if you change camera?
+    camera_query: Query<&Transform, (With<Camera>, With<LocalCamera>)>,
     mut grass_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, GrassMaterial>>>,
 ) {
     // Initialize timer on first run
@@ -415,6 +418,7 @@ pub fn spawn_grass_on_terrain(
                     Transform::default(),
                     Visibility::default(),
                     OcclusionCulling, // Enable Bevy's built-in occlusion culling
+                    DespawnOnWorldData,
                 ));
             }
         }

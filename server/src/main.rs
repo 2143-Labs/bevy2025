@@ -4,7 +4,9 @@ use std::{
     time::Duration,
 };
 
-use bevy::{app::ScheduleRunnerPlugin, prelude::*};
+use bevy::{
+    app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, time::common_conditions::on_timer,
+};
 use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
@@ -18,6 +20,7 @@ use shared::{
         send_event_to_server, send_event_to_server_batch, EventToClient, EventToServer,
         NetworkConnectionTarget, ServerNetworkingResources,
     },
+    physics::terrain::TerrainParams,
     Config, ConfigPlugin,
 };
 
@@ -53,6 +56,7 @@ struct PlayerEndpoint(Endpoint);
 //pub mod chat;
 //pub mod game_manager;
 pub mod spawns;
+pub mod terrain;
 
 fn main() {
     info!("Main Start");
@@ -72,6 +76,8 @@ fn main() {
             //chat::ChatPlugin,
             //game_manager::GamePlugin,
             spawns::SpawnPlugin,
+            shared::physics::water::SharedWaterPlugin,
+            terrain::TerrainPlugin,
             //StatusPlugin,
         ))
         .init_state::<ServerState>()
@@ -121,7 +127,7 @@ fn main() {
 
 fn add_network_connection_info_from_config(config: Res<Config>, mut commands: Commands) {
     commands.insert_resource(NetworkConnectionTarget {
-        ip: config.ip.clone(),
+        ip: config.host_ip.as_ref().unwrap_or(&config.ip).clone(),
         port: config.port,
     });
 }
@@ -140,6 +146,7 @@ fn on_player_connect(
     cameras: Query<(&NetEntId, &MyNetEntParentId, &Transform, &PlayerName), With<PlayerCamera>>,
     balls: Query<(&Transform, &NetEntId, &HasColor), With<shared::net_components::ents::Ball>>,
     sr: Res<ServerNetworkingResources>,
+    terrain: Res<TerrainParams>,
     _config: Res<Config>,
     mut commands: Commands,
 ) {
@@ -242,6 +249,7 @@ fn on_player_connect(
         let event = EventToClient::WorldData2(WorldData2 {
             your_unit_id: new_player_ent_id,
             your_camera_unit_id: spawn_camera_unit.net_ent_id,
+            terrain_params: terrain.clone(),
             units: unit_list_to_new_client,
         });
         send_event_to_server(&sr.handler, player.endpoint, &event);
