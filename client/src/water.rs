@@ -84,6 +84,7 @@ pub fn spawn_water_client(
         Transform::from_xyz(0.0, water_level, 0.0)
             .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)), // Rotate to be horizontal
         Water,
+        WorldEntity,
         DespawnOnWorldData,
     ));
 }

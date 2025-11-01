@@ -12,7 +12,7 @@ use bevy::{
 use noise::{NoiseFn, Perlin};
 use shared::net_components::ents::Ball;
 
-use crate::{camera::LocalCamera, network::DespawnOnWorldData};
+use crate::{camera::LocalCamera, game_state::WorldEntity, network::DespawnOnWorldData};
 
 /// Marker for grass entities
 #[derive(Component)]
@@ -418,6 +418,7 @@ pub fn spawn_grass_on_terrain(
                     Transform::default(),
                     Visibility::default(),
                     OcclusionCulling, // Enable Bevy's built-in occlusion culling
+                    WorldEntity,
                     DespawnOnWorldData,
                 ));
             }

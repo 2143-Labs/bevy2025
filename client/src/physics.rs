@@ -93,12 +93,18 @@ fn spawn_ball_network(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    use crate::game_state::WorldEntity;
+
     for spawn in unit_spawns.read() {
         // Spawn ball with physics
-        spawn
+        let entity = spawn
             .event
             .clone()
             .spawn_entity(&mut commands, &mut meshes, &mut materials);
+
+        // Add WorldEntity component to balls so they get cleaned up properly
+        commands.entity(entity).insert(WorldEntity);
+
         info!("Spawned from networked SpawnUnit2");
     }
 }

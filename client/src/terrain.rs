@@ -3,17 +3,12 @@ use bevy::{pbr::ExtendedMaterial, prelude::*};
 use shared::physics::terrain::{generate_terrain_mesh, spawn_boundary_walls, BoundaryWall, Terrain, TerrainParams};
 
 use crate::{
-    grass::{Grass, GrassMaterial, WindSettings, spawn_grass_on_terrain},
+    grass::{GrassMaterial, WindSettings, spawn_grass_on_terrain},
     network::DespawnOnWorldData,
     water::{WaterMaterial, spawn_water_client},
 };
 
 use crate::game_state::{GameState, WorldEntity};
-use shared::net_components::ents::Ball;
-
-/// Marker for world light
-#[derive(Component)]
-struct WorldLight;
 
 /// Resource to track if world is currently spawned
 #[derive(Resource, Default)]
@@ -140,7 +135,7 @@ fn setup_terrain_client(
 
     let ents = spawn_boundary_walls(&mut commands, &terrain_params);
     for e in ents {
-        commands.entity(e).insert(DespawnOnWorldData);
+        commands.entity(e).insert((WorldEntity, DespawnOnWorldData));
     }
 
     // Add directional light (sun)
@@ -151,7 +146,6 @@ fn setup_terrain_client(
             ..default()
         },
         Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.7, 0.3, 0.0)),
-        WorldLight,
         WorldEntity,
     ));
 }
@@ -159,44 +153,14 @@ fn setup_terrain_client(
 /// Despawn all terrain and world entities when leaving Playing state
 fn despawn_terrain(
     mut commands: Commands,
-    terrain_query: Query<Entity, With<Terrain>>,
-    boundary_query: Query<Entity, With<BoundaryWall>>,
-    light_query: Query<Entity, With<WorldLight>>,
-    grass_query: Query<Entity, With<Grass>>,
-    water_query: Query<Entity, With<shared::physics::water::Water>>,
-    ball_query: Query<Entity, With<Ball>>,
+    world_entity_query: Query<Entity, With<WorldEntity>>,
     mut world_spawned: ResMut<WorldSpawned>,
 ) {
     // Reset flag
     world_spawned.0 = false;
 
-    // Despawn terrain
-    for entity in terrain_query.iter() {
-        commands.entity(entity).despawn();
-    }
-
-    // Despawn boundary walls
-    for entity in boundary_query.iter() {
-        commands.entity(entity).despawn();
-    }
-
-    // Despawn light
-    for entity in light_query.iter() {
-        commands.entity(entity).despawn();
-    }
-
-    // Despawn grass
-    for entity in grass_query.iter() {
-        commands.entity(entity).despawn();
-    }
-
-    // Despawn water
-    for entity in water_query.iter() {
-        commands.entity(entity).despawn();
-    }
-
-    // Despawn all balls
-    for entity in ball_query.iter() {
+    // Despawn all world entities (terrain, walls, light, grass, water, balls, etc.)
+    for entity in world_entity_query.iter() {
         commands.entity(entity).despawn();
     }
 }

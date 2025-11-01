@@ -1,5 +1,4 @@
 use bevy::{
-    image::{ImageFilterMode, ImageSampler, ImageSamplerDescriptor},
     input_focus::InputFocus,
     math::Rot2,
     prelude::*,
