@@ -47,6 +47,7 @@ pub fn spawn_boundary_walls(commands: &mut Commands, params: &TerrainParams) -> 
 
     // North wall (positive Z) - plane perpendicular to Z axis
     let e1 = commands.spawn((
+        Name::new("Boundary Wall (North)"),
         Transform::from_xyz(0.0, center_y, half_size),
         RigidBody::Static,
         Collider::cuboid(size, wall_height, wall_thickness),
@@ -55,6 +56,7 @@ pub fn spawn_boundary_walls(commands: &mut Commands, params: &TerrainParams) -> 
 
     // South wall (negative Z) - plane perpendicular to Z axis
     let e2 = commands.spawn((
+        Name::new("Boundary Wall (South)"),
         Transform::from_xyz(0.0, center_y, -half_size),
         RigidBody::Static,
         Collider::cuboid(size, wall_height, wall_thickness),
@@ -63,6 +65,7 @@ pub fn spawn_boundary_walls(commands: &mut Commands, params: &TerrainParams) -> 
 
     // East wall (positive X) - plane perpendicular to X axis
     let e3 = commands.spawn((
+        Name::new("Boundary Wall (East)"),
         Transform::from_xyz(half_size, center_y, 0.0),
         RigidBody::Static,
         Collider::cuboid(wall_thickness, wall_height, size),
@@ -71,6 +74,7 @@ pub fn spawn_boundary_walls(commands: &mut Commands, params: &TerrainParams) -> 
 
     // West wall (negative X) - plane perpendicular to X axis
     let e4 = commands.spawn((
+        Name::new("Boundary Wall (West)"),
         Transform::from_xyz(-half_size, center_y, 0.0),
         RigidBody::Static,
         Collider::cuboid(wall_thickness, wall_height, size),

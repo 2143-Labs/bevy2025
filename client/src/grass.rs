@@ -241,9 +241,23 @@ pub fn create_grass_blade_mesh() -> Mesh {
     .with_inserted_indices(Indices::U32(indices))
 }
 
-/// Spawn grass instances on the terrain
-pub fn spawn_grass_on_terrain(
-    commands: &mut Commands,
+/// Grass chunk bundle type
+type GrassChunkBundle = (
+    GrassChunk,
+    Grass,
+    Name,
+    Mesh3d,
+    MeshMaterial3d<ExtendedMaterial<StandardMaterial, GrassMaterial>>,
+    Transform,
+    Visibility,
+    OcclusionCulling,
+    WorldEntity,
+    DespawnOnWorldData,
+);
+
+/// Create grass chunk bundles for terrain
+/// Returns a Vec of bundles that can be spawned as children of the terrain entity
+pub fn create_grass_bundles(
     meshes: &mut ResMut<Assets<Mesh>>,
     _materials: &mut ResMut<Assets<StandardMaterial>>,
     grass_materials: &mut ResMut<Assets<ExtendedMaterial<StandardMaterial, GrassMaterial>>>,
@@ -253,7 +267,7 @@ pub fn spawn_grass_on_terrain(
     terrain_seed: u32,
     terrain_height_scale: f32,
     water_level: f32,
-) {
+) -> Vec<GrassChunkBundle> {
     let grass_mesh = meshes.add(create_grass_blade_mesh());
     let noise = Perlin::new(terrain_seed);
 
@@ -282,6 +296,9 @@ pub fn spawn_grass_on_terrain(
     const LOD_MID_DIST: f32 = 60.0; // Medium density 30-60m
     const LOD_FAR_DIST: f32 = 80.0; // Low density 60-80m
     // Beyond 80m: no grass (culled)
+
+    // Collect all grass chunk bundles
+    let mut grass_bundles = Vec::new();
 
     // Spawn grass organized into chunks
     for chunk_x in 0..chunks_per_side {
@@ -315,7 +332,7 @@ pub fn spawn_grass_on_terrain(
             };
 
             // Apply LOD density multiplier
-            let chunk_grass_density = grass_density * density_multiplier;
+            let _chunk_grass_density = grass_density * density_multiplier;
 
             // Collect all grass blade transforms for this chunk
             let mut chunk_blade_data = Vec::new();
@@ -406,13 +423,15 @@ pub fn spawn_grass_on_terrain(
                 let merged_mesh = create_merged_grass_mesh(&grass_mesh, meshes, &chunk_blade_data);
                 let merged_mesh_handle = meshes.add(merged_mesh);
 
-                // Spawn single chunk entity with merged mesh
-                commands.spawn((
+                // Create chunk bundle with name for debugging
+                let chunk_name = format!("Grass Chunk ({}, {})", chunk_x, chunk_z);
+                grass_bundles.push((
                     GrassChunk {
                         center: chunk_center,
                         size: CHUNK_SIZE,
                     },
                     Grass,
+                    Name::new(chunk_name),
                     Mesh3d(merged_mesh_handle),
                     MeshMaterial3d(grass_material.clone()),
                     Transform::default(),
@@ -424,6 +443,8 @@ pub fn spawn_grass_on_terrain(
             }
         }
     }
+
+    grass_bundles
 }
 
 /// Create a merged mesh from multiple grass blade instances

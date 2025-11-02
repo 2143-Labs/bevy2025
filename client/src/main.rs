@@ -9,6 +9,7 @@ mod terrain;
 mod ui;
 mod water;
 mod assets;
+mod debug;
 
 use avian3d::prelude::*;
 use bevy::{
@@ -26,6 +27,7 @@ use terrain::TerrainPlugin;
 use ui::UIPlugin;
 use water::WaterPlugin;
 use assets::AssetsPlugin;
+use debug::DebugPlugin;
 
 #[derive(Parser, Resource, Debug)]
 struct ClapArgs {
@@ -60,6 +62,7 @@ fn main() {
             DefaultPlugins,
             game_state::StatePlugin,
             AssetsPlugin,
+            DebugPlugin,
             UIPlugin,
             CameraPlugin,
             TerrainPlugin,
@@ -71,7 +74,7 @@ fn main() {
             WaterPlugin,
             GrassPlugin,
             // Diagnostics
-            FrameTimeDiagnosticsPlugin::default(),
+            // FrameTimeDiagnosticsPlugin::default(),
             LogDiagnosticsPlugin::default(),
         ))
         .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue

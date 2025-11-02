@@ -69,6 +69,7 @@ pub fn spawn_water_client(
     let water_mesh = Rectangle::new(size, size);
 
     commands.spawn((
+        Name::new("Water"),
         Mesh3d(meshes.add(water_mesh)),
         MeshMaterial3d(water_materials.add(ExtendedMaterial {
             base: StandardMaterial {

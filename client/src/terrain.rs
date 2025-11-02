@@ -3,7 +3,7 @@ use bevy::{pbr::ExtendedMaterial, prelude::*};
 use shared::physics::terrain::{generate_terrain_mesh, spawn_boundary_walls, BoundaryWall, Terrain, TerrainParams};
 
 use crate::{
-    grass::{GrassMaterial, WindSettings, spawn_grass_on_terrain},
+    grass::{GrassMaterial, WindSettings, create_grass_bundles},
     network::DespawnOnWorldData,
     water::{WaterMaterial, spawn_water_client},
 };
@@ -97,31 +97,10 @@ fn setup_terrain_client(
         ..default()
     });
 
-    // Spawn terrain with physics collider
-    commands.spawn((
-        Mesh3d(terrain_mesh_handle),
-        MeshMaterial3d(terrain_material.clone()),
-        Transform::from_xyz(0.0, 0.0, 0.0),
-        RigidBody::Static,
-        Collider::trimesh_from_mesh(&terrain_mesh).unwrap(),
-        Terrain,
-        WorldEntity,
-        DespawnOnWorldData,
-    ));
-
-    // Spawn water at calculated level
-    spawn_water_client(
-        &mut commands,
-        &mut meshes,
-        &mut water_materials,
-        water_level,
-        terrain_params.plane_size,
-    );
-
-    // Spawn grass on terrain - very dense grass with height-based variation
+    // Create grass bundles before spawning terrain
+    // Very dense grass with height-based variation
     // Using mesh merging + LOD, we can handle extremely high density!
-    spawn_grass_on_terrain(
-        &mut commands,
+    let grass_bundles = create_grass_bundles(
         &mut meshes,
         &mut materials,
         &mut grass_materials,
@@ -133,6 +112,33 @@ fn setup_terrain_client(
         water_level,
     );
 
+    // Spawn terrain with grass as children using new Bevy children API
+    commands.spawn((
+        Name::new("Terrain"),
+        Mesh3d(terrain_mesh_handle),
+        MeshMaterial3d(terrain_material.clone()),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        RigidBody::Static,
+        Collider::trimesh_from_mesh(&terrain_mesh).unwrap(),
+        Terrain,
+        WorldEntity,
+        DespawnOnWorldData,
+        Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
+            for bundle in grass_bundles {
+                parent.spawn(bundle);
+            }
+        })),
+    ));
+
+    // Spawn water at calculated level
+    spawn_water_client(
+        &mut commands,
+        &mut meshes,
+        &mut water_materials,
+        water_level,
+        terrain_params.plane_size,
+    );
+
     let ents = spawn_boundary_walls(&mut commands, &terrain_params);
     for e in ents {
         commands.entity(e).insert((WorldEntity, DespawnOnWorldData));
@@ -140,6 +146,7 @@ fn setup_terrain_client(
 
     // Add directional light (sun)
     commands.spawn((
+        Name::new("Sun (Directional Light)"),
         DirectionalLight {
             illuminance: 10000.0,
             shadows_enabled: true,

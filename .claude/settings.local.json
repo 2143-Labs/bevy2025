@@ -11,7 +11,9 @@
       "Bash(nix --extra-experimental-features nix-command --extra-experimental-features flakes develop --command cargo build)",
       "WebFetch(domain:docs.rs)",
       "Bash(nix --extra-experimental-features nix-command --extra-experimental-features flakes develop --command cargo doc --package bevy --no-deps --open)",
-      "WebFetch(domain:bevyengine.org)"
+      "WebFetch(domain:bevyengine.org)",
+      "Bash(test:*)",
+      "Bash(cargo run:*)"
     ],
     "deny": [],
     "ask": []

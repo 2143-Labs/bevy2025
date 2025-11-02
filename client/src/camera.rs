@@ -1,4 +1,3 @@
-use avian3d::prelude::*;
 use bevy::prelude::*;
 use shared::{Config, GameAction};
 
@@ -419,39 +418,5 @@ fn ease_in_out_cubic(t: f32) -> f32 {
         4.0 * t * t * t
     } else {
         1.0 - (-2.0 * t + 2.0).powi(3) / 2.0
-    }
-}
-
-/// Spawn pause UI overlay
-fn spawn_pause_ui(mut commands: Commands) {
-    commands
-        .spawn((
-            Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                position_type: PositionType::Absolute,
-                ..default()
-            },
-            PauseUI,
-            ZIndex(1000),
-        ))
-        .with_children(|parent| {
-            parent.spawn((
-                Text::new("PAUSED"),
-                TextFont {
-                    font_size: 100.0,
-                    ..default()
-                },
-                TextColor(Color::WHITE),
-            ));
-        });
-}
-
-/// Despawn pause UI when unpausing
-fn despawn_pause_ui(mut commands: Commands, ui_query: Query<Entity, With<PauseUI>>) {
-    for entity in ui_query.iter() {
-        commands.entity(entity).despawn();
     }
 }

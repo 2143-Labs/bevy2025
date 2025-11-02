@@ -18,8 +18,11 @@ use shared::{
 };
 
 use crate::{
-    camera::FreeCam, game_state::NetworkGameState, notification::Notification,
+    camera::FreeCam,
+    game_state::NetworkGameState,
+    notification::Notification,
     terrain::SetupTerrain,
+    ui::ConnectionTrigger,
 };
 
 #[derive(Component)]
@@ -30,20 +33,10 @@ impl Plugin for NetworkingPlugin {
     fn build(&self, app: &mut App) {
         shared::event::client::register_events(app);
         app.add_message::<SpawnUnit2>()
+            // Don't auto-connect on startup - wait for trigger from UI
             .add_systems(
-                Startup,
-                (
-                    |mut commands: Commands, config: Res<Config>| {
-                        // Setup networking resources
-                        commands.insert_resource(NetworkConnectionTarget {
-                            ip: config.ip.clone(),
-                            port: config.port,
-                        });
-                    },
-                    |mut state: ResMut<NextState<NetworkGameState>>| {
-                        state.set(NetworkGameState::ClientConnecting)
-                    },
-                ),
+                Update,
+                trigger_connection.run_if(resource_exists::<ConnectionTrigger>),
             )
             .add_systems(
                 OnEnter(NetworkGameState::ClientConnecting),
@@ -106,6 +99,35 @@ impl Plugin for NetworkingPlugin {
     }
 }
 
+/// Trigger connection when ConnectionTrigger resource is present
+fn trigger_connection(
+    mut commands: Commands,
+    config: Res<Config>,
+    trigger: Res<ConnectionTrigger>,
+    mut next_network_state: ResMut<NextState<NetworkGameState>>,
+    mut trigger_consumed: Local<bool>,
+) {
+    // Only trigger once per resource creation
+    if *trigger_consumed {
+        return;
+    }
+
+    if trigger.should_connect {
+        info!("Connection triggered - starting connection process");
+
+        // Setup networking resources with current config values
+        commands.insert_resource(NetworkConnectionTarget {
+            ip: config.ip.clone(),
+            port: config.port,
+        });
+
+        // Start connection process
+        next_network_state.set(NetworkGameState::ClientConnecting);
+
+        *trigger_consumed = true;
+    }
+}
+
 fn send_connect_packet(
     sr: Res<NetworkingResources<EventToClient>>,
     //args: Res<CliArgs>,
@@ -114,9 +136,12 @@ fn send_connect_packet(
     mut notif: MessageWriter<Notification>,
     local_player: Query<&Transform, With<FreeCam>>,
 ) {
-    let Ok(&my_location) = local_player.single() else {
-        return;
-    };
+    // Use FreeCam transform if available, otherwise use default spawn location
+    let my_location = local_player
+        .single()
+        .copied()
+        .unwrap_or_else(|_| Transform::from_xyz(0.0, 10.0, 0.0));
+
     //let name = args.name_override.clone().or(config.name.clone());
     let name = config.name.clone();
     let event = EventToServer::ConnectRequest(ConnectRequest {
