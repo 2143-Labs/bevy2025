@@ -25,13 +25,14 @@ impl Plugin for TerrainPlugin {
             .insert_resource(WorldSpawned(false))
             .add_systems(OnEnter(GameState::Playing), setup_terrain_client)
             .add_systems(OnEnter(GameState::MainMenu), despawn_terrain)
-            .add_systems(Update, draw_boundary_debug)
+            // Temporarily disabled to test if this is causing the red rectangle
+            // .add_systems(Update, draw_boundary_debug)
             .add_message::<SetupTerrain>()
             .add_systems(Startup, |mut setup_events: MessageWriter<SetupTerrain>| {
                 // this can also be sent by world net connect
                 setup_events.write(SetupTerrain);
             })
-            .add_systems(Update, draw_boundary_debug)
+            // .add_systems(Update, draw_boundary_debug)
             .add_systems(
                 Update,
                 setup_terrain_client.run_if(on_message::<SetupTerrain>),
