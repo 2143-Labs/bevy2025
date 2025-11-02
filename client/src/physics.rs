@@ -4,6 +4,7 @@ use shared::event::ERFE;
 use shared::event::{client::SpawnUnit2, server::SpawnCircle};
 use shared::net_components::ents::Ball;
 
+use crate::camera::LocalCamera;
 use crate::game_state::{GameState, NetworkGameState};
 
 /// UI component for the ball counter parent
@@ -60,7 +61,7 @@ fn manage_physics_pause(
 /// Spawn balls every frame while holding spacebar (from active camera's view)
 fn spawn_ball_on_space(
     keyboard: Res<ButtonInput<KeyCode>>,
-    camera_query: Query<(&Camera, &Transform)>,
+    camera_query: Query<(&Camera, &Transform), With<LocalCamera>>,
     //mut commands: Commands,
     //mut meshes: ResMut<Assets<Mesh>>,
     //mut materials: ResMut<Assets<StandardMaterial>>,

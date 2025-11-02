@@ -10,10 +10,10 @@ mod ui;
 mod water;
 mod assets;
 mod debug;
+mod remote_players;
 
-use avian3d::prelude::*;
 use bevy::{
-    diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
+    diagnostic::LogDiagnosticsPlugin,
     prelude::*,
 };
 
@@ -28,6 +28,7 @@ use ui::UIPlugin;
 use water::WaterPlugin;
 use assets::AssetsPlugin;
 use debug::DebugPlugin;
+use remote_players::RemotePlayersPlugin;
 
 #[derive(Parser, Resource, Debug)]
 struct ClapArgs {
@@ -69,11 +70,13 @@ fn main() {
             PhysicsPlugin,
             PickingPlugin,
             network::NetworkingPlugin,
+            RemotePlayersPlugin,
             shared::ConfigPlugin,
             notification::NotificationPlugin,
             WaterPlugin,
+        ))
+        .add_plugins((
             GrassPlugin,
-            // FrameTimeDiagnosticsPlugin::default(),
             LogDiagnosticsPlugin::default(),
         ))
         .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue

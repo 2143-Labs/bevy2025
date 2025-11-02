@@ -18,8 +18,8 @@ use shared::{
 };
 
 use crate::{
-    camera::FreeCam,
-    game_state::NetworkGameState,
+    camera::LocalCamera,
+    game_state::{GameState, NetworkGameState},
     notification::Notification,
     terrain::SetupTerrain,
     ui::ConnectionTrigger,
@@ -27,6 +27,10 @@ use crate::{
 
 #[derive(Component)]
 pub struct DespawnOnWorldData;
+
+/// Temporary storage for camera NetEntId until camera is spawned
+#[derive(Resource)]
+struct PendingCameraId(NetEntId);
 
 pub struct NetworkingPlugin;
 impl Plugin for NetworkingPlugin {
@@ -85,9 +89,11 @@ impl Plugin for NetworkingPlugin {
             //)
             .add_systems(
                 Update,
-                (send_movement)
-                    .run_if(on_timer(Duration::from_millis(25)))
-                    .run_if(in_state(NetworkGameState::ClientConnected)),
+                (apply_pending_camera_id, send_movement, debug_camera_components)
+                    .chain()
+                    .run_if(on_timer(Duration::from_millis(15))) // ~64Hz (1000/64 ≈ 15.6ms)
+                    .run_if(in_state(NetworkGameState::ClientConnected))
+                    .run_if(in_state(GameState::Playing)),
             )
             .add_systems(
                 Update,
@@ -134,9 +140,9 @@ fn send_connect_packet(
     mse: Res<MainServerEndpoint>,
     config: Res<Config>,
     mut notif: MessageWriter<Notification>,
-    local_player: Query<&Transform, With<FreeCam>>,
+    local_player: Query<&Transform, With<LocalCamera>>,
 ) {
-    // Use FreeCam transform if available, otherwise use default spawn location
+    // Use LocalCamera (FreeCam) transform if available, otherwise use default spawn location
     let my_location = local_player
         .single()
         .copied()
@@ -184,7 +190,7 @@ fn receive_world_data(
     mut world_data: ERFE<WorldData2>,
     mut commands: Commands,
     mut notif: MessageWriter<Notification>,
-    mut local_player: Query<(Entity, &mut Transform), With<FreeCam>>,
+    mut local_player: Query<(Entity, &mut Transform), With<LocalCamera>>,
     mut spawn_units: MessageWriter<SpawnUnit2>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -195,6 +201,7 @@ fn receive_world_data(
     mut msg_terrain_events: MessageWriter<SetupTerrain>,
 ) {
     for event in world_data.read() {
+        info!("===== RECEIVED WorldData2 event =====");
         game_state.set(NetworkGameState::ClientConnected);
         info!(?event, "Server has returned world data!");
 
@@ -208,30 +215,15 @@ fn receive_world_data(
         }
 
         let my_id = event.event.your_unit_id;
+        let my_camera_id = event.event.your_camera_unit_id;
+
+        // Store the camera ID to be applied later when camera is spawned
+        commands.insert_resource(PendingCameraId(my_camera_id));
+        info!("Stored pending camera ID {:?} to be applied when camera spawns", my_camera_id);
+
         for unit in &event.event.units {
-            if unit.net_ent_id == my_id {
-                // If so, start aligning the client to it
-                let (p_ent, mut p_tfm) = local_player.single_mut().unwrap();
-                //TODO this again
-                //p_tfm.translation = unit.transform.translation;
-
-                //notif.send(Notification(format!(
-                //"Connected to server as {name} {my_id:?}"
-                //)));
-
-                //// Add our netentid + name
-                //commands
-                //.entity(p_ent)
-                //.insert(my_id)
-                //.insert(PlayerName(name.clone()))
-                //.insert(unit.health)
-                //.with_children(|s| {
-                //build_healthbar(s, &mut meshes, &mut materials, Vec3::ZERO)
-                //});
-
-                // if this is us, skip the spawn units call cause we updated a local unit
-                // instead. TODO eventually fix this so when we fully despawn the menu
-                // player unit
+            if unit.net_ent_id == my_id || unit.net_ent_id == my_camera_id {
+                // Skip our own player and camera units - they're already set up locally
             } else {
                 // TOOD do this gracefully?
                 for component in &unit.components {
@@ -306,19 +298,97 @@ fn send_heartbeat(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoin
 //}
 //}
 
+/// Apply pending camera ID to LocalCamera once it's spawned
+fn apply_pending_camera_id(
+    pending: Option<Res<PendingCameraId>>,
+    mut commands: Commands,
+    local_cam: Query<Entity, (With<LocalCamera>, Without<PlayerCamera>)>,
+) {
+    if let Some(pending_id) = pending {
+        if let Ok(cam_entity) = local_cam.single() {
+            commands.entity(cam_entity)
+                .insert(pending_id.0)
+                .insert(PlayerCamera);
+            info!("✓ Applied NetEntId {:?} and PlayerCamera to local camera", pending_id.0);
+            commands.remove_resource::<PendingCameraId>();
+        }
+    }
+}
+
+fn debug_camera_components(
+    local_cam: Query<(Entity, Option<&NetEntId>, Option<&PlayerCamera>), With<LocalCamera>>,
+    all_cams: Query<Entity, With<PlayerCamera>>,
+) {
+    static mut LOGGED: bool = false;
+    unsafe {
+        if !LOGGED {
+            LOGGED = true;
+            if let Ok((entity, net_id, player_cam)) = local_cam.single() {
+                info!(
+                    "LocalCamera entity {:?} - has NetEntId: {}, has PlayerCamera: {}",
+                    entity,
+                    net_id.is_some(),
+                    player_cam.is_some()
+                );
+                if let Some(id) = net_id {
+                    info!("  NetEntId = {:?}", id);
+                }
+            } else {
+                warn!("No LocalCamera found!");
+            }
+
+            info!("Total cameras with PlayerCamera component: {}", all_cams.iter().count());
+        }
+    }
+}
+
 fn send_movement(
     sr: Res<ClientNetworkingResources>,
     mse: Res<MainServerEndpoint>,
-    our_transform: Query<(&Transform, &NetEntId), (With<PlayerCamera>, Changed<Transform>)>,
+    our_transform: Query<(&Transform, &NetEntId), (With<LocalCamera>, With<PlayerCamera>)>,
 ) {
-    if let Ok((transform, ent_id)) = our_transform.single() {
-        let mut events = vec![];
-        events.push(EventToServer::ChangeMovement(ChangeMovement {
-            net_ent_id: *ent_id,
-            transform: *transform,
-        }));
+    // Track last sent transform to detect changes
+    static mut LAST_SENT: Option<(Vec3, Quat)> = None;
+    static mut LOGGED_NO_CAMERA: bool = false;
 
-        send_event_to_server_batch(&sr.handler, mse.0, &events);
+    if let Ok((transform, ent_id)) = our_transform.single() {
+        unsafe {
+            LOGGED_NO_CAMERA = false; // Reset if we found the camera
+        }
+        let current = (transform.translation, transform.rotation);
+        let should_send = unsafe {
+            if let Some(last) = LAST_SENT {
+                // Check if position or rotation changed significantly (avoid floating point precision issues)
+                let pos_changed = (last.0 - current.0).length() > 0.001;
+                let rot_changed = last.1.angle_between(current.1) > 0.001;
+                pos_changed || rot_changed
+            } else {
+                true // First send
+            }
+        };
+
+        if should_send {
+            let mut events = vec![];
+            events.push(EventToServer::ChangeMovement(ChangeMovement {
+                net_ent_id: *ent_id,
+                transform: *transform,
+            }));
+
+            send_event_to_server_batch(&sr.handler, mse.0, &events);
+            info!("Sent movement update for camera {:?} at {:?}", ent_id, transform.translation);
+
+            unsafe {
+                LAST_SENT = Some(current);
+            }
+        }
+    } else {
+        // Log once if we can't find the camera
+        unsafe {
+            if !LOGGED_NO_CAMERA {
+                LOGGED_NO_CAMERA = true;
+                warn!("send_movement: Cannot find LocalCamera with both PlayerCamera and NetEntId components");
+            }
+        }
     }
 }
 

@@ -5,6 +5,7 @@ use bevy::prelude::*;
 
 #[cfg(feature = "inspector")]
 use bevy_inspector_egui::{
+    quick::WorldInspectorPlugin,
     bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass},
     egui,
 };
@@ -19,9 +20,9 @@ impl Plugin for DebugPlugin {
     fn build(&self, app: &mut App) {
         #[cfg(feature = "inspector")]
         {
+
             app.add_plugins(EguiPlugin::default())
-                // Temporarily disable WorldInspectorPlugin to test if it's causing the issue
-                // .add_plugins(WorldInspectorPlugin::new())
+                .add_plugins(WorldInspectorPlugin::new())
                 .init_resource::<EguiReady>()
                 .add_systems(First, mark_egui_ready)
                 .add_systems(EguiPrimaryContextPass, visibility_toggle_ui.run_if(|ready: Res<EguiReady>| ready.0));

@@ -1,7 +1,7 @@
 ip: 127.0.0.1
-host_ip: 0.0.0.0
+host_ip: 127.0.0.1
 port: 25555
-name: John
+name: Orbsa 
 sens: 0.003
 qe_sens: 3.0
 sound: false

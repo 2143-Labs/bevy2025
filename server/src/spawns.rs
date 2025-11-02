@@ -33,6 +33,7 @@ fn on_circle_spawn(
     for spawn_ev in spawns.read() {
         info!(?spawn_ev.event, "Spawning circle from event");
         let spawn = &spawn_ev.event;
+        debug!("Spawning circle at position: {:?}", spawn.position);
         let transform = Transform::from_translation(spawn.position);
         let ent_id = NetEntId::random();
 

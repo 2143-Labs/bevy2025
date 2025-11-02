@@ -176,13 +176,14 @@ fn on_player_connect(
         let mut unit_list_to_new_client = vec![];
 
         // Add all existing cameras from other players to unit list as spawnunit2s
-        for (c_net_ent, _c_parent_id, c_tfm, c_name) in &cameras {
+        for (c_net_ent, c_parent_id, c_tfm, c_name) in &cameras {
             unit_list_to_new_client.push(SpawnUnit2 {
                 net_ent_id: *c_net_ent,
                 components: vec![
                     PlayerCamera.to_net_component(),
                     (*c_tfm).to_net_component(),
                     c_name.clone().to_net_component(),
+                    c_parent_id.clone().to_net_component(),
                 ],
             });
         }
@@ -246,12 +247,15 @@ fn on_player_connect(
             .insert(player.endpoint, new_player_ent_id);
 
         // Finally, tell the client all this info.
-        let event = EventToClient::WorldData2(WorldData2 {
+        let world_data = WorldData2 {
             your_unit_id: new_player_ent_id,
             your_camera_unit_id: spawn_camera_unit.net_ent_id,
             terrain_params: terrain.clone(),
             units: unit_list_to_new_client,
-        });
+        };
+        info!("Sending WorldData2 to new player: player_id={:?}, camera_id={:?}, {} units",
+              new_player_ent_id, spawn_camera_unit.net_ent_id, world_data.units.len());
+        let event = EventToClient::WorldData2(world_data);
         send_event_to_server(&sr.handler, player.endpoint, &event);
 
         for ball_unit in unit_list_to_new_client_balls.chunks(100) {
@@ -334,34 +338,54 @@ fn on_movement(
     mut pd: ERFE<ChangeMovement>,
     endpoint_mapping: Res<EndpointToNetId>,
     clients: Query<(&PlayerEndpoint, &NetEntId), With<ConnectedPlayer>>,
-    cameras: Query<(&NetEntId, &MyNetEntParentId, &mut Transform), With<PlayerCamera>>,
+    mut cameras: Query<(&NetEntId, &MyNetEntParentId, &mut Transform), With<PlayerCamera>>,
     sr: Res<ServerNetworkingResources>,
 ) {
     for movement in pd.read() {
-        if let Some(moved_net_id) = endpoint_mapping.map.get(&movement.endpoint) {
+        // Get the player ID who sent this movement
+        let sending_player_net_id = endpoint_mapping.map.get(&movement.endpoint);
+
+        // The camera NetEntId is directly in the movement event
+        let camera_net_id = movement.event.net_ent_id;
+
+        // Find and update the camera entity
+        let mut camera_updated = false;
+        info!("Server received movement for camera {:?} from player {:?}", camera_net_id, sending_player_net_id);
+        for (cam_net_id, _cam_parent_id, mut cam_transform) in &mut cameras {
+            if cam_net_id == &camera_net_id {
+                // Update the camera's transform on the server
+                info!("Server updating camera {:?} from {:?} to {:?}", cam_net_id, cam_transform.translation, movement.event.transform.translation);
+                *cam_transform = movement.event.transform;
+                camera_updated = true;
+                break;
+            }
+        }
+
+        // Broadcast the camera update to all OTHER clients
+        if camera_updated {
             let event = EventToClient::UpdateUnit2(UpdateUnit2 {
-                net_ent_id: *moved_net_id,
+                net_ent_id: camera_net_id,
                 components: vec![movement.event.transform.to_net_component()],
             });
 
-            //todo!();
-
-            //for (c_net_client, c_net_ent) in &mut clients {
-            //if moved_net_id == c_net_ent {
-            ////info!(?event);
-            //// If this person moved, update their transform serverside
-            //match movement.event {
-            //ChangeMovement::SetTransform(new_tfm) => *c_tfm = new_tfm,
-            //ChangeMovement::Move2d(new_intent) => {
-            //*intent = MovementIntention(new_intent)
-            //}
-            //_ => {}
-            //}
-            //} else {
-            //// Else, just rebroadcast the packet to everyone else
-            //send_event_to_server(&sr.handler, c_net_client.0, &event);
-            //}
-            //}
+            let mut broadcast_count = 0;
+            for (c_net_client, c_net_ent) in &clients {
+                // Don't send the update back to the player who sent it
+                if let Some(sender_id) = sending_player_net_id {
+                    if sender_id != c_net_ent {
+                        send_event_to_server(&sr.handler, c_net_client.0, &event);
+                        broadcast_count += 1;
+                        info!("Broadcasting camera {:?} update to client {:?}", camera_net_id, c_net_ent);
+                    }
+                } else {
+                    // If we can't identify the sender, broadcast to everyone
+                    send_event_to_server(&sr.handler, c_net_client.0, &event);
+                    broadcast_count += 1;
+                }
+            }
+            info!("Broadcast camera {:?} update to {} clients", camera_net_id, broadcast_count);
+        } else {
+            warn!("Received movement for unknown camera {:?}", camera_net_id);
         }
     }
 }
