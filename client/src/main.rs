@@ -73,7 +73,6 @@ fn main() {
             notification::NotificationPlugin,
             WaterPlugin,
             GrassPlugin,
-            // Diagnostics
             // FrameTimeDiagnosticsPlugin::default(),
             LogDiagnosticsPlugin::default(),
         ))

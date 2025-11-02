@@ -66,11 +66,16 @@ fn update_pick_point(
     mut pick_point: ResMut<PickPoint>,
     cameras: Query<(&Camera, &GlobalTransform)>,
     windows: Query<&Window>,
-    spatial_query: SpatialQuery,
+    spatial_query: Option<SpatialQuery>,
     mut indicator_query: Query<&mut Transform, With<CursorIndicator>>,
     boundary_walls: Query<Entity, With<BoundaryWall>>,
 ) {
     let Ok(window) = windows.single() else {
+        return;
+    };
+
+    // Guard clause for SpatialQuery availability
+    let Some(spatial_query) = spatial_query else {
         return;
     };
 
