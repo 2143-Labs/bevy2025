@@ -185,7 +185,9 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                             for i in 0..8 {
                                 let hue = (i as f32) * 45.0; // 0, 45, 90, 135, 180, 225, 270, 315
                                 let is_selected = (hue - selected_hue).abs() < 1.0;
-                                let color = Color::hsl(hue, 0.8, 0.6);
+
+                                // Create HSL color directly for UI display
+                                let color = Color::hsl(hue, 0.9, 0.5);
 
                                 colors.spawn((
                                     Node {
