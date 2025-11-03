@@ -5,7 +5,7 @@ use shared::{
     Config,
     event::{
         ERFE, NetEntId,
-        client::{SpawnUnit2, WorldData2},
+        client::{SpawnUnit2, WorldData2, UpdateUnit2, DespawnUnit2, PlayerDisconnected},
         server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle},
     },
     net_components::{ents::PlayerCamera, ours::PlayerName},
@@ -37,6 +37,9 @@ impl Plugin for NetworkingPlugin {
     fn build(&self, app: &mut App) {
         shared::event::client::register_events(app);
         app.add_message::<SpawnUnit2>()
+            .add_message::<UpdateUnit2>()
+            .add_message::<DespawnUnit2>()
+            .add_message::<PlayerDisconnected>()
             // Don't auto-connect on startup - wait for trigger from UI
             .add_systems(
                 Update,
@@ -89,7 +92,7 @@ impl Plugin for NetworkingPlugin {
             //)
             .add_systems(
                 Update,
-                (apply_pending_camera_id, send_movement, debug_camera_components)
+                (apply_pending_camera_id, send_movement)
                     .chain()
                     .run_if(on_timer(Duration::from_millis(15))) // ~64Hz (1000/64 ≈ 15.6ms)
                     .run_if(in_state(NetworkGameState::ClientConnected))
@@ -201,14 +204,12 @@ fn receive_world_data(
     mut msg_terrain_events: MessageWriter<SetupTerrain>,
 ) {
     for event in world_data.read() {
-        info!("===== RECEIVED WorldData2 event =====");
         game_state.set(NetworkGameState::ClientConnected);
-        info!(?event, "Server has returned world data!");
+        info!("Connected to server");
 
         // Tell the client to update the terrain with the server's seed
         *terrain_data = event.event.terrain_params.clone();
         msg_terrain_events.write(SetupTerrain);
-        info!(?terrain_data, "Updated terrain params from server.");
 
         for ent in ents_to_despawn.iter() {
             commands.entity(ent).despawn();
@@ -219,12 +220,14 @@ fn receive_world_data(
 
         // Store the camera ID to be applied later when camera is spawned
         commands.insert_resource(PendingCameraId(my_camera_id));
-        info!("Stored pending camera ID {:?} to be applied when camera spawns", my_camera_id);
 
+        info!("Received {} units from server", event.event.units.len());
         for unit in &event.event.units {
             if unit.net_ent_id == my_id || unit.net_ent_id == my_camera_id {
                 // Skip our own player and camera units - they're already set up locally
+                info!("  Skipping own unit {:?}", unit.net_ent_id);
             } else {
+                info!("  Processing remote unit {:?} with {} components", unit.net_ent_id, unit.components.len());
                 // TOOD do this gracefully?
                 for component in &unit.components {
                     if let shared::net_components::NetComponent::Ours(ours) = component {
@@ -309,35 +312,7 @@ fn apply_pending_camera_id(
             commands.entity(cam_entity)
                 .insert(pending_id.0)
                 .insert(PlayerCamera);
-            info!("✓ Applied NetEntId {:?} and PlayerCamera to local camera", pending_id.0);
             commands.remove_resource::<PendingCameraId>();
-        }
-    }
-}
-
-fn debug_camera_components(
-    local_cam: Query<(Entity, Option<&NetEntId>, Option<&PlayerCamera>), With<LocalCamera>>,
-    all_cams: Query<Entity, With<PlayerCamera>>,
-) {
-    static mut LOGGED: bool = false;
-    unsafe {
-        if !LOGGED {
-            LOGGED = true;
-            if let Ok((entity, net_id, player_cam)) = local_cam.single() {
-                info!(
-                    "LocalCamera entity {:?} - has NetEntId: {}, has PlayerCamera: {}",
-                    entity,
-                    net_id.is_some(),
-                    player_cam.is_some()
-                );
-                if let Some(id) = net_id {
-                    info!("  NetEntId = {:?}", id);
-                }
-            } else {
-                warn!("No LocalCamera found!");
-            }
-
-            info!("Total cameras with PlayerCamera component: {}", all_cams.iter().count());
         }
     }
 }
@@ -349,12 +324,8 @@ fn send_movement(
 ) {
     // Track last sent transform to detect changes
     static mut LAST_SENT: Option<(Vec3, Quat)> = None;
-    static mut LOGGED_NO_CAMERA: bool = false;
 
     if let Ok((transform, ent_id)) = our_transform.single() {
-        unsafe {
-            LOGGED_NO_CAMERA = false; // Reset if we found the camera
-        }
         let current = (transform.translation, transform.rotation);
         let should_send = unsafe {
             if let Some(last) = LAST_SENT {
@@ -375,18 +346,9 @@ fn send_movement(
             }));
 
             send_event_to_server_batch(&sr.handler, mse.0, &events);
-            info!("Sent movement update for camera {:?} at {:?}", ent_id, transform.translation);
 
             unsafe {
                 LAST_SENT = Some(current);
-            }
-        }
-    } else {
-        // Log once if we can't find the camera
-        unsafe {
-            if !LOGGED_NO_CAMERA {
-                LOGGED_NO_CAMERA = true;
-                warn!("send_movement: Cannot find LocalCamera with both PlayerCamera and NetEntId components");
             }
         }
     }

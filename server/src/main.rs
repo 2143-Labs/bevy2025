@@ -173,10 +173,23 @@ fn on_player_connect(
             ],
         };
 
+        // Add the connected player ent here (BEFORE querying cameras)
+        commands.spawn((
+            PlayerName { name: name.clone() },
+            new_player_ent_id,
+            PlayerEndpoint(player.endpoint),
+            ConnectedPlayer,
+        ));
+
+        // Add the camera entity here (BEFORE querying cameras so it's available for next client)
+        spawn_camera_unit.clone().spawn_entity_srv(&mut commands);
+
         let mut unit_list_to_new_client = vec![];
 
         // Add all existing cameras from other players to unit list as spawnunit2s
+        info!("Found {} existing cameras to send to new player", cameras.iter().len());
         for (c_net_ent, c_parent_id, c_tfm, c_name) in &cameras {
+            info!("  - Camera {:?} at {:?} for player {:?}", c_net_ent, c_tfm.translation, c_parent_id);
             unit_list_to_new_client.push(SpawnUnit2 {
                 net_ent_id: *c_net_ent,
                 components: vec![
@@ -219,18 +232,6 @@ fn on_player_connect(
             unit_list_to_new_client_balls.push(make_ball(ent_id, transform, has_color.0));
         }
 
-        // Add the connected player ent here
-        commands.spawn((
-            PlayerName { name },
-            new_player_ent_id,
-            PlayerEndpoint(player.endpoint),
-            ConnectedPlayer,
-            // Used as a target for some AI
-        ));
-
-        // Add the camera entity here
-        spawn_camera_unit.clone().spawn_entity_srv(&mut commands);
-
         // Each time we miss a heartbeat, we increment the Atomic counter.
         // So, we initially set this to negative number to give extra time for the initial
         // connection.
@@ -253,8 +254,7 @@ fn on_player_connect(
             terrain_params: terrain.clone(),
             units: unit_list_to_new_client,
         };
-        info!("Sending WorldData2 to new player: player_id={:?}, camera_id={:?}, {} units",
-              new_player_ent_id, spawn_camera_unit.net_ent_id, world_data.units.len());
+        info!("Player connected - sending {} existing units", world_data.units.len());
         let event = EventToClient::WorldData2(world_data);
         send_event_to_server(&sr.handler, player.endpoint, &event);
 
@@ -350,11 +350,9 @@ fn on_movement(
 
         // Find and update the camera entity
         let mut camera_updated = false;
-        info!("Server received movement for camera {:?} from player {:?}", camera_net_id, sending_player_net_id);
         for (cam_net_id, _cam_parent_id, mut cam_transform) in &mut cameras {
             if cam_net_id == &camera_net_id {
                 // Update the camera's transform on the server
-                info!("Server updating camera {:?} from {:?} to {:?}", cam_net_id, cam_transform.translation, movement.event.transform.translation);
                 *cam_transform = movement.event.transform;
                 camera_updated = true;
                 break;
@@ -368,24 +366,17 @@ fn on_movement(
                 components: vec![movement.event.transform.to_net_component()],
             });
 
-            let mut broadcast_count = 0;
             for (c_net_client, c_net_ent) in &clients {
                 // Don't send the update back to the player who sent it
                 if let Some(sender_id) = sending_player_net_id {
                     if sender_id != c_net_ent {
                         send_event_to_server(&sr.handler, c_net_client.0, &event);
-                        broadcast_count += 1;
-                        info!("Broadcasting camera {:?} update to client {:?}", camera_net_id, c_net_ent);
                     }
                 } else {
                     // If we can't identify the sender, broadcast to everyone
                     send_event_to_server(&sr.handler, c_net_client.0, &event);
-                    broadcast_count += 1;
                 }
             }
-            info!("Broadcast camera {:?} update to {} clients", camera_net_id, broadcast_count);
-        } else {
-            warn!("Received movement for unknown camera {:?}", camera_net_id);
         }
     }
 }
