@@ -23,11 +23,18 @@ pub struct ConnectButton;
 #[derive(Component)]
 pub struct BackButton;
 
+/// Marker for color selection buttons
+#[derive(Component)]
+pub struct ColorButton {
+    pub hue: f32,
+}
+
 /// Spawn the multiplayer menu UI with input fields pre-filled from config
 pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
     // Pre-fill inputs from config
     let server_address = format!("{}:{}", config.ip, config.port);
     let username = config.name.clone().unwrap_or_else(|| "Player".to_string());
+    let selected_hue = config.player_color_hue;
 
     commands
         .spawn((
@@ -110,7 +117,7 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::Start,
                     row_gap: Val::Px(10.0),
-                    margin: UiRect::bottom(Val::Px(40.0)),
+                    margin: UiRect::bottom(Val::Px(20.0)),
                     ..default()
                 })
                 .with_children(|section| {
@@ -148,6 +155,56 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                             TextInputDisplay,
                         ));
                     });
+                });
+
+            // Player Color section
+            parent
+                .spawn(Node {
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Start,
+                    row_gap: Val::Px(10.0),
+                    margin: UiRect::bottom(Val::Px(40.0)),
+                    ..default()
+                })
+                .with_children(|section| {
+                    // Label
+                    section.spawn({
+                        let (text, font, color) = label_text("Player Color:");
+                        (text, font, color)
+                    });
+
+                    // Color selection row
+                    section
+                        .spawn(Node {
+                            flex_direction: FlexDirection::Row,
+                            column_gap: Val::Px(15.0),
+                            ..default()
+                        })
+                        .with_children(|colors| {
+                            // Create 8 color buttons with different hues
+                            for i in 0..8 {
+                                let hue = (i as f32) * 45.0; // 0, 45, 90, 135, 180, 225, 270, 315
+                                let is_selected = (hue - selected_hue).abs() < 1.0;
+                                let color = Color::hsl(hue, 0.8, 0.6);
+
+                                colors.spawn((
+                                    Node {
+                                        width: Val::Px(45.0),
+                                        height: Val::Px(45.0),
+                                        border: UiRect::all(Val::Px(if is_selected { 4.0 } else { 2.0 })),
+                                        ..default()
+                                    },
+                                    BackgroundColor(color),
+                                    BorderColor::all(if is_selected {
+                                        Color::WHITE
+                                    } else {
+                                        Color::srgb(0.4, 0.4, 0.4)
+                                    }),
+                                    Interaction::default(),
+                                    ColorButton { hue },
+                                ));
+                            }
+                        });
                 });
 
             // Buttons row
@@ -193,6 +250,29 @@ pub fn despawn_multiplayer_menu(
     }
 }
 
+/// Handle color button interactions
+pub fn handle_color_buttons(
+    color_query: Query<(&Interaction, &ColorButton), Changed<Interaction>>,
+    mut all_color_buttons: Query<(&mut BorderColor, &ColorButton)>,
+    mut config: ResMut<Config>,
+) {
+    for (interaction, color_button) in color_query.iter() {
+        if *interaction == Interaction::Pressed {
+            info!("Color selected: hue = {}", color_button.hue);
+            config.player_color_hue = color_button.hue;
+
+            // Update border colors for all buttons
+            for (mut border, button) in all_color_buttons.iter_mut() {
+                if (button.hue - color_button.hue).abs() < 1.0 {
+                    *border = BorderColor::all(Color::WHITE);
+                } else {
+                    *border = BorderColor::all(Color::srgb(0.4, 0.4, 0.4));
+                }
+            }
+        }
+    }
+}
+
 /// Handle button interactions in multiplayer menu
 pub fn handle_multiplayer_buttons(
     connect_query: Query<&Interaction, (Changed<Interaction>, With<ConnectButton>)>,
@@ -229,7 +309,8 @@ pub fn handle_multiplayer_buttons(
                 (server_address.clone(), config.port)
             };
 
-            info!("Connect button pressed - IP: {}, Port: {}, Username: {}", ip, port, username);
+            info!("Connect button pressed - IP: {}, Port: {}, Username: {}, Color: {}",
+                  ip, port, username, config.player_color_hue);
 
             // Update config (temporary, not persisted)
             config.ip = ip;

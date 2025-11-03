@@ -46,6 +46,9 @@ pub struct Config {
     pub host_ip: Option<String>,
     pub port: u16,
     pub name: Option<String>,
+    /// Player color as HSL hue (0.0-360.0)
+    #[serde(default)]
+    pub player_color_hue: f32,
     //#[serde(default="default_sens")]
     pub sens: f32,
     //#[serde(default="default_qe_sens")]
@@ -120,6 +123,7 @@ impl Default for Config {
             ip: "127.0.0.1".into(),
             host_ip: None,
             port: 25565,
+            player_color_hue: 0.0, // Default to red
             sens: 0.003,
             qe_sens: 3.0,
             name: None,

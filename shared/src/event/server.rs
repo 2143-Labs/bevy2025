@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 pub struct ConnectRequest {
     pub name: Option<String>,
     pub my_location: Transform,
+    pub color_hue: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]

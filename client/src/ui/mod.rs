@@ -40,6 +40,7 @@ impl Plugin for UIPlugin {
                 Update,
                 (
                     multiplayer_menu::handle_multiplayer_buttons,
+                    multiplayer_menu::handle_color_buttons,
                     text_input::handle_text_input_focus,
                     text_input::handle_text_input_keyboard,
                     text_input::update_text_input_visual_feedback,

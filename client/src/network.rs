@@ -156,6 +156,7 @@ fn send_connect_packet(
     let event = EventToServer::ConnectRequest(ConnectRequest {
         name: name.clone(),
         my_location,
+        color_hue: config.player_color_hue,
     });
     notif.write(Notification(format!(
         "Connecting server={} name={name:?}",

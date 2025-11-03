@@ -15,7 +15,7 @@ use shared::{
         server::{ChangeMovement, Heartbeat},
         MyNetEntParentId, NetEntId, ERFE,
     },
-    net_components::{ents::PlayerCamera, make_ball, ours::PlayerName, ToNetComponent},
+    net_components::{ents::PlayerCamera, make_ball, ours::{PlayerName, PlayerColor}, ToNetComponent},
     netlib::{
         send_event_to_server, send_event_to_server_batch, EventToClient, EventToServer,
         NetworkConnectionTarget, ServerNetworkingResources,
@@ -142,8 +142,8 @@ fn on_player_connect(
     mut new_players: ERFE<shared::event::server::ConnectRequest>,
     mut heartbeat_mapping: ResMut<HeartbeatList>,
     mut endpoint_to_net_id: ResMut<EndpointToNetId>,
-    clients: Query<(&PlayerEndpoint, &NetEntId, &PlayerName), With<ConnectedPlayer>>,
-    cameras: Query<(&NetEntId, &MyNetEntParentId, &Transform, &PlayerName), With<PlayerCamera>>,
+    clients: Query<(&PlayerEndpoint, &NetEntId, &PlayerName, &PlayerColor), With<ConnectedPlayer>>,
+    cameras: Query<(&NetEntId, &MyNetEntParentId, &Transform, &PlayerName, &PlayerColor), With<PlayerCamera>>,
     balls: Query<(&Transform, &NetEntId, &HasColor), With<shared::net_components::ents::Ball>>,
     sr: Res<ServerNetworkingResources>,
     terrain: Res<TerrainParams>,
@@ -160,6 +160,7 @@ fn on_player_connect(
             .unwrap_or_else(|| format!("Player #{}", rand::rng().random_range(1..10000)));
 
         let spawn_location = player.event.my_location;
+        let player_color = PlayerColor { hue: player.event.color_hue };
 
         let new_player_ent_id = NetEntId::random();
 
@@ -167,6 +168,7 @@ fn on_player_connect(
             net_ent_id: NetEntId::random(),
             components: vec![
                 PlayerName { name: name.clone() }.to_net_component(),
+                player_color.clone().to_net_component(),
                 spawn_location.to_net_component(),
                 PlayerCamera.to_net_component(),
                 MyNetEntParentId::new(new_player_ent_id).to_net_component(),
@@ -176,6 +178,7 @@ fn on_player_connect(
         // Add the connected player ent here (BEFORE querying cameras)
         commands.spawn((
             PlayerName { name: name.clone() },
+            player_color.clone(),
             new_player_ent_id,
             PlayerEndpoint(player.endpoint),
             ConnectedPlayer,
@@ -188,7 +191,7 @@ fn on_player_connect(
 
         // Add all existing cameras from other players to unit list as spawnunit2s
         info!("Found {} existing cameras to send to new player", cameras.iter().len());
-        for (c_net_ent, c_parent_id, c_tfm, c_name) in &cameras {
+        for (c_net_ent, c_parent_id, c_tfm, c_name, c_color) in &cameras {
             info!("  - Camera {:?} at {:?} for player {:?}", c_net_ent, c_tfm.translation, c_parent_id);
             unit_list_to_new_client.push(SpawnUnit2 {
                 net_ent_id: *c_net_ent,
@@ -196,21 +199,22 @@ fn on_player_connect(
                     PlayerCamera.to_net_component(),
                     (*c_tfm).to_net_component(),
                     c_name.clone().to_net_component(),
+                    c_color.clone().to_net_component(),
                     c_parent_id.clone().to_net_component(),
                 ],
             });
         }
 
         // Add all other players to unit list too
-        for (_c_net_client, c_net_ent, c_name) in &clients {
+        for (_c_net_client, c_net_ent, c_name, c_color) in &clients {
             unit_list_to_new_client.push(SpawnUnit2 {
                 net_ent_id: *c_net_ent,
-                components: vec![c_name.clone().to_net_component()],
+                components: vec![c_name.clone().to_net_component(), c_color.clone().to_net_component()],
             });
         }
 
         // Tell all other clients about your new player
-        for (c_net_client, _c_net_ent, c_name) in &clients {
+        for (c_net_client, _c_net_ent, _c_name, _c_color) in &clients {
             send_event_to_server_batch(
                 &sr.handler,
                 c_net_client.0,
@@ -220,7 +224,10 @@ fn on_player_connect(
                     // their player unit
                     EventToClient::SpawnUnit2(SpawnUnit2 {
                         net_ent_id: new_player_ent_id,
-                        components: vec![c_name.clone().to_net_component()],
+                        components: vec![
+                            PlayerName { name: name.clone() }.to_net_component(),
+                            player_color.clone().to_net_component(),
+                        ],
                     }),
                 ],
             );

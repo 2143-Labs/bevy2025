@@ -13,6 +13,7 @@ impl Plugin for AssetsPlugin {
             LoadingState::new(GameState::AssetLoading)
                 .continue_to_state(GameState::MainMenu)
                 .load_collection::<ImageAssets>()
+                .load_collection::<FontAssets>()
                 .load_collection::<ModelAssets>(),
         );
     }
@@ -24,6 +25,12 @@ pub struct ImageAssets {
     #[asset(path = "images/Logo.png")]
     #[asset(image(sampler(filter = nearest)))]
     pub logo: Handle<Image>,
+}
+
+#[derive(AssetCollection, Resource)]
+pub struct FontAssets {
+    #[asset(path = "fonts/PTSans-Regular.ttf")]
+    pub regular: Handle<Font>,
 }
 
 #[derive(AssetCollection, Resource)]
