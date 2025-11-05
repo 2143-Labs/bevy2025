@@ -16,7 +16,9 @@
       "Bash(cargo run:*)",
       "Bash(dir:*)",
       "Bash(nul)",
-      "Bash(cargo doc:*)"
+      "Bash(cargo doc:*)",
+      "Bash(cargo rustdoc:*)",
+      "Bash(cargo tree:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{camera::visibility::NoFrustumCulling, prelude::*};
 use shared::{
     event::{
         client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2},
@@ -32,6 +32,10 @@ pub struct NameLabel {
     pub target_entity: Entity,
 }
 
+/// Marker component for scenes that need NoFrustumCulling applied to all their meshes
+#[derive(Component)]
+pub struct ApplyNoFrustumCulling;
+
 pub struct RemotePlayersPlugin;
 
 impl Plugin for RemotePlayersPlugin {
@@ -46,6 +50,7 @@ impl Plugin for RemotePlayersPlugin {
                 handle_player_disconnect,
                 update_name_label_positions,
                 apply_player_color_tint,
+                apply_no_frustum_culling_to_scene_meshes,
             )
                 .chain()
                 .run_if(in_state(NetworkGameState::ClientConnected)),
@@ -154,6 +159,7 @@ fn handle_spawn_unit(
                             camera_net_id: unit.net_ent_id,
                         },
                         shared::net_components::ours::PlayerColor { hue: player_color_hue },
+                        ApplyNoFrustumCulling, // Mark this scene to have NoFrustumCulling applied to all meshes
                     ));
                 });
 
@@ -310,3 +316,33 @@ fn apply_player_color_tint(
         commands.entity(model_entity).insert(ColorApplied);
     }
 }
+
+/// Apply NoFrustumCulling to all mesh entities within scenes marked with ApplyNoFrustumCulling
+/// This prevents individual mesh components from being culled when they shouldn't be (self-occlusion)
+fn apply_no_frustum_culling_to_scene_meshes(
+    // Find all scene roots marked for NoFrustumCulling
+    scene_roots: Query<(Entity, &Children), With<ApplyNoFrustumCulling>>,
+    // Find all mesh entities (they have a Mesh3d component)
+    all_children: Query<&Children>,
+    mesh_entities: Query<Entity, (With<Mesh3d>, Without<NoFrustumCulling>)>,
+    mut commands: Commands,
+) {
+    // For each marked scene root
+    for (_scene_root, children) in &scene_roots {
+        // Recursively find all descendant mesh entities
+        let mut to_process: Vec<Entity> = children.iter().collect();
+
+        while let Some(entity) = to_process.pop() {
+            // If this entity is a mesh without NoFrustumCulling, add it
+            if mesh_entities.contains(entity) {
+                commands.entity(entity).insert(NoFrustumCulling);
+            }
+
+            // Add children to processing queue
+            if let Ok(entity_children) = all_children.get(entity) {
+                to_process.extend(entity_children.iter());
+            }
+        }
+    }
+}
+
