@@ -71,14 +71,13 @@ fn setup_terrain_client(
     mut grass_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, GrassMaterial>>>,
     wind: Res<WindSettings>,
     mut world_spawned: ResMut<WorldSpawned>,
+    terrain_params: Res<TerrainParams>,
 ) {
     // Only spawn if not already spawned
     if world_spawned.0 {
         return;
     }
     world_spawned.0 = true;
-
-    let terrain_params = TerrainParams::default();
 
     // Calculate water level: 30% between min and max terrain height
     // Terrain heights range from -max_height_delta to +max_height_delta
