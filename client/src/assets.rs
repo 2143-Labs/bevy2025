@@ -42,6 +42,10 @@ pub struct ImageAssets {
     #[asset(path = "images/bucket.png")]
     #[asset(image(sampler(filter = nearest)))]
     pub bucket: Handle<Image>,
+
+    #[asset(path = "images/T_3x3.png")]
+    #[asset(image(sampler(filter = nearest)))]
+    pub t_3x3: Handle<Image>,
 }
 
 #[derive(AssetCollection, Resource)]

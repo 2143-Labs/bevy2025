@@ -1,5 +1,6 @@
 mod camera;
-pub mod components;
+pub mod player;
+pub mod inventory;
 pub mod game_state;
 mod grass;
 mod network;
