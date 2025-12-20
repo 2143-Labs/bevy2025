@@ -13,7 +13,7 @@ use bevy::prelude::*;
 use bevy_pbr::StandardMaterial;
 use serde::{Deserialize, Serialize};
 
-use crate::event::{client::SpawnUnit2, MyNetEntParentId, NetEntId};
+use crate::{event::{MyNetEntParentId, NetEntId, PlayerId, client::SpawnUnit2}, net_components::ours::ControlledBy};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MeshGenerator(pub String, pub f32);
@@ -80,6 +80,7 @@ pub enum NetComponent {
     Ents(ents::NetComponentEnts),
     MyNetEntParentId(MyNetEntParentId),
     NetEntId(NetEntId),
+    PlayerId(PlayerId),
 }
 
 impl NetComponent {
@@ -104,6 +105,9 @@ impl NetComponent {
             NetComponent::NetEntId(net_ent_id) => {
                 ent_commands.insert(net_ent_id);
             }
+            NetComponent::PlayerId(player_id) => {
+                ent_commands.insert(player_id);
+            }
         }
     }
 
@@ -121,6 +125,9 @@ impl NetComponent {
             NetComponent::NetEntId(net_ent_id) => {
                 ent_commands.insert(net_ent_id);
             }
+            NetComponent::PlayerId(player_id) => {
+                ent_commands.insert(player_id);
+            }
         }
     }
 }
@@ -135,6 +142,11 @@ impl ToNetComponent for NetEntId {
         NetComponent::NetEntId(self)
     }
 }
+impl ToNetComponent for PlayerId {
+    fn to_net_component(self) -> NetComponent {
+        NetComponent::PlayerId(self)
+    }
+}
 
 impl SpawnUnit2 {
     pub fn spawn_entity(
@@ -143,7 +155,12 @@ impl SpawnUnit2 {
         meshes: &mut ResMut<Assets<Mesh>>,
         materials: &mut ResMut<Assets<StandardMaterial>>,
     ) -> Entity {
-        let mut ent_commands = commands.spawn(self.net_ent_id);
+        let mut ent_commands = commands.spawn(());
+        if !self.net_ent_id.is_none() {
+            ent_commands.insert(self.net_ent_id);
+        }
+
+        ent_commands.insert(self.net_ent_id);
 
         for net_comp in self.components {
             net_comp.insert_components(&mut ent_commands, meshes, materials);
@@ -153,7 +170,10 @@ impl SpawnUnit2 {
     }
 
     pub fn spawn_entity_srv(self, commands: &mut Commands) -> Entity {
-        let mut ent_commands = commands.spawn(self.net_ent_id);
+        let mut ent_commands = commands.spawn(());
+        if !self.net_ent_id.is_none() {
+            ent_commands.insert(self.net_ent_id);
+        }
 
         for net_comp in self.components {
             net_comp.insert_components_srv(&mut ent_commands);
@@ -167,11 +187,12 @@ pub trait ToNetComponent {
     fn to_net_component(self) -> NetComponent;
 }
 
-pub fn make_ball(net_ent_id: NetEntId, transform: Transform, color: Color) -> SpawnUnit2 {
+pub fn make_ball(net_ent_id: NetEntId, transform: Transform, color: Color, owner: ControlledBy)-> SpawnUnit2 {
     let sphere_size = 0.5;
     SpawnUnit2 {
         net_ent_id,
         components: vec![
+            owner.to_net_component(),
             ents::Ball.to_net_component(),
             ents::SendNetworkTranformUpdates.to_net_component(),
             transform.to_net_component(),
@@ -188,10 +209,11 @@ pub fn make_ball(net_ent_id: NetEntId, transform: Transform, color: Color) -> Sp
     }
 }
 
-pub fn make_man(net_ent_id: NetEntId, transform: Transform) -> SpawnUnit2 {
+pub fn make_man(net_ent_id: NetEntId, transform: Transform, owner: ControlledBy) -> SpawnUnit2 {
     SpawnUnit2 {
         net_ent_id,
         components: vec![
+            owner.to_net_component(),
             ents::Man.to_net_component(),
             ents::SendNetworkTranformUpdates.to_net_component(),
             transform.to_net_component(),

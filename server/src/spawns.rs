@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 use shared::{
-    event::{ERFE, NetEntId, server::{SpawnCircle, SpawnMan}}, net_components::make_man, netlib::{EventToClient, ServerNetworkingResources, send_event_to_server_now}
+    event::{ERFE, NetEntId, server::{SpawnCircle, SpawnMan}}, net_components::{make_man, ours::ControlledBy}, netlib::{EventToClient, ServerNetworkingResources, send_event_to_server_now}
 };
 
-use crate::{make_ball, ConnectedPlayer, HasColor, PlayerEndpoint, ServerState};
+use crate::{ConnectedPlayer, EndpointToPlayerId, HasColor, PlayerEndpoint, ServerState, make_ball};
 
 pub struct SpawnPlugin;
 impl Plugin for SpawnPlugin {
@@ -26,17 +26,24 @@ impl Plugin for SpawnPlugin {
 fn on_circle_spawn(
     mut spawns: ERFE<SpawnCircle>,
     mut commands: Commands,
+    endpoint_to_player_id: Res<EndpointToPlayerId>,
     sr: Res<ServerNetworkingResources>,
     clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
 ) {
     for spawn_ev in spawns.read() {
         info!(?spawn_ev.event, "Spawning circle from event");
         let spawn = &spawn_ev.event;
+
+        let Some(player_id_of_spawner) = endpoint_to_player_id.map.get(&spawn_ev.endpoint) else {
+            warn!("Could not find player ID for endpoint: {:?}", spawn_ev.endpoint);
+            continue;
+        };
+
         debug!("Spawning circle at position: {:?}", spawn.position);
         let transform = Transform::from_translation(spawn.position);
         let ent_id = NetEntId::random();
 
-        let unit = make_ball(ent_id, transform, spawn.color);
+        let unit = make_ball(ent_id, transform, spawn.color, ControlledBy::single(*player_id_of_spawner));
         let unit_ent = unit.clone().spawn_entity_srv(&mut commands);
         commands.entity(unit_ent).insert(HasColor(spawn.color));
 
@@ -53,17 +60,24 @@ fn on_circle_spawn(
 fn on_man_spawn(
     mut spawns: ERFE<SpawnMan>,
     mut commands: Commands,
+    endpoint_to_player_id: Res<EndpointToPlayerId>,
     sr: Res<ServerNetworkingResources>,
     clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
 ) {
     for spawn_ev in spawns.read() {
         info!(?spawn_ev.event, "Spawning man from event");
         let spawn = &spawn_ev.event;
+
+        let Some(player_id_of_spawner) = endpoint_to_player_id.map.get(&spawn_ev.endpoint) else {
+            warn!("Could not find player ID for endpoint: {:?}", spawn_ev.endpoint);
+            continue;
+        };
+
         debug!("Spawning man at position: {:?}", spawn.position);
         let transform = Transform::from_translation(spawn.position);
         let ent_id = NetEntId::random();
 
-        let unit = make_man(ent_id, transform);
+        let unit = make_man(ent_id, transform, ControlledBy::single(*player_id_of_spawner));
         let _ent = unit.clone().spawn_entity_srv(&mut commands);
 
         let event = EventToClient::SpawnUnit2(unit);

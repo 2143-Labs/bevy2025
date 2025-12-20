@@ -185,7 +185,7 @@ fn receive_world_data(
             commands.entity(ent).despawn();
         }
 
-        let my_id = event.event.your_unit_id;
+        let my_id = event.event.your_player_id;
         let my_camera_id = event.event.your_camera_unit_id;
 
         // Store the camera ID to be applied later when camera is spawned
@@ -193,7 +193,7 @@ fn receive_world_data(
 
         info!("Received {} units from server", event.event.units.len());
         for unit in &event.event.units {
-            if unit.net_ent_id == my_id || unit.net_ent_id == my_camera_id {
+            if unit.net_ent_id.is_none() || unit.net_ent_id == my_camera_id {
                 // Skip our own player and camera units - they're already set up locally
                 info!("  Skipping own unit {:?}", unit.net_ent_id);
             } else {

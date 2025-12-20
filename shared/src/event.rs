@@ -6,13 +6,34 @@ use serde::{Deserialize, Serialize};
 pub mod client;
 pub mod server;
 
+/// Every spawned entity gets a unique NetEntId.
 #[derive(Debug, Clone, Copy, Component, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct NetEntId(pub u64);
+
+/// Every unique player gets a unique PlayerId.
+#[derive(Debug, Clone, Copy, Component, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct PlayerId(pub u64);
 
 #[derive(Debug, Clone, Copy, Component, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct MyNetEntParentId(pub u64);
 
 impl NetEntId {
+    pub fn random() -> Self {
+        // ID < 10 are reserved for special purposes.
+        Self(rand::random_range(10..=u64::MAX))
+    }
+
+    // Very rarely used: only for special meta entities.
+    pub fn none() -> Self {
+        Self(0)
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.0 == 0
+    }
+}
+
+impl PlayerId {
     pub fn random() -> Self {
         Self(rand::random())
     }

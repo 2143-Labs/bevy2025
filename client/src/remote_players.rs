@@ -4,7 +4,7 @@ use shared::{
     event::{
         ERFE, NetEntId, client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2}
     },
-    net_components::{NetComponent, ents::SendNetworkTranformUpdates},
+    net_components::{NetComponent, ents::SendNetworkTranformUpdates, ours::ControlledBy},
 };
 
 use crate::{
@@ -126,7 +126,7 @@ fn handle_spawn_unit(
                 NetComponent::MyNetEntParentId(pid) => {
                     parent_id = Some(NetEntId(pid.0));
                 }
-                NetComponent::Groups(_) | NetComponent::NetEntId(_) => {
+                NetComponent::Groups(_) | NetComponent::NetEntId(_) | NetComponent::PlayerId(_) => {
                     // Ignore these for player camera spawning
                 }
             }
@@ -249,7 +249,7 @@ fn handle_despawn_unit(
 /// Handle player disconnections
 fn handle_player_disconnect(
     mut disconnect_events: MessageReader<PlayerDisconnected>,
-    remote_cameras: Query<(Entity, &RemotePlayerCamera)>,
+    remote_cameras: Query<(Entity, &ControlledBy, &RemotePlayerCamera)>,
     mut commands: Commands,
     mut notif: MessageWriter<Notification>,
 ) {
@@ -259,8 +259,8 @@ fn handle_player_disconnect(
         info!("Player disconnected: {:?}", player_id);
 
         // Find and despawn all entities belonging to this player
-        for (entity, remote_cam) in &remote_cameras {
-            if remote_cam.player_net_id == player_id {
+        for (entity, controlled_by, _remote_cam) in &remote_cameras {
+            if controlled_by.players == &[player_id] {
                 info!("Despawning remote player camera and model for {:?}", player_id);
                 // Despawn (automatically despawns children in Bevy 0.17)
                 commands.entity(entity).despawn();

@@ -75,9 +75,11 @@ pub fn send_event_to_server_now_batch<T: NetworkingEvent>(
     event: &[T],
 ) {
     trace!(?event, "Sending batch event");
+    let data = postcard::to_stdvec(&EventGroupingRef::Batch(event)).unwrap();
+    info!(data_len = data.len(), "Sending batch event of size");
     handler.network().send(
         endpoint,
-        &postcard::to_stdvec(&EventGroupingRef::Batch(event)).unwrap(),
+        &data,
     );
 }
 

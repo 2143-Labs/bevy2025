@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::net_components::ToNetComponent;
+use crate::{event::PlayerId, net_components::ToNetComponent};
 
 //include!(concat!(env!("OUT_DIR"), "/net_components_ours.rs"));
 #[derive(Serialize, Deserialize, Component, Debug, Eq, PartialEq, Clone)]
@@ -12,6 +12,19 @@ pub struct Health {
 #[derive(Serialize, Deserialize, Component, Debug, Eq, PartialEq, Clone)]
 pub struct PlayerName {
     pub name: String,
+}
+
+#[derive(Serialize, Deserialize, Component, Debug, Eq, PartialEq, Clone)]
+pub struct ControlledBy {
+    pub players: Vec<PlayerId>,
+}
+
+impl ControlledBy {
+    pub fn single(player_id: PlayerId) -> Self {
+        ControlledBy {
+            players: vec![player_id],
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Component, Debug, PartialEq, Clone)]
@@ -31,6 +44,7 @@ pub struct PlayerColor {
 pub enum NetComponentOurs {
     Health(Health),
     PlayerName(PlayerName),
+    ControlledBy(ControlledBy),
     PlayerColor(PlayerColor),
 }
 
@@ -44,6 +58,9 @@ impl NetComponentOurs {
                 entity.insert(c);
             }
             NetComponentOurs::PlayerColor(c) => {
+                entity.insert(c);
+            }
+            NetComponentOurs::ControlledBy(c) => {
                 entity.insert(c);
             }
         }
@@ -65,6 +82,12 @@ impl ToNetComponent for PlayerName {
 impl ToNetComponent for PlayerColor {
     fn to_net_component(self) -> super::NetComponent {
         super::NetComponent::Ours(NetComponentOurs::PlayerColor(self))
+    }
+}
+
+impl ToNetComponent for ControlledBy {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::ControlledBy(self))
     }
 }
 
