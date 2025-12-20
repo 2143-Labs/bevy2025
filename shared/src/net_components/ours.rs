@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::net_components::ToNetComponent;
 
+//include!(concat!(env!("OUT_DIR"), "/net_components_ours.rs"));
 #[derive(Serialize, Deserialize, Component, Debug, Eq, PartialEq, Clone)]
 pub struct Health {
     pub hp: u32,
@@ -18,7 +19,13 @@ pub struct PlayerColor {
     /// HSL hue value (0.0-360.0)
     pub hue: f32,
 }
-//include!(concat!(env!("OUT_DIR"), "/net_components_ours.rs"));
+
+///// This struct represents all the possible things a unit might be trying to do this tick.
+//#[derive(Serialize, Deserialize, Component, Debug, PartialEq, Clone)]
+//pub enum ControlIntent {
+    //MoveTo3D(Vec3),
+    //Stop,
+//}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NetComponentOurs {

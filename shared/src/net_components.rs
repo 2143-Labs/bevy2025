@@ -65,6 +65,7 @@ impl MaterialGenerator {
 
 //include!(concat!(env!("OUT_DIR"), "/net_components.rs"));
 
+/// A bevy component that can be sent over the network and added to an entity.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NetComponent {
     Foreign(foreign::NetComponentForeign),
@@ -76,6 +77,8 @@ pub enum NetComponent {
 }
 
 impl NetComponent {
+    /// Insert components (client) into given entity. If you dont have meshes/materials, use
+    /// [`Self::insert_components_srv`] instead.
     pub fn insert_components(
         self,
         ent_commands: &mut EntityCommands,
