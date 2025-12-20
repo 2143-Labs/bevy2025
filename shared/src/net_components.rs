@@ -173,6 +173,7 @@ pub fn make_ball(net_ent_id: NetEntId, transform: Transform, color: Color) -> Sp
         net_ent_id,
         components: vec![
             ents::Ball.to_net_component(),
+            ents::SendNetworkTranformUpdates.to_net_component(),
             transform.to_net_component(),
             groups::NormalMeshMaterial {
                 mesh: MeshGenerator("sphere".to_string(), sphere_size),
@@ -192,6 +193,7 @@ pub fn make_man(net_ent_id: NetEntId, transform: Transform) -> SpawnUnit2 {
         net_ent_id,
         components: vec![
             ents::Man.to_net_component(),
+            ents::SendNetworkTranformUpdates.to_net_component(),
             transform.to_net_component(),
             groups::NormalMeshMaterial {
                 mesh: MeshGenerator::new("sphere", 3.0),

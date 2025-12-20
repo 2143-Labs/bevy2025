@@ -3,15 +3,23 @@ use serde::{Deserialize, Serialize};
 
 use crate::net_components::ToNetComponent;
 
+/// Simple Network physics entity
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct Ball;
 
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct Interactable;
 
+/// Anything with this component will have its transform sent over the network regularly from the
+/// server.
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct SendNetworkTranformUpdates;
+
+/// Player Camera Entity
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct PlayerCamera;
 
+/// Controllable player entity
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct Man;
 
@@ -21,6 +29,7 @@ pub struct Man;
 pub enum NetComponentEnts {
     Ball(Ball),
     Interactable(Interactable),
+    SendNetworkTranformUpdates(SendNetworkTranformUpdates),
     PlayerCamera(PlayerCamera),
     Man(Man),
 }
@@ -32,6 +41,9 @@ impl NetComponentEnts {
                 entity.insert(c);
             }
             NetComponentEnts::Interactable(c) => {
+                entity.insert(c);
+            }
+            NetComponentEnts::SendNetworkTranformUpdates(c) => {
                 entity.insert(c);
             }
             NetComponentEnts::PlayerCamera(c) => {
@@ -65,5 +77,11 @@ impl ToNetComponent for PlayerCamera {
 impl ToNetComponent for Man {
     fn to_net_component(self) -> super::NetComponent {
         super::NetComponent::Ents(NetComponentEnts::Man(self))
+    }
+}
+
+impl ToNetComponent for SendNetworkTranformUpdates {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ents(NetComponentEnts::SendNetworkTranformUpdates(self))
     }
 }

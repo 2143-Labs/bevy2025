@@ -4,6 +4,7 @@ use std::{
     time::Duration,
 };
 
+use avian3d::prelude::LinearVelocity;
 use bevy::{
     app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, time::common_conditions::on_timer,
 };
@@ -12,7 +13,7 @@ use rand::Rng;
 use shared::{
     Config, ConfigPlugin, event::{
         ERFE, MyNetEntParentId, NetEntId, client::{PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2}, server::{ChangeMovement, Heartbeat}
-    }, net_components::{ToNetComponent, ents::PlayerCamera, make_ball, ours::{PlayerColor, PlayerName}}, netlib::{
+    }, net_components::{ToNetComponent, ents::{PlayerCamera, SendNetworkTranformUpdates}, make_ball, ours::{PlayerColor, PlayerName}}, netlib::{
         EventToClient, EventToServer, NetworkConnectionTarget, ServerNetworkingResources, Tick, send_event_to_server_now, send_event_to_server_now_batch
     }, physics::terrain::TerrainParams
 };
@@ -184,6 +185,7 @@ fn on_player_connect(
                 spawn_location.to_net_component(),
                 PlayerCamera.to_net_component(),
                 MyNetEntParentId::new(new_player_ent_id).to_net_component(),
+                SendNetworkTranformUpdates.to_net_component(),
             ],
         };
 
@@ -213,6 +215,7 @@ fn on_player_connect(
                     c_name.clone().to_net_component(),
                     c_color.clone().to_net_component(),
                     c_parent_id.clone().to_net_component(),
+                    SendNetworkTranformUpdates.to_net_component(),
                 ],
             });
         }
@@ -376,7 +379,8 @@ fn on_movement(
 fn broadcast_movement_updates(
     clients: Query<(&PlayerEndpoint, &NetEntId), With<ConnectedPlayer>>,
     sr: Res<ServerNetworkingResources>,
-    changed_cameras: Query<(&NetEntId, &Transform), (With<PlayerCamera>, Changed<Transform>)>,
+    changed_cameras: Query<(&NetEntId, &Transform), (With<SendNetworkTranformUpdates>, Changed<Transform>)>,
+    changed_phys: Query<(&NetEntId, &LinearVelocity), (With<SendNetworkTranformUpdates>, Changed<LinearVelocity>)>,
     //current_tick: Res<CurrentTick>,
 ) {
     let mut events_to_send = vec![];
@@ -385,6 +389,16 @@ fn broadcast_movement_updates(
             net_ent_id: *cam_net_id,
             //tick: current_tick.0,
             components: vec![cam_transform.to_net_component()],
+        });
+
+        events_to_send.push(event);
+    }
+
+    for (phys_net_id, linear_velocity) in &changed_phys {
+        let event = EventToClient::UpdateUnit2(UpdateUnit2 {
+            net_ent_id: *phys_net_id,
+            //tick: current_tick.0,
+            components: vec![linear_velocity.to_net_component()],
         });
 
         events_to_send.push(event);

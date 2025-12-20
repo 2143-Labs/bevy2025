@@ -31,6 +31,32 @@ pub enum GameAction {
     Chat,
 }
 
+static DEFAULT_BINDS: Lazy<Keybinds> = Lazy::new(|| {
+    let kk = |k: KeyCode| KeyCodeOrMouseButton::KeyCode(k);
+    let mb = |m: MouseButton| KeyCodeOrMouseButton::MouseButton(m);
+    HashMap::from([
+        (GameAction::MoveForward, vec![kk(KeyCode::KeyW)]),
+        (GameAction::MoveBackward, vec![kk(KeyCode::KeyS)]),
+        (GameAction::StrafeLeft, vec![kk(KeyCode::KeyA)]),
+        (GameAction::StrafeRight, vec![kk(KeyCode::KeyD)]),
+        (GameAction::RotateLeft, vec![kk(KeyCode::KeyQ)]),
+        (GameAction::RotateRight, vec![kk(KeyCode::KeyE)]),
+        (GameAction::Ascend, vec![kk(KeyCode::Space)]),
+        (GameAction::Descend, vec![kk(KeyCode::ShiftLeft)]),
+
+        (GameAction::Jump, vec![kk(KeyCode::Space)]),
+
+        (GameAction::Use, vec![kk(KeyCode::KeyE)]),
+        (GameAction::ChangeCamera, vec![kk(KeyCode::KeyC)]),
+        (GameAction::UnlockCursor, vec![kk(KeyCode::KeyX)]),
+        (GameAction::Fire1, vec![mb(MouseButton::Left)]),
+        (GameAction::Fire2, vec![mb(MouseButton::Right)]),
+        (GameAction::Mod1, vec![kk(KeyCode::ShiftLeft)]),
+        (GameAction::Special1, vec![kk(KeyCode::KeyQ)]),
+        (GameAction::Chat, vec![kk(KeyCode::Enter)]),
+    ])
+});
+
 impl GameAction {
     /// Run condition that returns true if this keycode was just pressed
     pub const fn just_pressed(
@@ -136,31 +162,6 @@ impl Config {
         )
     }
 }
-
-static DEFAULT_BINDS: Lazy<Keybinds> = Lazy::new(|| {
-    let kk = |k: KeyCode| KeyCodeOrMouseButton::KeyCode(k);
-    let mb = |m: MouseButton| KeyCodeOrMouseButton::MouseButton(m);
-    HashMap::from([
-        (GameAction::MoveForward, vec![kk(KeyCode::KeyW)]),
-        (GameAction::MoveBackward, vec![kk(KeyCode::KeyS)]),
-        (GameAction::StrafeLeft, vec![kk(KeyCode::KeyA)]),
-        (GameAction::StrafeRight, vec![kk(KeyCode::KeyD)]),
-        (GameAction::RotateLeft, vec![kk(KeyCode::KeyQ)]),
-        (GameAction::RotateRight, vec![kk(KeyCode::KeyE)]),
-        (GameAction::Ascend, vec![kk(KeyCode::Space)]),
-        (GameAction::Descend, vec![kk(KeyCode::ShiftLeft)]),
-
-        (GameAction::Jump, vec![kk(KeyCode::Space)]),
-
-        (GameAction::Use, vec![kk(KeyCode::KeyE)]),
-        (GameAction::ChangeCamera, vec![kk(KeyCode::KeyC)]),
-        (GameAction::UnlockCursor, vec![kk(KeyCode::KeyX)]),
-        (GameAction::Fire1, vec![mb(MouseButton::Left)]),
-        (GameAction::Fire2, vec![mb(MouseButton::Right)]),
-        (GameAction::Mod1, vec![kk(KeyCode::ShiftLeft)]),
-        (GameAction::Chat, vec![kk(KeyCode::Enter)]),
-    ])
-});
 
 impl Default for Config {
     fn default() -> Self {

@@ -1,10 +1,10 @@
+use avian3d::prelude::LinearVelocity;
 use bevy::{camera::visibility::NoFrustumCulling, prelude::*};
 use shared::{
     event::{
-        client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2},
-        NetEntId, ERFE,
+        ERFE, NetEntId, client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2}
     },
-    net_components::NetComponent,
+    net_components::{NetComponent, ents::SendNetworkTranformUpdates},
 };
 
 use crate::{
@@ -140,6 +140,7 @@ fn handle_spawn_unit(
                     RemotePlayerCamera {
                         player_net_id: parent_id.unwrap_or(unit.net_ent_id),
                     },
+                    SendNetworkTranformUpdates,
                     Transform::from_translation(transform.translation)
                         .with_rotation(transform.rotation),
                     GlobalTransform::default(),
@@ -192,18 +193,33 @@ fn handle_spawn_unit(
 /// Handle updating unit transforms (mainly for player cameras)
 fn handle_update_unit(
     mut update_events: MessageReader<UpdateUnit2>,
-    mut remote_cameras: Query<(&NetEntId, &mut Transform), With<RemotePlayerCamera>>,
+    mut remote_unit: Query<(&NetEntId, &mut Transform), With<shared::net_components::ents::SendNetworkTranformUpdates>>,
+    mut remote_unit2: Query<(&NetEntId, &mut LinearVelocity), With<shared::net_components::ents::SendNetworkTranformUpdates>>,
 ) {
     for update in update_events.read() {
 
         // Find the entity with this NetEntId
-        for (net_id, mut transform) in &mut remote_cameras {
+        for (net_id, mut transform) in &mut remote_unit {
             if net_id == &update.net_ent_id {
                 // Update the transform from components
                 for component in &update.components {
                     if let NetComponent::Foreign(foreign) = component {
                         if let shared::net_components::foreign::NetComponentForeign::Transform(tfm) = foreign {
                             *transform = *tfm;
+                        }
+                    }
+                }
+                break;
+            }
+        }
+
+        for (net_id, mut velocity) in &mut remote_unit2 {
+            if net_id == &update.net_ent_id {
+                // Update the velocity from components
+                for component in &update.components {
+                    if let NetComponent::Foreign(foreign) = component {
+                        if let shared::net_components::foreign::NetComponentForeign::LinearVelocity(lv) = foreign {
+                            *velocity = *lv;
                         }
                     }
                 }

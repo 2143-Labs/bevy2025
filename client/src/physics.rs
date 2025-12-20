@@ -99,7 +99,7 @@ fn spawn_man_on_use1(
     camera_query: Query<(&Camera, &Transform), With<LocalCamera>>,
     mut spawn_man_writer: MessageWriter<SpawnMan>,
 ) {
-    if !config.just_pressed(&keyboard, &mouse, shared::GameAction::Mod1) {
+    if !config.just_pressed(&keyboard, &mouse, shared::GameAction::Special1) {
         return;
     }
 
