@@ -81,5 +81,26 @@ fn main() {
         ))
         .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue
         .insert_resource(args)
+        .add_systems(Startup, check_all_clap_args)
         .run();
+}
+
+/// This looks for the clap args like autoconnect and modifys the config if neede
+fn check_all_clap_args(
+    mut config: ResMut<Config>,
+    args: Res<ClapArgs>,
+) {
+    if let Some(ip_and_port) = &args.autoconnect {
+        // 2 choices: ip:port or just ip and then default port
+        let mut parts = ip_and_port.split(':');
+        let ip_as_str = parts.next();
+        let port: Option<u16> = parts.next().and_then(|s| s.parse().ok());
+
+        if let Some(ip) = ip_as_str {
+            config.ip = ip.to_string();
+        }
+        if let Some(port) = port {
+            config.port = port;
+        }
+    }
 }
