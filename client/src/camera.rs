@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use shared::{Config, GameAction};
 
+use crate::assets::ImageAssets;
+use crate::components::{Inventory, Item, Player};
 use crate::game_state::GameState;
 
 /// Resource for global time scaling
@@ -84,12 +86,32 @@ impl Plugin for CameraPlugin {
 }
 
 /// Setup all three cameras
-fn setup_cameras(mut commands: Commands, mut cameras_spawned: ResMut<CamerasSpawned>) {
+fn setup_cameras(
+    mut commands: Commands,
+    mut cameras_spawned: ResMut<CamerasSpawned>,
+    image_assets: Res<ImageAssets>,
+) {
     // Only spawn if not already spawned
     if cameras_spawned.0 {
         return;
     }
     cameras_spawned.0 = true;
+
+    // Create default inventory with starter items
+    let mut inventory = Inventory::default();
+
+    // Add tornado
+    inventory.add_item(Item::new("Tornado", image_assets.tornado.clone()));
+
+    // Add cake
+    inventory.add_item(Item::new("Cake", image_assets.cake.clone()));
+
+    // Add two stars
+    inventory.add_item(Item::new("Star", image_assets.star.clone()));
+    inventory.add_item(Item::new("Star", image_assets.star.clone()));
+
+    // Add bucket
+    inventory.add_item(Item::new("Bucket", image_assets.bucket.clone()));
 
     // FreeCam - Perspective, active by default
     commands.spawn((
@@ -107,6 +129,8 @@ fn setup_cameras(mut commands: Commands, mut cameras_spawned: ResMut<CamerasSpaw
             pitch: -0.6,
             move_speed: 20.0,
         },
+        Player,
+        inventory,
     ));
 
     // BirdsEye - Orthographic, disabled by default

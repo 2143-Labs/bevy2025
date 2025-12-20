@@ -25,6 +25,23 @@ pub struct ImageAssets {
     #[asset(path = "images/Logo.png")]
     #[asset(image(sampler(filter = nearest)))]
     pub logo: Handle<Image>,
+
+    // Inventory item textures
+    #[asset(path = "images/tornado.png")]
+    #[asset(image(sampler(filter = nearest)))]
+    pub tornado: Handle<Image>,
+
+    #[asset(path = "images/cake.png")]
+    #[asset(image(sampler(filter = nearest)))]
+    pub cake: Handle<Image>,
+
+    #[asset(path = "images/star.png")]
+    #[asset(image(sampler(filter = nearest)))]
+    pub star: Handle<Image>,
+
+    #[asset(path = "images/bucket.png")]
+    #[asset(image(sampler(filter = nearest)))]
+    pub bucket: Handle<Image>,
 }
 
 #[derive(AssetCollection, Resource)]

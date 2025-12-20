@@ -29,6 +29,7 @@ pub enum GameAction {
     Descend,
 
     Chat,
+    Inventory,
 }
 
 impl GameAction {
@@ -114,6 +115,7 @@ static DEFAULT_BINDS: Lazy<Keybinds> = Lazy::new(|| {
         (GameAction::Fire2, vec![KeyCode::KeyQ]),
         (GameAction::Mod1, vec![KeyCode::ShiftLeft]),
         (GameAction::Chat, vec![KeyCode::Enter]),
+        (GameAction::Inventory, vec![KeyCode::Tab]),
     ])
 });
 

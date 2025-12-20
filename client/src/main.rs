@@ -1,4 +1,5 @@
 mod camera;
+pub mod components;
 pub mod game_state;
 mod grass;
 mod network;
@@ -24,7 +25,7 @@ use physics::PhysicsPlugin;
 use picking::PickingPlugin;
 use shared::Config;
 use terrain::TerrainPlugin;
-use ui::UIPlugin;
+use ui::{InventoryPlugin, UIPlugin};
 use water::WaterPlugin;
 use assets::AssetsPlugin;
 use debug::DebugPlugin;
@@ -65,6 +66,7 @@ fn main() {
             AssetsPlugin,
             DebugPlugin,
             UIPlugin,
+            InventoryPlugin,
             CameraPlugin,
             TerrainPlugin,
             PhysicsPlugin,
