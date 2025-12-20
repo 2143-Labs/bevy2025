@@ -1,6 +1,6 @@
 use std::{collections::HashMap, env::current_dir, fs::OpenOptions};
 
-use bevy::prelude::*;
+use bevy::{input::mouse::MouseButtonInput, prelude::*};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
@@ -35,8 +35,8 @@ impl GameAction {
     /// Run condition that returns true if this keycode was just pressed
     pub const fn just_pressed(
         &'static self,
-    ) -> impl Fn(Res<ButtonInput<KeyCode>>, Res<Config>) -> bool {
-        move |keyboard_input, config| config.just_pressed(&keyboard_input, self.clone())
+    ) -> impl Fn(Res<ButtonInput<KeyCode>>, Res<ButtonInput<MouseButton>>, Res<Config>) -> bool {
+        move |keyboard_input, mouse_input, config| config.just_pressed(&keyboard_input, &mouse_input, self.clone())
     }
 }
 
@@ -59,12 +59,31 @@ pub struct Config {
     pub keybindings: Keybinds, // TODO rust_phf
 }
 
-type Keybinds = HashMap<GameAction, Vec<KeyCode>>;
+#[derive(Reflect, Clone, Hash, Eq, PartialEq, Deserialize, Serialize, Debug)]
+pub enum KeyCodeOrMouseButton {
+    KeyCode(KeyCode),
+    MouseButton(MouseButton),
+}
+
+impl From<KeyCode> for KeyCodeOrMouseButton {
+    fn from(value: KeyCode) -> Self {
+        KeyCodeOrMouseButton::KeyCode(value)
+    }
+}
+
+impl From<MouseButton> for KeyCodeOrMouseButton {
+    fn from(value: MouseButton) -> Self {
+        KeyCodeOrMouseButton::MouseButton(value)
+    }
+}
+
+type Keybinds = HashMap<GameAction, Vec<KeyCodeOrMouseButton>>;
 
 impl Config {
     pub fn pressing_keybind(
         &self,
         mut keyboard_input: impl FnMut(KeyCode) -> bool,
+        mut mouse_input: impl FnMut(MouseButton) -> bool,
         ga: GameAction,
     ) -> bool {
         let bound_key_codes = match self.keybindings.get(&ga) {
@@ -73,47 +92,73 @@ impl Config {
         };
 
         for key in bound_key_codes {
-            if keyboard_input(*key) {
-                return true;
+            match key {
+                KeyCodeOrMouseButton::KeyCode(c) => {
+                    if keyboard_input(*c) {
+                        return true;
+                    }
+                },
+                KeyCodeOrMouseButton::MouseButton(mb) => {
+                    if mouse_input(*mb) {
+                        return true;
+                    }
+                },
             }
         }
 
         false
     }
 
-    pub fn just_pressed(&self, keyboard_input: &Res<ButtonInput<KeyCode>>, ga: GameAction) -> bool {
-        self.pressing_keybind(|x| keyboard_input.just_pressed(x), ga)
+    pub fn just_pressed(&self, keyboard_input: &Res<ButtonInput<KeyCode>>, mouse_input: &Res<ButtonInput<MouseButton>>, ga: GameAction) -> bool {
+        self.pressing_keybind(
+            |x| keyboard_input.just_pressed(x),
+            |x| mouse_input.just_pressed(x),
+        ga)
     }
 
-    pub fn pressed(&self, keyboard_input: &Res<ButtonInput<KeyCode>>, ga: GameAction) -> bool {
-        self.pressing_keybind(|x| keyboard_input.pressed(x), ga)
+    pub fn pressed(&self, keyboard_input: &Res<ButtonInput<KeyCode>>, mouse_input: &Res<ButtonInput<MouseButton>>, ga: GameAction) -> bool {
+        self.pressing_keybind(
+            |x| keyboard_input.pressed(x),
+            |x| mouse_input.pressed(x),
+        ga)
     }
 
     pub fn just_released(
         &self,
         keyboard_input: &Res<ButtonInput<KeyCode>>,
+        mouse_input: &Res<ButtonInput<MouseButton>>,
         ga: GameAction,
     ) -> bool {
-        self.pressing_keybind(|x| keyboard_input.just_released(x), ga)
+        self.pressing_keybind(
+            |x| keyboard_input.just_released(x),
+            |x| mouse_input.just_released(x),
+            ga,
+        )
     }
 }
 
 static DEFAULT_BINDS: Lazy<Keybinds> = Lazy::new(|| {
+    let kk = |k: KeyCode| KeyCodeOrMouseButton::KeyCode(k);
+    let mb = |m: MouseButton| KeyCodeOrMouseButton::MouseButton(m);
     HashMap::from([
-        (GameAction::MoveForward, vec![KeyCode::KeyW]),
-        (GameAction::MoveBackward, vec![KeyCode::KeyS]),
-        (GameAction::StrafeLeft, vec![KeyCode::KeyA]),
-        (GameAction::StrafeRight, vec![KeyCode::KeyD]),
-        (GameAction::RotateLeft, vec![KeyCode::KeyQ]),
-        (GameAction::RotateRight, vec![KeyCode::KeyE]),
-        (GameAction::Jump, vec![KeyCode::Space]),
-        (GameAction::Use, vec![KeyCode::KeyE]),
-        (GameAction::ChangeCamera, vec![KeyCode::KeyC]),
-        (GameAction::UnlockCursor, vec![KeyCode::KeyX]),
-        (GameAction::Fire1, vec![KeyCode::KeyF]),
-        (GameAction::Fire2, vec![KeyCode::KeyQ]),
-        (GameAction::Mod1, vec![KeyCode::ShiftLeft]),
-        (GameAction::Chat, vec![KeyCode::Enter]),
+        (GameAction::MoveForward, vec![kk(KeyCode::KeyW)]),
+        (GameAction::MoveBackward, vec![kk(KeyCode::KeyS)]),
+        (GameAction::StrafeLeft, vec![kk(KeyCode::KeyA)]),
+        (GameAction::StrafeRight, vec![kk(KeyCode::KeyD)]),
+        (GameAction::RotateLeft, vec![kk(KeyCode::KeyQ)]),
+        (GameAction::RotateRight, vec![kk(KeyCode::KeyE)]),
+        (GameAction::Ascend, vec![kk(KeyCode::Space)]),
+        (GameAction::Descend, vec![kk(KeyCode::ShiftLeft)]),
+
+        (GameAction::Jump, vec![kk(KeyCode::Space)]),
+
+        (GameAction::Use, vec![kk(KeyCode::KeyE)]),
+        (GameAction::ChangeCamera, vec![kk(KeyCode::KeyC)]),
+        (GameAction::UnlockCursor, vec![kk(KeyCode::KeyX)]),
+        (GameAction::Fire1, vec![mb(MouseButton::Left)]),
+        (GameAction::Fire2, vec![mb(MouseButton::Right)]),
+        (GameAction::Mod1, vec![kk(KeyCode::ShiftLeft)]),
+        (GameAction::Chat, vec![kk(KeyCode::Enter)]),
     ])
 });
 

@@ -208,7 +208,7 @@ fn freecam_controller(
     let old_freecam = freecam.clone();
 
     // Mouse rotation (right-click to pan)
-    if mouse.pressed(MouseButton::Right) {
+    if config.pressed(&keyboard, &mouse, GameAction::Fire2) {
         let sensitivity = 0.003;
         for motion in mouse_motion.read() {
             freecam.yaw -= motion.delta.x * sensitivity;
@@ -234,30 +234,29 @@ fn freecam_controller(
     let right = transform.right();
 
     // Check if key pressed is in keybindings vector for gameaction
-    if config.pressed(&keyboard, GameAction::MoveForward) {
+    if config.pressed(&keyboard, &mouse, GameAction::MoveForward) {
         movement += *forward * speed * time.delta_secs();
     }
-    if config.pressed(&keyboard, GameAction::MoveBackward) {
+    if config.pressed(&keyboard, &mouse, GameAction::MoveBackward) {
         movement -= *forward * speed * time.delta_secs();
     }
-    if config.pressed(&keyboard, GameAction::StrafeLeft) {
+    if config.pressed(&keyboard, &mouse, GameAction::StrafeLeft) {
         movement -= *right * speed * time.delta_secs();
     }
-    if config.pressed(&keyboard, GameAction::StrafeRight) {
+    if config.pressed(&keyboard, &mouse, GameAction::StrafeRight) {
         movement += *right * speed * time.delta_secs();
     }
-    if config.pressed(&keyboard, GameAction::Ascend) {
+    if config.pressed(&keyboard, &mouse, GameAction::Ascend) {
         movement.y += speed * time.delta_secs();
     }
-    if config.pressed(&keyboard, GameAction::Descend) {
+    if config.pressed(&keyboard, &mouse, GameAction::Descend) {
         movement.y -= speed * time.delta_secs();
     }
 
-    if movement == Vec3::ZERO {
-        return;
+    if movement != Vec3::ZERO {
+        transform.translation += movement;
     }
 
-    transform.translation += movement;
 }
 
 /// Start transition from playing to paused

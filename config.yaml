@@ -6,35 +6,32 @@ sens: 0.003
 qe_sens: 3.0
 sound: false
 keybindings:
-  RotateRight:
-  - KeyE
-  MoveForward:
-  - KeyW
-  Use:
-  - KeyE
-  ChangeCamera:
-  - KeyC
-  UnlockCursor:
-  - KeyX
-  Chat:
-  - Enter
-  MoveBackward:
-  - KeyS
-  StrafeRight:
-  - KeyD
   Jump:
-  - Space
-  RotateLeft:
-  - KeyQ
-  Mod1:
-  - ShiftLeft
+  - !KeyCode Space
   Fire2:
-  - KeyQ
-  Fire1:
-  - KeyF
+  - !KeyCode KeyQ
+  - !MouseButton Right
   StrafeLeft:
-  - KeyA
-  Ascend:
-  - ShiftLeft
-  Descend:
-  - ControlLeft
+  - !KeyCode KeyA
+  Use:
+  - !KeyCode KeyE
+  RotateLeft:
+  - !KeyCode KeyQ
+  RotateRight:
+  - !KeyCode KeyE
+  ChangeCamera:
+  - !KeyCode KeyC
+  UnlockCursor:
+  - !KeyCode KeyX
+  MoveForward:
+  - !KeyCode KeyW
+  Mod1:
+  - !KeyCode ShiftLeft
+  MoveBackward:
+  - !KeyCode KeyS
+  StrafeRight:
+  - !KeyCode KeyD
+  Fire1:
+  - !MouseButton Left
+  Chat:
+  - !KeyCode Enter
