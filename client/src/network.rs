@@ -5,14 +5,14 @@ use shared::{
     Config,
     event::{
         ERFE, NetEntId,
-        client::{SpawnUnit2, WorldData2, UpdateUnit2, DespawnUnit2, PlayerDisconnected},
-        server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle},
+        client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2},
+        server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle, SpawnMan},
     },
     net_components::{ents::PlayerCamera, ours::PlayerName},
     netlib::{
         ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint,
-        NetworkConnectionTarget, NetworkingResources, send_event_to_server,
-        send_event_to_server_batch, setup_client,
+        NetworkConnectionTarget, NetworkingResources, send_event_to_server_now,
+        send_event_to_server_now_batch, setup_client,
     },
     physics::terrain::TerrainParams,
 };
@@ -40,11 +40,6 @@ impl Plugin for NetworkingPlugin {
             .add_message::<UpdateUnit2>()
             .add_message::<DespawnUnit2>()
             .add_message::<PlayerDisconnected>()
-            // Don't auto-connect on startup - wait for trigger from UI
-            .add_systems(
-                Update,
-                trigger_connection.run_if(resource_exists::<ConnectionTrigger>),
-            )
             .add_systems(
                 OnEnter(NetworkGameState::ClientConnecting),
                 (
@@ -80,6 +75,8 @@ impl Plugin for NetworkingPlugin {
                 (
                     // TODO receive new world data at any time?
                     spawn_circle,
+                    spawn_man,
+                    apply_pending_camera_id,
                 )
                     .run_if(in_state(NetworkGameState::ClientConnected)),
             )
@@ -91,10 +88,9 @@ impl Plugin for NetworkingPlugin {
             ////.run_if(any_with_component::<Player>),
             //)
             .add_systems(
-                Update,
-                (apply_pending_camera_id, send_movement)
+                FixedUpdate,
+                (send_movement_camera)
                     .chain()
-                    .run_if(on_timer(Duration::from_millis(15))) // ~64Hz (1000/64 ≈ 15.6ms)
                     .run_if(in_state(NetworkGameState::ClientConnected))
                     .run_if(in_state(GameState::Playing)),
             )
@@ -105,35 +101,6 @@ impl Plugin for NetworkingPlugin {
                     .run_if(in_state(NetworkGameState::ClientConnected)),
             )
             .add_message::<SpawnCircle>();
-    }
-}
-
-/// Trigger connection when ConnectionTrigger resource is present
-fn trigger_connection(
-    mut commands: Commands,
-    config: Res<Config>,
-    trigger: Res<ConnectionTrigger>,
-    mut next_network_state: ResMut<NextState<NetworkGameState>>,
-    mut trigger_consumed: Local<bool>,
-) {
-    // Only trigger once per resource creation
-    if *trigger_consumed {
-        return;
-    }
-
-    if trigger.should_connect {
-        info!("Connection triggered - starting connection process");
-
-        // Setup networking resources with current config values
-        commands.insert_resource(NetworkConnectionTarget {
-            ip: config.ip.clone(),
-            port: config.port,
-        });
-
-        // Start connection process
-        next_network_state.set(NetworkGameState::ClientConnecting);
-
-        *trigger_consumed = true;
     }
 }
 
@@ -162,7 +129,7 @@ fn send_connect_packet(
         "Connecting server={} name={name:?}",
         mse.0.addr(),
     )));
-    send_event_to_server(&sr.handler, mse.0, &event);
+    send_event_to_server_now(&sr.handler, mse.0, &event);
     info!("Sent connection packet to {}", mse.0);
 }
 
@@ -189,6 +156,7 @@ fn send_connect_packet(
 //s.spawn((hp_bar, crate::network::stats::HPBar(player_id)));
 //}
 
+/// This function is called when we receive the world data from the server on first connect
 #[allow(unused)]
 fn receive_world_data(
     mut world_data: ERFE<WorldData2>,
@@ -287,7 +255,7 @@ fn receive_world_data(
 
 fn send_heartbeat(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoint>) {
     let event = EventToServer::Heartbeat(Heartbeat {});
-    send_event_to_server(&sr.handler, mse.0, &event);
+    send_event_to_server_now(&sr.handler, mse.0, &event);
 }
 
 //fn send_interp(
@@ -296,7 +264,7 @@ fn send_heartbeat(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoin
 //our_transform: Query<&MovementIntention, (With<Player>, Changed<MovementIntention>)>,
 //) {
 //if let Ok(intent) = our_transform.get_single() {
-/// TODO add interp for `AttackIntent` here
+// TODO add interp for `AttackIntent` here
 //let event = EventToServer::ChangeMovement(ChangeMovement::Move2d(intent.0));
 //send_event_to_server(&sr.handler, mse.0, &event);
 //}
@@ -318,40 +286,19 @@ fn apply_pending_camera_id(
     }
 }
 
-fn send_movement(
+fn send_movement_camera(
     sr: Res<ClientNetworkingResources>,
     mse: Res<MainServerEndpoint>,
-    our_transform: Query<(&Transform, &NetEntId), (With<LocalCamera>, With<PlayerCamera>)>,
+    our_transform: Query<(&Transform, &NetEntId), (With<LocalCamera>, With<PlayerCamera>, Changed<Transform>)>,
 ) {
-    // Track last sent transform to detect changes
-    static mut LAST_SENT: Option<(Vec3, Quat)> = None;
-
     if let Ok((transform, ent_id)) = our_transform.single() {
-        let current = (transform.translation, transform.rotation);
-        let should_send = unsafe {
-            if let Some(last) = LAST_SENT {
-                // Check if position or rotation changed significantly (avoid floating point precision issues)
-                let pos_changed = (last.0 - current.0).length() > 0.001;
-                let rot_changed = last.1.angle_between(current.1) > 0.001;
-                pos_changed || rot_changed
-            } else {
-                true // First send
-            }
-        };
+        let mut events = vec![];
+        events.push(EventToServer::ChangeMovement(ChangeMovement {
+            net_ent_id: *ent_id,
+            transform: *transform,
+        }));
 
-        if should_send {
-            let mut events = vec![];
-            events.push(EventToServer::ChangeMovement(ChangeMovement {
-                net_ent_id: *ent_id,
-                transform: *transform,
-            }));
-
-            send_event_to_server_batch(&sr.handler, mse.0, &events);
-
-            unsafe {
-                LAST_SENT = Some(current);
-            }
-        }
+        send_event_to_server_now_batch(&sr.handler, mse.0, &events);
     }
 }
 
@@ -421,40 +368,6 @@ fn send_movement(
 //}
 //}
 
-pub fn check_connect_button(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    //args: Res<CliArgs>,
-    config: Res<Config>,
-    mut commands: Commands,
-    mut game_state: ResMut<NextState<NetworkGameState>>,
-) {
-    if !config.just_pressed(&keyboard_input, shared::GameAction::Use) {
-        return;
-    }
-
-    warn!("Connecting to server due to user pressing connect button!");
-
-    let target = {
-        // Split this into ip and port and then connect
-        let addr: SocketAddr = "127.0.0.1:22143"
-            .parse()
-            .expect("--autoconnect was given an invalid ip and port to connect to");
-
-        NetworkConnectionTarget {
-            ip: addr.ip().to_string(),
-            port: addr.port(),
-        }
-    };
-
-    info!(
-        ?target,
-        "Using --autoconnect command line argument to setup connection."
-    );
-
-    commands.insert_resource(target);
-    game_state.set(NetworkGameState::ClientConnecting);
-}
-
 fn spawn_circle(
     mut ev_sa: MessageReader<SpawnCircle>,
     sr: Res<ClientNetworkingResources>,
@@ -463,7 +376,19 @@ fn spawn_circle(
     for thing in ev_sa.read() {
         let event = EventToServer::SpawnCircle(thing.clone());
         info!("Sending spawn circle event to server");
-        send_event_to_server(&sr.handler, mse.0, &event);
+        send_event_to_server_now(&sr.handler, mse.0, &event);
+    }
+}
+
+fn spawn_man(
+    mut ev_sa: MessageReader<SpawnMan>,
+    sr: Res<ClientNetworkingResources>,
+    mse: Res<MainServerEndpoint>,
+) {
+    for thing in ev_sa.read() {
+        let event = EventToServer::SpawnMan(thing.clone());
+        info!("Sending spawn man event to server");
+        send_event_to_server_now(&sr.handler, mse.0, &event);
     }
 }
 

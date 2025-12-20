@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use shared::Config;
+use shared::{Config, netlib::NetworkConnectionTarget};
 use crate::game_state::{GameState, MenuState, NetworkGameState};
 use super::styles::*;
 
@@ -15,15 +15,8 @@ pub struct ConnectionStatusText;
 #[derive(Component)]
 pub struct CancelButton;
 
-/// Resource to trigger network connection attempt
-#[derive(Resource, Default)]
-pub struct ConnectionTrigger {
-    pub should_connect: bool,
-    pub use_custom_settings: bool,
-}
-
 /// Spawn the connecting menu UI
-pub fn spawn_connecting_menu(mut commands: Commands, config: Res<Config>) {
+pub fn spawn_connecting_menu_and_connect(mut commands: Commands, config: Res<Config>, mut next_network_state: ResMut<NextState<NetworkGameState>>) {
     let server_display = format!("{}:{}", config.ip, config.port);
     let username_display = config.name.clone().unwrap_or_else(|| "Player".to_string());
 
@@ -102,11 +95,13 @@ pub fn spawn_connecting_menu(mut commands: Commands, config: Res<Config>) {
                 });
         });
 
-    // Trigger connection attempt
-    commands.insert_resource(ConnectionTrigger {
-        should_connect: true,
-        use_custom_settings: true,
+    commands.insert_resource(NetworkConnectionTarget {
+        ip: config.ip.clone(),
+        port: config.port,
     });
+
+    // Start connection process
+    next_network_state.set(NetworkGameState::ClientConnecting);
 }
 
 /// Despawn the connecting menu

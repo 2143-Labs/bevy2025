@@ -10,18 +10,11 @@ use bevy::{
 use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
-    event::{
-        client::{PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2},
-        server::{ChangeMovement, Heartbeat},
-        MyNetEntParentId, NetEntId, ERFE,
-    },
-    net_components::{ents::PlayerCamera, make_ball, ours::{PlayerName, PlayerColor}, ToNetComponent},
-    netlib::{
-        send_event_to_server, send_event_to_server_batch, EventToClient, EventToServer,
-        NetworkConnectionTarget, ServerNetworkingResources,
-    },
-    physics::terrain::TerrainParams,
-    Config, ConfigPlugin,
+    Config, ConfigPlugin, event::{
+        ERFE, MyNetEntParentId, NetEntId, client::{PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2}, server::{ChangeMovement, Heartbeat}
+    }, net_components::{ToNetComponent, ents::PlayerCamera, make_ball, ours::{PlayerColor, PlayerName}}, netlib::{
+        EventToClient, EventToServer, NetworkConnectionTarget, ServerNetworkingResources, Tick, send_event_to_server_now, send_event_to_server_now_batch
+    }, physics::terrain::TerrainParams
 };
 
 /// How often to run the system
@@ -31,6 +24,8 @@ const HEARTBEAT_TIMEOUT: u64 = 1000;
 /// How long do you have to connect, as a multipler of the heartbeart timeout.
 /// If the timeout is 1000 ms, then `5` would mean you have `5000ms` to connect.
 const HEARTBEAT_CONNECTION_GRACE_PERIOD: u64 = 5;
+
+const BASE_TICKS_PER_SECOND: u16 = 15;
 
 #[derive(States, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 enum ServerState {
@@ -53,6 +48,15 @@ struct EndpointToNetId {
 #[derive(Debug, Component)]
 struct PlayerEndpoint(Endpoint);
 
+#[derive(Resource, Debug)]
+struct CurrentTick(Tick);
+
+#[derive(Resource, Debug)]
+struct ServerSettings {
+    tick_rate: u16,
+    cheats: bool,
+}
+
 //pub mod chat;
 //pub mod game_manager;
 pub mod spawns;
@@ -65,6 +69,8 @@ fn main() {
     shared::event::server::register_events(&mut app);
     app.insert_resource(EndpointToNetId::default())
         .insert_resource(HeartbeatList::default())
+        .insert_resource(Time::<Fixed>::from_hz(BASE_TICKS_PER_SECOND as _))
+        .insert_resource(CurrentTick(Tick(1)))
         .add_message::<PlayerDisconnected>()
         .add_plugins(DefaultPlugins)
         .add_plugins((
@@ -113,6 +119,12 @@ fn main() {
                 shared::event::server::drain_events,
                 on_movement,
             )
+                .run_if(in_state(ServerState::Running)),
+        )
+        .add_systems(
+            FixedUpdate,
+            (broadcast_movement_updates,
+             increment_ticks,)
                 .run_if(in_state(ServerState::Running)),
         )
         .add_systems(
@@ -215,7 +227,7 @@ fn on_player_connect(
 
         // Tell all other clients about your new player
         for (c_net_client, _c_net_ent, _c_name, _c_color) in &clients {
-            send_event_to_server_batch(
+            send_event_to_server_now_batch(
                 &sr.handler,
                 c_net_client.0,
                 &[
@@ -263,14 +275,14 @@ fn on_player_connect(
         };
         info!("Player connected - sending {} existing units", world_data.units.len());
         let event = EventToClient::WorldData2(world_data);
-        send_event_to_server(&sr.handler, player.endpoint, &event);
+        send_event_to_server_now(&sr.handler, player.endpoint, &event);
 
         for ball_unit in unit_list_to_new_client_balls.chunks(100) {
             let events = ball_unit
                 .iter()
                 .map(|u| EventToClient::SpawnUnit2(u.clone()))
                 .collect::<Vec<_>>();
-            send_event_to_server_batch(&sr.handler, player.endpoint, &events);
+            send_event_to_server_now_batch(&sr.handler, player.endpoint, &events);
         }
     }
 }
@@ -318,7 +330,7 @@ fn on_player_disconnect(
         }
 
         for (c_ent, net_client, net_ent_id) in &clients {
-            send_event_to_server_batch(&sr.handler, net_client.0, &events);
+            send_event_to_server_now_batch(&sr.handler, net_client.0, &events);
             if net_ent_id == &player.id {
                 commands.entity(c_ent).despawn();
             }
@@ -343,47 +355,48 @@ fn on_player_heartbeat(
 
 fn on_movement(
     mut pd: ERFE<ChangeMovement>,
-    endpoint_mapping: Res<EndpointToNetId>,
-    clients: Query<(&PlayerEndpoint, &NetEntId), With<ConnectedPlayer>>,
     mut cameras: Query<(&NetEntId, &MyNetEntParentId, &mut Transform), With<PlayerCamera>>,
-    sr: Res<ServerNetworkingResources>,
 ) {
     for movement in pd.read() {
-        // Get the player ID who sent this movement
-        let sending_player_net_id = endpoint_mapping.map.get(&movement.endpoint);
-
         // The camera NetEntId is directly in the movement event
         let camera_net_id = movement.event.net_ent_id;
 
         // Find and update the camera entity
-        let mut camera_updated = false;
         for (cam_net_id, _cam_parent_id, mut cam_transform) in &mut cameras {
             if cam_net_id == &camera_net_id {
                 // Update the camera's transform on the server
                 *cam_transform = movement.event.transform;
-                camera_updated = true;
                 break;
             }
         }
+    }
+}
 
-        // Broadcast the camera update to all OTHER clients
-        if camera_updated {
-            let event = EventToClient::UpdateUnit2(UpdateUnit2 {
-                net_ent_id: camera_net_id,
-                components: vec![movement.event.transform.to_net_component()],
-            });
 
-            for (c_net_client, c_net_ent) in &clients {
-                // Don't send the update back to the player who sent it
-                if let Some(sender_id) = sending_player_net_id {
-                    if sender_id != c_net_ent {
-                        send_event_to_server(&sr.handler, c_net_client.0, &event);
-                    }
-                } else {
-                    // If we can't identify the sender, broadcast to everyone
-                    send_event_to_server(&sr.handler, c_net_client.0, &event);
-                }
-            }
+fn broadcast_movement_updates(
+    clients: Query<(&PlayerEndpoint, &NetEntId), With<ConnectedPlayer>>,
+    sr: Res<ServerNetworkingResources>,
+    changed_cameras: Query<(&NetEntId, &Transform), (With<PlayerCamera>, Changed<Transform>)>,
+    //current_tick: Res<CurrentTick>,
+) {
+    let mut events_to_send = vec![];
+    for (cam_net_id, cam_transform) in &changed_cameras {
+        let event = EventToClient::UpdateUnit2(UpdateUnit2 {
+            net_ent_id: *cam_net_id,
+            //tick: current_tick.0,
+            components: vec![cam_transform.to_net_component()],
+        });
+
+        events_to_send.push(event);
+    }
+
+    if !events_to_send.is_empty() {
+        for (c_net_client, _c_net_ent) in &clients {
+            send_event_to_server_now_batch(&sr.handler, c_net_client.0, &events_to_send);
         }
     }
+}
+
+fn increment_ticks(mut current_tick: ResMut<CurrentTick>) {
+    current_tick.0.increment();
 }

@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use shared::{
-    event::{server::SpawnCircle, NetEntId, ERFE},
-    netlib::{send_event_to_server, EventToClient, ServerNetworkingResources},
+    event::{ERFE, NetEntId, server::{SpawnCircle, SpawnMan}}, net_components::make_man, netlib::{EventToClient, ServerNetworkingResources, send_event_to_server_now}
 };
 
 use crate::{make_ball, ConnectedPlayer, HasColor, PlayerEndpoint, ServerState};
@@ -11,7 +10,7 @@ impl Plugin for SpawnPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (on_circle_spawn)
+            (on_circle_spawn, on_man_spawn)
                 //.run_if(on_timer(Duration::from_millis(10)))
                 .run_if(in_state(ServerState::Running)),
         );
@@ -46,10 +45,37 @@ fn on_circle_spawn(
         info!("Notifying clients of new unit: {:?}", event);
         for endpoint in &clients {
             info!("Sending spawn event to endpoint: {:?}", endpoint.0);
-            send_event_to_server(&sr.handler, endpoint.0, &event);
+            send_event_to_server_now(&sr.handler, endpoint.0, &event);
         }
     }
 }
+
+fn on_man_spawn(
+    mut spawns: ERFE<SpawnMan>,
+    mut commands: Commands,
+    sr: Res<ServerNetworkingResources>,
+    clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
+) {
+    for spawn_ev in spawns.read() {
+        info!(?spawn_ev.event, "Spawning man from event");
+        let spawn = &spawn_ev.event;
+        debug!("Spawning man at position: {:?}", spawn.position);
+        let transform = Transform::from_translation(spawn.position);
+        let ent_id = NetEntId::random();
+
+        let unit = make_man(ent_id, transform);
+        let _ent = unit.clone().spawn_entity_srv(&mut commands);
+
+        let event = EventToClient::SpawnUnit2(unit);
+        info!("Notifying clients of new unit: {:?}", event);
+        for endpoint in &clients {
+            info!("Sending spawn event to endpoint: {:?}", endpoint.0);
+            send_event_to_server_now(&sr.handler, endpoint.0, &event);
+        }
+    }
+}
+
+
 
 //fn send_networked_Spawn_move(
 //Spawns: Query<

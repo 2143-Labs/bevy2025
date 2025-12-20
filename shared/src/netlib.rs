@@ -25,6 +25,16 @@ pub struct NetworkConnectionTarget {
     pub port: u16,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Tick(pub u64);
+
+impl Tick {
+    pub fn increment(&mut self) {
+        self.0 += 1;
+    }
+}
+
+
 pub use crate::event::client::EventToClient;
 pub use crate::event::server::EventToServer;
 
@@ -47,7 +57,7 @@ pub enum EventGroupingRef<'a, T> {
     Batch(&'a [T]),
 }
 
-pub fn send_event_to_server<T: NetworkingEvent>(
+pub fn send_event_to_server_now<T: NetworkingEvent>(
     handler: &NodeHandler<()>,
     endpoint: Endpoint,
     event: &T,
@@ -59,7 +69,7 @@ pub fn send_event_to_server<T: NetworkingEvent>(
     );
 }
 
-pub fn send_event_to_server_batch<T: NetworkingEvent>(
+pub fn send_event_to_server_now_batch<T: NetworkingEvent>(
     handler: &NodeHandler<()>,
     endpoint: Endpoint,
     event: &[T],

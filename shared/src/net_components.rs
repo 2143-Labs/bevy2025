@@ -51,6 +51,12 @@ impl MaterialGenerator {
                 perceptual_roughness: 0.5,
                 ..default()
             },
+            "basic2" => StandardMaterial {
+                base_color: self.1,
+                metallic: 1.0,
+                perceptual_roughness: 0.5,
+                ..default()
+            },
             _ => StandardMaterial {
                 base_color: self.1,
                 metallic: 0.0,
@@ -178,5 +184,22 @@ pub fn make_ball(net_ent_id: NetEntId, transform: Transform, color: Color) -> Sp
             avian3d::prelude::Mass(0.3).to_net_component(), // Lighter balls that will float (density ~0.57 of water)
                                                             // Add other ball components here as needed
         ],
+    }
+}
+
+pub fn make_man(net_ent_id: NetEntId, transform: Transform) -> SpawnUnit2 {
+    SpawnUnit2 {
+        net_ent_id,
+        components: vec![
+            ents::Man.to_net_component(),
+            transform.to_net_component(),
+            groups::NormalMeshMaterial {
+                mesh: MeshGenerator::new("sphere", 3.0),
+                material: MaterialGenerator::new("basic", Color::linear_rgb(0.8, 0.7, 0.6)),
+            }.to_net_component(),
+            avian3d::prelude::RigidBody::Dynamic.to_net_component(),
+            avian3d::prelude::Collider::sphere(3.0).to_net_component(),
+            avian3d::prelude::Mass(70.0).to_net_component(),
+        ]
     }
 }

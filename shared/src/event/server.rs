@@ -26,6 +26,12 @@ pub struct SpawnCircle {
     pub color: Color,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct SpawnMan {
+    pub position: Vec3,
+}
+
+
 //#[derive(Debug, Clone, Serialize, Deserialize, Message)]
 //pub struct RequestSpawnUnit2 //{
 //pub components: Vec<NetComponent>,

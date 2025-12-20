@@ -48,7 +48,7 @@ impl Plugin for UIPlugin {
             )
 
             // Connecting Menu
-            .add_systems(OnEnter(MenuState::Connecting), connecting_menu::spawn_connecting_menu)
+            .add_systems(OnEnter(MenuState::Connecting), connecting_menu::spawn_connecting_menu_and_connect)
             .add_systems(OnExit(MenuState::Connecting), connecting_menu::despawn_connecting_menu)
             .add_systems(
                 Update,
