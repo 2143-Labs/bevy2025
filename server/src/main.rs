@@ -358,14 +358,14 @@ fn on_player_heartbeat(
 
 fn on_movement(
     mut pd: ERFE<ChangeMovement>,
-    mut cameras: Query<(&NetEntId, &MyNetEntParentId, &mut Transform), With<PlayerCamera>>,
+    mut ent_to_move: Query<(&NetEntId, &MyNetEntParentId, &mut Transform), With<SendNetworkTranformUpdates>>,
 ) {
     for movement in pd.read() {
         // The camera NetEntId is directly in the movement event
         let camera_net_id = movement.event.net_ent_id;
 
         // Find and update the camera entity
-        for (cam_net_id, _cam_parent_id, mut cam_transform) in &mut cameras {
+        for (cam_net_id, _cam_parent_id, mut cam_transform) in &mut ent_to_move {
             if cam_net_id == &camera_net_id {
                 // Update the camera's transform on the server
                 *cam_transform = movement.event.transform;
@@ -376,15 +376,17 @@ fn on_movement(
 }
 
 
+// TODO make this more efficient by batching updates per client and only sending changed components
+// for physics if we think the client needs them
 fn broadcast_movement_updates(
     clients: Query<(&PlayerEndpoint, &NetEntId), With<ConnectedPlayer>>,
     sr: Res<ServerNetworkingResources>,
-    changed_cameras: Query<(&NetEntId, &Transform), (With<SendNetworkTranformUpdates>, Changed<Transform>)>,
+    changed_transforms: Query<(&NetEntId, &Transform), (With<SendNetworkTranformUpdates>, Changed<Transform>)>,
     changed_phys: Query<(&NetEntId, &LinearVelocity), (With<SendNetworkTranformUpdates>, Changed<LinearVelocity>)>,
     //current_tick: Res<CurrentTick>,
 ) {
     let mut events_to_send = vec![];
-    for (cam_net_id, cam_transform) in &changed_cameras {
+    for (cam_net_id, cam_transform) in &changed_transforms {
         let event = EventToClient::UpdateUnit2(UpdateUnit2 {
             net_ent_id: *cam_net_id,
             //tick: current_tick.0,
