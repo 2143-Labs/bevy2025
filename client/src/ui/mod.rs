@@ -8,7 +8,6 @@ pub mod text_input;
 use bevy::prelude::*;
 use crate::game_state::{GameState, MenuState};
 
-pub use connecting_menu::ConnectionTrigger;
 pub use text_input::FocusedInput;
 
 pub struct UIPlugin;

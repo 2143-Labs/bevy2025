@@ -391,6 +391,7 @@ fn broadcast_movement_updates(
     }
 
     if !events_to_send.is_empty() {
+        info!("Broadcasting {} movement updates to clients", events_to_send.len());
         for (c_net_client, _c_net_ent) in &clients {
             send_event_to_server_now_batch(&sr.handler, c_net_client.0, &events_to_send);
         }
@@ -399,4 +400,8 @@ fn broadcast_movement_updates(
 
 fn increment_ticks(mut current_tick: ResMut<CurrentTick>) {
     current_tick.0.increment();
+
+    if current_tick.0 .0 % 100 == 0 {
+        info!("Server Tick: {:?}", current_tick.0);
+    }
 }

@@ -22,7 +22,6 @@ use crate::{
     game_state::{GameState, NetworkGameState},
     notification::Notification,
     terrain::SetupTerrain,
-    ui::ConnectionTrigger,
 };
 
 #[derive(Component)]
@@ -100,7 +99,9 @@ impl Plugin for NetworkingPlugin {
                     .run_if(on_timer(Duration::from_millis(200)))
                     .run_if(in_state(NetworkGameState::ClientConnected)),
             )
-            .add_message::<SpawnCircle>();
+            .add_message::<SpawnCircle>()
+            .add_message::<SpawnMan>();
+
     }
 }
 

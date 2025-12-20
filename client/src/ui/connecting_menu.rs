@@ -112,9 +112,6 @@ pub fn despawn_connecting_menu(
     for entity in menu_query.iter() {
         commands.entity(entity).despawn();
     }
-
-    // Remove connection trigger
-    commands.remove_resource::<ConnectionTrigger>();
 }
 
 /// Handle cancel button in connecting menu

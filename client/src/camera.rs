@@ -33,7 +33,7 @@ impl Default for CameraTransition {
 }
 
 /// Marker for FreeCam (playing mode, perspective)
-#[derive(Component)]
+#[derive(Component, Clone, PartialEq)]
 pub struct FreeCam {
     yaw: f32,
     pitch: f32,
@@ -205,6 +205,8 @@ fn freecam_controller(
         return;
     };
 
+    let old_freecam = freecam.clone();
+
     // Mouse rotation (right-click to pan)
     if mouse.pressed(MouseButton::Right) {
         let sensitivity = 0.003;
@@ -218,8 +220,10 @@ fn freecam_controller(
         }
     }
 
-    // Update rotation from yaw/pitch
-    transform.rotation = Quat::from_euler(EulerRot::YXZ, freecam.yaw, freecam.pitch, 0.0);
+    if old_freecam != *freecam {
+        //info!("FreeCam yaw: {}, pitch: {}", freecam.yaw, freecam.pitch);
+        transform.rotation = Quat::from_euler(EulerRot::YXZ, freecam.yaw, freecam.pitch, 0.0);
+    }
 
     // WASD movement relative to camera orientation
     let mut movement = Vec3::ZERO;
@@ -247,6 +251,10 @@ fn freecam_controller(
     }
     if config.pressed(&keyboard, GameAction::Descend) {
         movement.y -= speed * time.delta_secs();
+    }
+
+    if movement == Vec3::ZERO {
+        return;
     }
 
     transform.translation += movement;
