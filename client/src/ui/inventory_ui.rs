@@ -12,7 +12,7 @@ impl Plugin for InventoryPlugin {
             .init_resource::<InventoryVisible>()
             .init_resource::<DragState>()
             .add_systems(OnEnter(GameState::Playing), spawn_inventory_ui)
-            .add_systems(OnExit(GameState::Playing), despawn_inventory_ui)
+            .add_systems(OnExit(GameState::Playing), (despawn_inventory_ui, close_inventory_on_state_exit))
             .add_systems(
                 Update,
                 (
@@ -21,6 +21,7 @@ impl Plugin for InventoryPlugin {
                     initialize_inventory_display,
                     update_inventory_slots,
                     handle_slot_interaction,
+                    update_drag_visual_position,
                 ).run_if(in_state(GameState::Playing)),
             );
     }
@@ -48,6 +49,10 @@ pub struct SlotItemText {
     pub slot_index: usize,
 }
 
+/// Marker component for the dragged item visual that follows the cursor
+#[derive(Component)]
+pub struct DraggedItemVisual;
+
 /// Resource to track inventory visibility
 #[derive(Resource, Default)]
 pub struct InventoryVisible(pub bool);
@@ -64,15 +69,10 @@ pub struct DragState {
 pub fn handle_inventory_toggle(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut inventory_visible: ResMut<InventoryVisible>,
-    game_state: Res<State<GameState>>,
     config: Res<Config>,
 ) {
-    // Only allow opening inventory in Playing state (not Paused)
-    if *game_state.get() != GameState::Playing {
-        return;
-    }
-
     // Check if Tab key was just pressed using config bindings
+    // This system only runs in Playing state due to run_if condition
     if config.just_pressed(&keyboard, GameAction::Inventory) {
         inventory_visible.0 = !inventory_visible.0;
         info!("Inventory toggled: {}", inventory_visible.0);
@@ -212,6 +212,51 @@ pub fn despawn_inventory_ui(
     }
 }
 
+/// Update the position of the dragged item visual to follow the cursor
+fn update_drag_visual_position(
+    windows: Query<&Window>,
+    mut drag_visual_query: Query<&mut Node, With<DraggedItemVisual>>,
+    drag_state: Res<DragState>,
+) {
+    if !drag_state.dragging {
+        return;
+    }
+
+    if let Ok(window) = windows.single() {
+        if let Some(cursor_pos) = window.cursor_position() {
+            for mut node in drag_visual_query.iter_mut() {
+                node.left = Val::Px(cursor_pos.x - 32.0); // Center on cursor
+                node.top = Val::Px(cursor_pos.y - 32.0);
+            }
+        }
+    }
+}
+
+/// Close inventory when exiting Playing state to prevent it from reopening unexpectedly
+fn close_inventory_on_state_exit(
+    mut commands: Commands,
+    mut inventory_visible: ResMut<InventoryVisible>,
+    mut drag_state: ResMut<DragState>,
+    drag_visual_query: Query<Entity, With<DraggedItemVisual>>,
+) {
+    if inventory_visible.0 {
+        info!("Closing inventory on state exit");
+        inventory_visible.0 = false;
+    }
+
+    // Also clear any active drag state and visual
+    if drag_state.dragging {
+        drag_state.dragging = false;
+        drag_state.source_slot = None;
+        drag_state.dragged_item = None;
+
+        // Despawn drag visual if it exists
+        for entity in drag_visual_query.iter() {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
 /// Update inventory UI visibility based on InventoryVisible resource
 pub fn update_inventory_visibility(
     inventory_visible: Res<InventoryVisible>,
@@ -335,10 +380,13 @@ pub fn update_inventory_slots(
 
 /// Handle slot interactions for drag and drop
 pub fn handle_slot_interaction(
+    mut commands: Commands,
     mut interaction_query: Query<(&Interaction, &InventorySlot, &mut BackgroundColor, &mut BorderColor)>,
     mut drag_state: ResMut<DragState>,
     mut inventory_query: Query<&mut Inventory, With<Player>>,
     mouse_button: Res<ButtonInput<MouseButton>>,
+    windows: Query<&Window>,
+    drag_visual_query: Query<Entity, With<DraggedItemVisual>>,
 ) {
     // Start drag on mouse press
     if mouse_button.just_pressed(MouseButton::Left) {
@@ -351,6 +399,29 @@ pub fn handle_slot_interaction(
                         drag_state.source_slot = Some(slot.index);
                         drag_state.dragged_item = Some(item.clone());
                         info!("Started dragging item from slot {}", slot.index);
+
+                        // Spawn visual indicator for dragged item
+                        if let Ok(window) = windows.single() {
+                            if let Some(cursor_pos) = window.cursor_position() {
+                                commands.spawn((
+                                    Node {
+                                        position_type: PositionType::Absolute,
+                                        left: Val::Px(cursor_pos.x - 32.0), // Center on cursor (64x64 / 2)
+                                        top: Val::Px(cursor_pos.y - 32.0),
+                                        width: Val::Px(64.0),
+                                        height: Val::Px(64.0),
+                                        ..default()
+                                    },
+                                    ImageNode {
+                                        image: item.texture_2d.clone(),
+                                        ..default()
+                                    },
+                                    BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.7)), // Semi-transparent
+                                    ZIndex(1000), // Render on top of everything
+                                    DraggedItemVisual,
+                                ));
+                            }
+                        }
                     }
                 }
             }
@@ -373,6 +444,11 @@ pub fn handle_slot_interaction(
                 }
                 break; // Only process the first hovered/pressed slot
             }
+        }
+
+        // Despawn the drag visual
+        for entity in drag_visual_query.iter() {
+            commands.entity(entity).despawn();
         }
 
         // Clear drag state
