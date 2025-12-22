@@ -34,10 +34,7 @@ pub struct NetworkingPlugin;
 impl Plugin for NetworkingPlugin {
     fn build(&self, app: &mut App) {
         shared::event::client::register_events(app);
-        app.add_message::<SpawnUnit2>()
-            .add_message::<UpdateUnit2>()
-            .add_message::<DespawnUnit2>()
-            .add_message::<PlayerDisconnected>()
+        app
             .add_systems(
                 OnEnter(NetworkGameState::ClientConnecting),
                 (
@@ -72,8 +69,8 @@ impl Plugin for NetworkingPlugin {
                 Update,
                 (
                     // TODO receive new world data at any time?
-                    spawn_circle,
-                    spawn_man,
+                    our_client_wants_to_spawn_circle,
+                    our_client_wants_to_spawn_man,
                     apply_pending_camera_id,
                 )
                     .run_if(in_state(NetworkGameState::ClientConnected)),
@@ -98,6 +95,7 @@ impl Plugin for NetworkingPlugin {
                     .run_if(on_timer(Duration::from_millis(200)))
                     .run_if(in_state(NetworkGameState::ClientConnected)),
             )
+            .add_message::<SpawnUnit2>()
             .add_message::<SpawnCircle>()
             .add_message::<SpawnMan>();
     }
@@ -191,7 +189,7 @@ fn receive_world_data(
 
         info!("Received {} units from server", event.event.units.len());
         for unit in &event.event.units {
-            if unit.net_ent_id.is_none() || unit.net_ent_id == my_camera_id {
+            if unit.net_ent_id == my_camera_id {
                 // Skip our own player and camera units - they're already set up locally
                 info!("  Skipping own unit {:?}", unit.net_ent_id);
             } else {
@@ -375,7 +373,7 @@ fn send_movement_camera(
 //}
 //}
 
-fn spawn_circle(
+fn our_client_wants_to_spawn_circle(
     mut ev_sa: MessageReader<SpawnCircle>,
     sr: Res<ClientNetworkingResources>,
     mse: Res<MainServerEndpoint>,
@@ -387,7 +385,7 @@ fn spawn_circle(
     }
 }
 
-fn spawn_man(
+fn our_client_wants_to_spawn_man(
     mut ev_sa: MessageReader<SpawnMan>,
     sr: Res<ClientNetworkingResources>,
     mse: Res<MainServerEndpoint>,

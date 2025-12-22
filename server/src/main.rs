@@ -433,6 +433,10 @@ fn on_movement(
     for movement in pd.read() {
         // The camera NetEntId is directly in the movement event
         let camera_net_id = movement.event.net_ent_id;
+        info!(
+            "Received movement update for camera {:?}",
+            camera_net_id
+        );
 
         // Find and update the camera entity
         for (cam_net_id, _cam_parent_id, mut cam_transform) in &mut ent_to_move {
@@ -451,31 +455,21 @@ fn broadcast_movement_updates(
     clients: Query<(&PlayerEndpoint, &NetEntId), With<ConnectedPlayer>>,
     sr: Res<ServerNetworkingResources>,
     changed_transforms: Query<
-        (&NetEntId, &Transform),
+        (&NetEntId, &Transform, Option<&LinearVelocity>),
         (With<SendNetworkTranformUpdates>, Changed<Transform>),
-    >,
-    changed_phys: Query<
-        (&NetEntId, &LinearVelocity),
-        (With<SendNetworkTranformUpdates>, Changed<LinearVelocity>),
     >,
     //current_tick: Res<CurrentTick>,
 ) {
     let mut events_to_send = vec![];
-    for (cam_net_id, cam_transform) in &changed_transforms {
+    for (cam_net_id, cam_transform, cam_lv) in &changed_transforms {
+        let mut components =  vec![ cam_transform.to_net_component(), ];
+        if let Some(lv) = cam_lv {
+            components.push(lv.to_net_component());
+        }
+
         let event = EventToClient::UpdateUnit2(UpdateUnit2 {
             net_ent_id: *cam_net_id,
-            //tick: current_tick.0,
-            components: vec![cam_transform.to_net_component()],
-        });
-
-        events_to_send.push(event);
-    }
-
-    for (phys_net_id, linear_velocity) in &changed_phys {
-        let event = EventToClient::UpdateUnit2(UpdateUnit2 {
-            net_ent_id: *phys_net_id,
-            //tick: current_tick.0,
-            components: vec![linear_velocity.to_net_component()],
+            components,
         });
 
         events_to_send.push(event);

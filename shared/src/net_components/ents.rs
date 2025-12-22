@@ -7,6 +7,7 @@ use crate::net_components::ToNetComponent;
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct Ball;
 
+/// Simple Interactable entity
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct Interactable;
 
@@ -15,7 +16,7 @@ pub struct Interactable;
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct SendNetworkTranformUpdates;
 
-/// Player Camera Entity
+/// This is the entity corresponding to the physical camera entity of the player
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct PlayerCamera;
 
