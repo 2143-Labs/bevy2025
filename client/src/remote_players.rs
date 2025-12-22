@@ -16,15 +16,11 @@ use crate::{
 
 /// Marker component for remote player camera entities (not our local camera)
 #[derive(Component)]
-pub struct RemotePlayerCamera {
-    pub player_net_id: NetEntId,
-}
+pub struct RemotePlayerCamera;
 
 /// Marker component for the visual model (G-Toilet) representing a remote player
 #[derive(Component)]
-pub struct RemotePlayerModel {
-    pub camera_net_id: NetEntId,
-}
+pub struct RemotePlayerModel;
 
 /// Marker component for player name labels (2D UI nodes)
 #[derive(Component)]
@@ -72,7 +68,7 @@ fn handle_spawn_unit(
         let mut player_name = None;
         let mut player_color_hue = 0.0; // Default red
         let mut transform = Transform::default();
-        let mut parent_id: Option<NetEntId> = None;
+        //let mut parent_id: Option<NetEntId> = None;
 
         for component in &unit.event.components {
             match component {
@@ -100,8 +96,8 @@ fn handle_spawn_unit(
                         transform = *tfm;
                     }
                 }
-                NetComponent::MyNetEntParentId(pid) => {
-                    parent_id = Some(NetEntId(pid.0));
+                NetComponent::MyNetEntParentId(_pid) => {
+                    //parent_id = Some(NetEntId(pid.0));
                 }
                 NetComponent::Groups(_) | NetComponent::NetEntId(_) | NetComponent::PlayerId(_) => {
                     // Ignore these for player camera spawning
@@ -114,9 +110,7 @@ fn handle_spawn_unit(
             let camera_entity = commands
                 .spawn((
                     unit.event.net_ent_id,
-                    RemotePlayerCamera {
-                        player_net_id: parent_id.unwrap_or(unit.event.net_ent_id),
-                    },
+                    RemotePlayerCamera,
                     SendNetworkTranformUpdates,
                     Transform::from_translation(transform.translation)
                         .with_rotation(transform.rotation),
@@ -134,9 +128,7 @@ fn handle_spawn_unit(
                     Transform::from_xyz(0.0, 0.0, 0.0)
                         .with_rotation(Quat::from_rotation_y(std::f32::consts::PI)) // 180° rotation
                         .with_scale(Vec3::splat(0.5)),
-                    RemotePlayerModel {
-                        camera_net_id: unit.event.net_ent_id,
-                    },
+                    RemotePlayerModel,
                     shared::net_components::ours::PlayerColor {
                         hue: player_color_hue,
                     },

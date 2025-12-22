@@ -49,8 +49,8 @@ struct BirdsEyeCam;
 struct InterpolationCam;
 
 /// Marker component for pause UI
-#[derive(Component)]
-struct PauseUI;
+//#[derive(Component)]
+//struct PauseUI;
 
 /// Marker for the player camera that we control
 #[derive(Component)]

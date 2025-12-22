@@ -44,6 +44,7 @@ impl Plugin for TerrainPlugin {
 }
 
 /// Draw debug wireframe borders for boundary walls
+#[allow(dead_code)]
 fn draw_boundary_debug(
     mut gizmos: Gizmos,
     walls: Query<(&Transform, &Collider), With<BoundaryWall>>,

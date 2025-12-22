@@ -64,11 +64,11 @@ struct PlayerEndpoint(Endpoint);
 #[derive(Resource, Debug)]
 struct CurrentTick(Tick);
 
-#[derive(Resource, Debug)]
-struct ServerSettings {
-    tick_rate: u16,
-    cheats: bool,
-}
+//#[derive(Resource, Debug)]
+//struct ServerSettings {
+    //tick_rate: u16,
+    //cheats: bool,
+//}
 
 //pub mod chat;
 //pub mod game_manager;
@@ -263,7 +263,7 @@ fn on_player_connect(
                 components: vec![
                     c_name.clone().to_net_component(),
                     c_color.clone().to_net_component(),
-                    c_player_id.clone().to_net_component(),
+                    c_player_id.to_net_component(),
                     //ConnectedPlayer.to_net_component(),
                 ],
             });
@@ -495,7 +495,7 @@ fn broadcast_movement_updates(
 fn increment_ticks(mut current_tick: ResMut<CurrentTick>) {
     current_tick.0.increment();
 
-    if current_tick.0 .0 % 100 == 0 {
+    if current_tick.0.0.is_multiple_of(100) {
         info!("Server Tick: {:?}", current_tick.0);
     }
 }

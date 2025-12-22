@@ -32,8 +32,8 @@ pub struct FontAssets {
 
 #[derive(AssetCollection, Resource)]
 pub struct ModelAssets {
-    #[asset(path = "models/g-toilet/scene.gltf")]
-    pub g_toilet: Handle<Gltf>,
+    //#[asset(path = "models/g-toilet/scene.gltf")]
+    //pub g_toilet: Handle<Gltf>,
 
     // If you want to access specific scenes within the GLTF:
     #[asset(path = "models/g-toilet/scene.gltf#Scene0")]

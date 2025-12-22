@@ -1,6 +1,6 @@
 use std::{collections::HashMap, env::current_dir, fs::OpenOptions};
 
-use bevy::{input::mouse::MouseButtonInput, prelude::*};
+use bevy::prelude::*;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 

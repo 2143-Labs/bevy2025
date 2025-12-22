@@ -31,7 +31,7 @@ impl Plugin for SharedWaterPlugin {
 }
 
 /// Setup water plane at specified level
-pub fn spawn_water_shared(commands: &mut Commands, water_level: f32, size: f32) {
+pub fn spawn_water_shared(commands: &mut Commands, water_level: f32, _size: f32) {
     // Store water level as resource
     commands.insert_resource(WaterLevel(water_level));
 }

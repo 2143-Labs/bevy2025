@@ -41,24 +41,24 @@ impl Plugin for PhysicsPlugin {
     }
 }
 /// Manage physics pause state based on game state
-fn manage_physics_pause(
-    game_state: Res<State<GameState>>,
-    mut physics_time: ResMut<Time<Physics>>,
-) {
-    match game_state.get() {
-        GameState::Paused | GameState::MainMenu => {
-            if !physics_time.is_paused() {
-                physics_time.pause();
-            }
-        }
-        GameState::Playing => {
-            if physics_time.is_paused() {
-                physics_time.unpause();
-            }
-        }
-        _ => {}
-    }
-}
+//fn manage_physics_pause(
+    //game_state: Res<State<GameState>>,
+    //mut physics_time: ResMut<Time<Physics>>,
+//) {
+    //match game_state.get() {
+        //GameState::Paused | GameState::MainMenu => {
+            //if !physics_time.is_paused() {
+                //physics_time.pause();
+            //}
+        //}
+        //GameState::Playing => {
+            //if physics_time.is_paused() {
+                //physics_time.unpause();
+            //}
+        //}
+        //_ => {}
+    //}
+//}
 
 /// Spawn balls every frame while holding spacebar (from active camera's view)
 fn spawn_ball_on_space(

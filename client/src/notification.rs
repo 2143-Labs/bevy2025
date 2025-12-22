@@ -52,11 +52,11 @@ fn setup_panel(mut commands: Commands) {
 
 fn on_notification(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
+    //asset_server: Res<AssetServer>,
     parent: Query<Entity, With<NotificationContainer>>,
     mut er: MessageReader<Notification>,
     // not virtualtime
-    time: Res<Time>,
+    //time: Res<Time>,
 ) {
     for e in er.read() {
         debug!("Got a notification... {}", e.0);

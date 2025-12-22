@@ -8,14 +8,6 @@ use shared::physics::water::{Water, apply_buoyancy, check_water_immersion, spawn
 
 use crate::game_state::{GameState, WorldEntity};
 
-#[derive(Component)]
-struct InWater {
-    submerged_volume: f32,
-}
-
-/// Resource to track water level
-#[derive(Resource)]
-pub struct WaterLevel(pub f32);
 use crate::network::DespawnOnWorldData;
 
 pub struct WaterPlugin;
@@ -26,7 +18,6 @@ impl Plugin for WaterPlugin {
             ExtendedMaterial<StandardMaterial, WaterMaterial>,
         >::default())
             .register_type::<WaterMaterial>()
-            .insert_resource(WaterLevel(0.0)) // Initialize with default value
             .add_systems(
                 Update,
                 (check_water_immersion, apply_buoyancy)
