@@ -175,7 +175,7 @@ fn handle_update_unit(
 ) {
     for update in update_events.read() {
         // Find the entity with this NetEntId
-        for (net_id, mut transform) in &mut remote_unit {
+        'a1: for (net_id, mut transform) in &mut remote_unit {
             if net_id == &update.event.net_ent_id {
                 // Update the transform from components
                 for component in &update.event.components {
@@ -188,11 +188,11 @@ fn handle_update_unit(
                         }
                     }
                 }
-                break;
+                break 'a1;
             }
         }
 
-        for (net_id, mut velocity) in &mut remote_unit2 {
+        'a2: for (net_id, mut velocity) in &mut remote_unit2 {
             if net_id == &update.event.net_ent_id {
                 // Update the velocity from components
                 for component in &update.event.components {
@@ -202,7 +202,7 @@ fn handle_update_unit(
                         }
                     }
                 }
-                break;
+                break 'a2;
             }
         }
     }

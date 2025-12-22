@@ -158,7 +158,8 @@ impl SpawnUnit2 {
         meshes: &mut ResMut<Assets<Mesh>>,
         materials: &mut ResMut<Assets<StandardMaterial>>,
     ) -> Entity {
-        let mut ent_commands = commands.spawn(());
+        let mut ent_commands = commands.spawn_empty();
+        error!(?self.net_ent_id, "Spawning entity client with net_ent_id");
         if !self.net_ent_id.is_none() {
             ent_commands.insert(self.net_ent_id);
         }
@@ -173,12 +174,14 @@ impl SpawnUnit2 {
     }
 
     pub fn spawn_entity_srv(self, commands: &mut Commands) -> Entity {
-        let mut ent_commands = commands.spawn(());
+        let mut ent_commands = commands.spawn_empty();
+        error!(?self.net_ent_id, "Spawning entity server with net_ent_id");
         if !self.net_ent_id.is_none() {
             ent_commands.insert(self.net_ent_id);
         }
 
         for net_comp in self.components {
+            error!(?net_comp, " - Inserting net component server");
             net_comp.insert_components_srv(&mut ent_commands);
         }
 

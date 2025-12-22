@@ -155,12 +155,14 @@ fn add_network_connection_info_from_config(config: Res<Config>, mut commands: Co
     });
 }
 
+/// This component is added to each of the meta entities representing a connected player
 #[derive(Component)]
 pub struct ConnectedPlayer;
 
 #[derive(Component)]
 pub struct HasColor(pub Color);
 
+#[allow(clippy::too_many_arguments)]
 fn on_player_connect(
     mut new_players: ERFE<shared::event::server::ConnectRequest>,
     mut heartbeat_mapping: ResMut<HeartbeatList>,
@@ -256,6 +258,7 @@ fn on_player_connect(
             });
         }
 
+        // Send each existing player's info to the new client
         for (_c_net_client, c_player_id, c_name, c_color) in &clients {
             // SPAWN A
             unit_list_to_new_client.push(SpawnUnit2 {
@@ -269,7 +272,7 @@ fn on_player_connect(
             });
         }
 
-        // Tell all other clients about your new player and camera
+        // Tell all connected clients about your new player and camera
         for (c_net_client, _c_net_ent, _c_name, _c_color) in &clients {
             send_event_to_server_now_batch(
                 &sr.handler,
@@ -374,7 +377,7 @@ fn check_heartbeats(
 fn on_player_disconnect(
     mut pd: MessageReader<PlayerDisconnected>,
     clients: Query<(Entity, &PlayerEndpoint, &PlayerId), With<PlayerName>>,
-    clients_owned_items: Query<(Entity, &NetEntId, &MyNetEntParentId)>,
+    //clients_owned_items: Query<(Entity, &NetEntId, &MyNetEntParentId)>,
     mut commands: Commands,
     mut heartbeat_mapping: ResMut<HeartbeatList>,
     sr: Res<ServerNetworkingResources>,
@@ -387,17 +390,17 @@ fn on_player_disconnect(
             id: player.id,
         }));
 
-        for (owned_ent, net_ent_id, owner_id) in &clients_owned_items {
-            if owner_id.0 == player.id.0 {
-                events.push(EventToClient::DespawnUnit2(
-                    shared::event::client::DespawnUnit2 {
-                        net_ent_id: *net_ent_id,
-                    },
-                ));
+        //for (owned_ent, net_ent_id, owner_id) in &clients_owned_items {
+            //if owner_id == player.id {
+                //events.push(EventToClient::DespawnUnit2(
+                    //shared::event::client::DespawnUnit2 {
+                        //net_ent_id: *net_ent_id,
+                    //},
+                //));
 
-                commands.entity(owned_ent).despawn();
-            }
-        }
+                //commands.entity(owned_ent).despawn();
+            //}
+        //}
 
         for (c_ent, net_client, player_id) in &clients {
             send_event_to_server_now_batch(&sr.handler, net_client.0, &events);
@@ -426,33 +429,34 @@ fn on_player_heartbeat(
 fn on_movement(
     mut pd: ERFE<ChangeMovement>,
     mut ent_to_move: Query<
-        (&NetEntId, &MyNetEntParentId, &mut Transform),
+        (&NetEntId, &mut Transform),
         With<SendNetworkTranformUpdates>,
     >,
 ) {
-    for movement in pd.read() {
+    'event: for movement in pd.read() {
         // The camera NetEntId is directly in the movement event
         let camera_net_id = movement.event.net_ent_id;
-        info!(
-            "Received movement update for camera {:?}",
-            camera_net_id
-        );
 
         // Find and update the camera entity
-        for (cam_net_id, _cam_parent_id, mut cam_transform) in &mut ent_to_move {
+        for (cam_net_id, mut cam_transform) in &mut ent_to_move {
             if cam_net_id == &camera_net_id {
                 // Update the camera's transform on the server
                 *cam_transform = movement.event.transform;
-                break;
+                continue 'event;
             }
         }
+
+        warn!(
+            "Received movement update for unknown entity {:?}",
+            camera_net_id
+        );
     }
 }
 
 // TODO make this more efficient by batching updates per client and only sending changed components
 // for physics if we think the client needs them
 fn broadcast_movement_updates(
-    clients: Query<(&PlayerEndpoint, &NetEntId), With<ConnectedPlayer>>,
+    clients: Query<(&PlayerEndpoint), With<ConnectedPlayer>>,
     sr: Res<ServerNetworkingResources>,
     changed_transforms: Query<
         (&NetEntId, &Transform, Option<&LinearVelocity>),
@@ -480,7 +484,7 @@ fn broadcast_movement_updates(
             "Broadcasting {} movement updates to clients",
             events_to_send.len()
         );
-        for (c_net_client, _c_net_ent) in &clients {
+        for (c_net_client) in &clients {
             send_event_to_server_now_batch(&sr.handler, c_net_client.0, &events_to_send);
         }
     }
