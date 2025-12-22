@@ -6,6 +6,10 @@ use crate::net_components::ToNetComponent;
 
 //include!(concat!(env!("OUT_DIR"), "/net_components_foreign.rs"));
 
+/// This is a simple wrapper to allow Color to be a bevy Component
+#[derive(Component)]
+pub struct ComponentColor(pub Color);
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NetComponentForeign {
     Transform(Transform),
@@ -13,6 +17,7 @@ pub enum NetComponentForeign {
     Collider(avian3d::prelude::Collider),
     Mass(avian3d::prelude::Mass),
     LinearVelocity(avian3d::prelude::LinearVelocity),
+    Color(Color),
 }
 
 impl NetComponentForeign {
@@ -32,6 +37,9 @@ impl NetComponentForeign {
             }
             NetComponentForeign::LinearVelocity(c) => {
                 entity.insert(c);
+            }
+            NetComponentForeign::Color(c) => {
+                entity.insert(ComponentColor(c));
             }
         }
     }
@@ -64,5 +72,11 @@ impl ToNetComponent for avian3d::prelude::Mass {
 impl ToNetComponent for avian3d::prelude::LinearVelocity {
     fn to_net_component(self) -> super::NetComponent {
         super::NetComponent::Foreign(NetComponentForeign::LinearVelocity(self))
+    }
+}
+
+impl ToNetComponent for Color {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Foreign(NetComponentForeign::Color(self))
     }
 }

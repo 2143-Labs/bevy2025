@@ -11,9 +11,7 @@ use shared::{
     netlib::{send_event_to_server_now, EventToClient, ServerNetworkingResources},
 };
 
-use crate::{
-    make_ball, ConnectedPlayer, EndpointToPlayerId, HasColor, PlayerEndpoint, ServerState,
-};
+use crate::{make_ball, ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint, ServerState};
 
 pub struct SpawnPlugin;
 impl Plugin for SpawnPlugin {
@@ -62,13 +60,10 @@ fn on_circle_spawn(
             spawn.color,
             ControlledBy::single(*player_id_of_spawner),
         );
-        let unit_ent = unit.clone().spawn_entity_srv(&mut commands);
-        commands
-            .entity(unit_ent)
-            .insert(HasColor(spawn.color))
-            .insert(DespawnOnPlayerDisconnect {
-                player_id: *player_id_of_spawner,
-            });
+        let unit_ent = unit.clone().spawn_entity(&mut commands);
+        commands.entity(unit_ent).insert(DespawnOnPlayerDisconnect {
+            player_id: *player_id_of_spawner,
+        });
 
         // Notify all clients about the new unit
         let event = EventToClient::SpawnUnit2(unit);
@@ -108,7 +103,7 @@ fn on_man_spawn(
             transform,
             ControlledBy::single(*player_id_of_spawner),
         );
-        let unit_ent = unit.clone().spawn_entity_srv(&mut commands);
+        let unit_ent = unit.clone().spawn_entity(&mut commands);
         commands.entity(unit_ent).insert(DespawnOnPlayerDisconnect {
             player_id: *player_id_of_spawner,
         });

@@ -16,7 +16,7 @@ use shared::{
     },
     net_components::{
         ents::{PlayerCamera, SendNetworkTranformUpdates},
-        groups::SpecialConstructor,
+        foreign::ComponentColor,
         make_ball, make_man,
         ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName},
         ToNetComponent,
@@ -165,9 +165,6 @@ pub struct DisconnectedPlayer {
     pub disconnect_tick: Tick,
 }
 
-#[derive(Component)]
-pub struct HasColor(pub Color);
-
 #[allow(clippy::too_many_arguments)]
 fn on_player_connect(
     mut new_players: ERFE<shared::event::server::ConnectRequest>,
@@ -186,7 +183,7 @@ fn on_player_connect(
         With<PlayerCamera>,
     >,
     balls: Query<
-        (&Transform, &ControlledBy, &NetEntId, &HasColor),
+        (&Transform, &ControlledBy, &NetEntId, &ComponentColor),
         With<shared::net_components::ents::Ball>,
     >,
     men: Query<(&Transform, &ControlledBy, &NetEntId), With<shared::net_components::ents::Man>>,
@@ -233,12 +230,11 @@ fn on_player_connect(
                 player_color.clone().to_net_component(),
                 ControlledBy::single(new_player_id).to_net_component(),
                 SendNetworkTranformUpdates.to_net_component(),
-                SpecialConstructor.to_net_component(),
             ],
         };
 
         // Mark the camera to despawn when the player disconnects (server-side only)
-        let ent = spawn_camera_unit.clone().spawn_entity_srv(&mut commands);
+        let ent = spawn_camera_unit.clone().spawn_entity(&mut commands);
         commands.entity(ent).insert(DespawnOnPlayerDisconnect {
             player_id: new_player_id,
         });
@@ -265,7 +261,6 @@ fn on_player_connect(
                     c_color.clone().to_net_component(),
                     c_controlled_by.clone().to_net_component(),
                     SendNetworkTranformUpdates.to_net_component(),
-                    SpecialConstructor.to_net_component(),
                 ],
             });
         }

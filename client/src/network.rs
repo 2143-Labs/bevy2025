@@ -9,8 +9,8 @@ use shared::{
         server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle, SpawnMan},
     },
     net_components::{
-        ents::PlayerCamera,
-        groups::SpecialConstructor,
+        ents::{Ball, Man, PlayerCamera},
+        foreign::ComponentColor,
         ours::{PlayerColor, PlayerName},
     },
     netlib::{
@@ -102,6 +102,8 @@ impl Plugin for NetworkingPlugin {
                 spawn_networked_unit_forward_local,
                 on_general_spawn_network_unit,
                 on_special_unit_spawn_remote_camera,
+                on_special_unit_spawn_ball,
+                on_special_unit_spawn_man,
             )
                 .run_if(in_state(NetworkGameState::ClientConnected)),
         )
@@ -130,26 +132,25 @@ fn spawn_networked_unit_forward_local(
     }
 }
 
+#[derive(Component)]
+pub struct NeedsClientConstruction;
+
 // Given some unit
 fn on_general_spawn_network_unit(
     mut unit_spawns: MessageReader<SpawnUnit2>,
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    //model_assets: Res<ModelAssets>,
-    //font_assets: Res<FontAssets>,
-    //mut notif: MessageWriter<Notification>,
 ) {
     use crate::game_state::WorldEntity;
 
     for spawn in unit_spawns.read() {
         // Spawn ball with physics
-        let entity = spawn
-            .clone()
-            .spawn_entity_client(&mut commands, &mut meshes, &mut materials);
+        let entity = spawn.clone().spawn_entity(&mut commands);
 
         // Add WorldEntity component to balls so they get cleaned up properly
-        commands.entity(entity).insert(WorldEntity);
+        commands
+            .entity(entity)
+            .insert(WorldEntity)
+            .insert(NeedsClientConstruction);
 
         info!(
             "Spawned from networked SpawnUnit2, has {} components",
@@ -158,15 +159,63 @@ fn on_general_spawn_network_unit(
     }
 }
 
+fn on_special_unit_spawn_ball(
+    mut commands: Commands,
+    mut unit_query: Query<
+        (Entity, &NetEntId, &ComponentColor, &Ball),
+        With<NeedsClientConstruction>,
+    >,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for (entity, _ent_id, color, ball) in unit_query.iter_mut() {
+        // TODO add ball-specific client setup here
+        commands
+            .entity(entity)
+            .insert((
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: color.0,
+                    metallic: 1.0,
+                    perceptual_roughness: 0.2,
+                    ..default()
+                })),
+                Mesh3d(meshes.add(Mesh::from(Sphere { radius: ball.0 }))),
+            ))
+            .remove::<NeedsClientConstruction>();
+    }
+}
+
+fn on_special_unit_spawn_man(
+    mut commands: Commands,
+    mut unit_query: Query<(Entity, &NetEntId, &Man), With<NeedsClientConstruction>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for (entity, _ent_id, man) in unit_query.iter_mut() {
+        // TODO add ball-specific client setup here
+        commands
+            .entity(entity)
+            .insert((
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: Color::WHITE,
+                    metallic: 0.2,
+                    perceptual_roughness: 0.4,
+                    ..default()
+                })),
+                Mesh3d(meshes.add(Mesh::from(Sphere { radius: man.0 }))),
+            ))
+            .remove::<NeedsClientConstruction>();
+    }
+}
+
 fn on_special_unit_spawn_remote_camera(
     mut commands: Commands,
     mut unit_query: Query<
         (Entity, &NetEntId, &PlayerColor, &PlayerCamera),
-        With<SpecialConstructor>,
+        With<NeedsClientConstruction>,
     >,
     model_assets: Res<ModelAssets>,
     font_assets: Res<FontAssets>,
-    notif: MessageWriter<Notification>,
 ) {
     for (entity, ent_id, player_color, _player_camera) in unit_query.iter_mut() {
         commands
@@ -178,7 +227,7 @@ fn on_special_unit_spawn_remote_camera(
                 GlobalTransform::default(),
                 ViewVisibility::default(),
             ))
-            .remove::<SpecialConstructor>()
+            .remove::<NeedsClientConstruction>()
             .with_children(|parent| {
                 // Spawn the remote player camera visuals
                 parent.spawn((

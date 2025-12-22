@@ -25,7 +25,6 @@ bevy_log = "0.17.2"
 bevy_time = "0.17.2"
 bevy_color = "0.17.2"
 bevy_transform = "0.17.2"
-bevy_pbr = "0.17.2"
 bevy_mesh = "0.17.2"
 bevy_diagnostic = "0.17.2"
 

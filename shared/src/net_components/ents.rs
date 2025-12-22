@@ -5,7 +5,15 @@ use crate::net_components::ToNetComponent;
 
 /// Simple Network physics entity
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
-pub struct Ball;
+pub struct Ball(pub f32);
+
+/// This is the entity corresponding to the physical camera entity of the player
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct PlayerCamera;
+
+/// Controllable player entity
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct Man(pub f32);
 
 /// Simple Interactable entity
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
@@ -15,14 +23,6 @@ pub struct Interactable;
 /// server. (should maybe move to "ours" category)
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct SendNetworkTranformUpdates;
-
-/// This is the entity corresponding to the physical camera entity of the player
-#[derive(Component, Serialize, Deserialize, Clone, Debug)]
-pub struct PlayerCamera;
-
-/// Controllable player entity
-#[derive(Component, Serialize, Deserialize, Clone, Debug)]
-pub struct Man;
 
 //include!(concat!(env!("OUT_DIR"), "/net_components_ents.rs"));
 
