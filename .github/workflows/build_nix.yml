@@ -10,90 +10,90 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  version-bump:
-    name: Version bump and output version
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    outputs:
-      version: ${{ steps.bump.outputs.version }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+  #version-bump:
+    #name: Version bump and output version
+    #runs-on: ubuntu-latest
+    #permissions:
+      #contents: write
+    #outputs:
+      #version: ${{ steps.bump.outputs.version }}
+    #steps:
+      #- name: Checkout repository
+        #uses: actions/checkout@v4
+        #with:
+          #fetch-depth: 0
 
-      - name: Determine bump type and update Cargo.toml
-        id: bump
-        shell: bash
-        run: |
-          set -euo pipefail
-          # 1) Read current version from top-level "version" in Cargo.toml
-          CURR_VERSION="$(awk -F\" '/^version *= *\"[0-9]+\.[0-9]+\.[0-9]+\"/ {print $2; exit}' Cargo.toml)"
-          if [ -z "${CURR_VERSION:-}" ]; then
-            echo "Unable to find current version in Cargo.toml" >&2
-            exit 1
-          fi
-          echo "Current version: $CURR_VERSION"
+      #- name: Determine bump type and update Cargo.toml
+        #id: bump
+        #shell: bash
+        #run: |
+          #set -euo pipefail
+          ## 1) Read current version from top-level "version" in Cargo.toml
+          #CURR_VERSION="$(awk -F\" '/^version *= *\"[0-9]+\.[0-9]+\.[0-9]+\"/ {print $2; exit}' Cargo.toml)"
+          #if [ -z "${CURR_VERSION:-}" ]; then
+            #echo "Unable to find current version in Cargo.toml" >&2
+            #exit 1
+          #fi
+          #echo "Current version: $CURR_VERSION"
 
-          # 2) Detect bump type from triggering commit message (default: patch)
-          MSG="${{ github.event.head_commit.message }}"
-          MSG_LOWER="$(printf "%s" "$MSG" | tr '[:upper:]' '[:lower:]')"
-          BUMP=patch
-          if echo "$MSG_LOWER" | grep -q "\[major\]"; then
-            BUMP=major
-          elif echo "$MSG_LOWER" | grep -q "\[minor\]"; then
-            BUMP=minor
-          elif echo "$MSG_LOWER" | grep -q "\[patch\]"; then
-            BUMP=patch
-          fi
-          echo "Bump type: $BUMP"
+          ## 2) Detect bump type from triggering commit message (default: patch)
+          #MSG="${{ github.event.head_commit.message }}"
+          #MSG_LOWER="$(printf "%s" "$MSG" | tr '[:upper:]' '[:lower:]')"
+          #BUMP=patch
+          #if echo "$MSG_LOWER" | grep -q "\[major\]"; then
+            #BUMP=major
+          #elif echo "$MSG_LOWER" | grep -q "\[minor\]"; then
+            #BUMP=minor
+          #elif echo "$MSG_LOWER" | grep -q "\[patch\]"; then
+            #BUMP=patch
+          #fi
+          #echo "Bump type: $BUMP"
 
-          # 3) Compute new semver
-          IFS='.' read -r MAJ MIN PAT <<< "$CURR_VERSION"
-          case "$BUMP" in
-            major)
-              ((MAJ=MAJ+1)); MIN=0; PAT=0;;
-            minor)
-              ((MIN=MIN+1)); PAT=0;;
-            patch)
-              ((PAT=PAT+1));;
-          esac
-          NEW_VERSION="${MAJ}.${MIN}.${PAT}"
-          echo "New version: $NEW_VERSION"
+          ## 3) Compute new semver
+          #IFS='.' read -r MAJ MIN PAT <<< "$CURR_VERSION"
+          #case "$BUMP" in
+            #major)
+              #((MAJ=MAJ+1)); MIN=0; PAT=0;;
+            #minor)
+              #((MIN=MIN+1)); PAT=0;;
+            #patch)
+              #((PAT=PAT+1));;
+          #esac
+          #NEW_VERSION="${MAJ}.${MIN}.${PAT}"
+          #echo "New version: $NEW_VERSION"
 
-          # 4) Update Cargo.toml (first occurrence of a top-level version line)
-          sed -i -E "0,/^version *= *\"[0-9]+\.[0-9]+\.[0-9]+\"/s//version = \"${NEW_VERSION}\"/" Cargo.toml
+          ## 4) Update Cargo.toml (first occurrence of a top-level version line)
+          #sed -i -E "0,/^version *= *\"[0-9]+\.[0-9]+\.[0-9]+\"/s//version = \"${NEW_VERSION}\"/" Cargo.toml
 
-          # 5) Verify update
-          UPDATED="$(awk -F\" '/^version *= *\"[0-9]+\.[0-9]+\.[0-9]+\"/ {print $2; exit}' Cargo.toml)"
-          if [ "$UPDATED" != "$NEW_VERSION" ]; then
-            echo "Failed to update Cargo.toml (found: $UPDATED)" >&2
-            exit 1
-          fi
+          ## 5) Verify update
+          #UPDATED="$(awk -F\" '/^version *= *\"[0-9]+\.[0-9]+\.[0-9]+\"/ {print $2; exit}' Cargo.toml)"
+          #if [ "$UPDATED" != "$NEW_VERSION" ]; then
+            #echo "Failed to update Cargo.toml (found: $UPDATED)" >&2
+            #exit 1
+          #fi
 
-          # 6) Export new version for downstream jobs
-          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          ## 6) Export new version for downstream jobs
+          #echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Commit version bump
-        if: ${{ steps.bump.outputs.version != '' }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.toml
-          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]" || echo "No changes to commit"
+      #- name: Commit version bump
+        #if: ${{ steps.bump.outputs.version != '' }}
+        #run: |
+          #set -euo pipefail
+          #git config user.name "github-actions[bot]"
+          #git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          #git add Cargo.toml
+          #git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]" || echo "No changes to commit"
 
-      - name: Push changes
-        if: ${{ steps.bump.outputs.version != '' }}
-        run: |
-          set -euo pipefail
-          git push origin HEAD:main
+      #- name: Push changes
+        #if: ${{ steps.bump.outputs.version != '' }}
+        #run: |
+          #set -euo pipefail
+          #git push origin HEAD:main
 
   build-linux:
     name: Linux build (Nix)
     runs-on: ubuntu-latest
-    needs: version-bump
+    #needs: version-bump
     permissions:
       contents: read
     steps:
@@ -127,7 +127,7 @@ jobs:
   build-windows:
     name: Windows build (cargo)
     runs-on: windows-latest
-    needs: version-bump
+    #needs: version-bump
     permissions:
       contents: read
     steps:
@@ -159,7 +159,6 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs:
-      - version-bump
       - build-linux
       - build-windows
     permissions:
