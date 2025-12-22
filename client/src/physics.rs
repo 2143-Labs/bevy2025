@@ -26,14 +26,6 @@ impl Plugin for PhysicsPlugin {
             .add_systems(OnEnter(GameState::MainMenu), despawn_ball_counter_ui)
             .add_systems(
                 Update,
-                (
-                    // TODO receive new world data at any time?
-                    spawn_networked_unit,
-                )
-                    .run_if(in_state(NetworkGameState::ClientConnected)),
-            )
-            .add_systems(
-                Update,
                 (spawn_ball_on_space, update_ball_counter, spawn_man_on_use1)
                     .run_if(in_state(GameState::Playing)),
             )
@@ -112,28 +104,6 @@ fn spawn_man_on_use1(
         spawn_man_writer.write(SpawnMan {
             position: spawn_pos,
         });
-    }
-}
-
-fn spawn_networked_unit(
-    mut unit_spawns: ERFE<SpawnUnit2>,
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    use crate::game_state::WorldEntity;
-
-    for spawn in unit_spawns.read() {
-        // Spawn ball with physics
-        let entity = spawn
-            .event
-            .clone()
-            .spawn_entity(&mut commands, &mut meshes, &mut materials);
-
-        // Add WorldEntity component to balls so they get cleaned up properly
-        commands.entity(entity).insert(WorldEntity);
-
-        info!("Spawned from networked SpawnUnit2");
     }
 }
 

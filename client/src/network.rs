@@ -17,10 +17,7 @@ use shared::{
 };
 
 use crate::{
-    camera::LocalCamera,
-    game_state::{GameState, NetworkGameState},
-    notification::Notification,
-    terrain::SetupTerrain,
+    assets::{FontAssets, ModelAssets}, camera::LocalCamera, game_state::{GameState, NetworkGameState}, notification::Notification, remote_players::handle_spawn_unit_maybe_camera, terrain::SetupTerrain
 };
 
 #[derive(Component)]
@@ -91,6 +88,16 @@ impl Plugin for NetworkingPlugin {
             )
             .add_systems(
                 Update,
+                (
+                    // TODO receive new world data at any time?
+                    spawn_networked_unit_forward_local,
+                    on_general_spawn_network_unit,
+                )
+                    .run_if(in_state(NetworkGameState::ClientConnected)),
+
+            )
+            .add_systems(
+                Update,
                 send_heartbeat
                     .run_if(on_timer(Duration::from_millis(200)))
                     .run_if(in_state(NetworkGameState::ClientConnected)),
@@ -98,6 +105,53 @@ impl Plugin for NetworkingPlugin {
             .add_message::<SpawnUnit2>()
             .add_message::<SpawnCircle>()
             .add_message::<SpawnMan>();
+    }
+}
+
+fn spawn_networked_unit_forward_local(
+    mut unit_spawns: ERFE<SpawnUnit2>,
+    mut unit_spawn_writer: MessageWriter<SpawnUnit2>,
+    //mut commands: Commands,
+    //mut meshes: ResMut<Assets<Mesh>>,
+    //mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for spawn in unit_spawns.read() {
+        // Echo back to server to confirm spawn
+        unit_spawn_writer.write(spawn.event.clone());
+    }
+}
+
+// Given some unit
+fn on_general_spawn_network_unit(
+    mut unit_spawns: MessageReader<SpawnUnit2>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+
+    model_assets: Res<ModelAssets>,
+    font_assets: Res<FontAssets>,
+    mut notif: MessageWriter<Notification>,
+) {
+    use crate::game_state::WorldEntity;
+
+    for spawn in unit_spawns.read() {
+        // Spawn ball with physics
+        let entity = spawn
+            .clone()
+            .spawn_entity_client(&mut commands, &mut meshes, &mut materials);
+
+        // Add WorldEntity component to balls so they get cleaned up properly
+        commands.entity(entity).insert(WorldEntity);
+
+        handle_spawn_unit_maybe_camera(
+            spawn,
+            &mut commands,
+            &model_assets,
+            &font_assets,
+            &mut notif,
+        );
+
+        info!("Spawned from networked SpawnUnit2, has {} components", spawn.components.len());
     }
 }
 

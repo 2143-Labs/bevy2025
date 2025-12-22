@@ -152,7 +152,7 @@ impl ToNetComponent for PlayerId {
 }
 
 impl SpawnUnit2 {
-    pub fn spawn_entity(
+    pub fn spawn_entity_client(
         self,
         commands: &mut Commands,
         meshes: &mut ResMut<Assets<Mesh>>,

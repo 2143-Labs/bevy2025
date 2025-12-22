@@ -40,7 +40,6 @@ impl Plugin for RemotePlayersPlugin {
         app.add_systems(
             Update,
             (
-                handle_spawn_unit,
                 handle_update_unit,
                 handle_despawn_unit,
                 handle_player_disconnect,
@@ -55,110 +54,116 @@ impl Plugin for RemotePlayersPlugin {
 }
 
 /// Handle spawning units from the server
-fn handle_spawn_unit(
-    mut spawn_events: ERFE<SpawnUnit2>,
-    mut commands: Commands,
-    model_assets: Res<ModelAssets>,
-    font_assets: Res<FontAssets>,
-    mut notif: MessageWriter<Notification>,
+pub fn handle_spawn_unit_maybe_camera(
+    unit: &SpawnUnit2,
+    commands: &mut Commands,
+    model_assets: &Res<ModelAssets>,
+    font_assets: &Res<FontAssets>,
+    notif: &mut MessageWriter<Notification>,
 ) {
-    for unit in spawn_events.read() {
-        // Check if this is a PlayerCamera component
-        let mut is_player_camera = false;
-        let mut player_name = None;
-        let mut player_color_hue = 0.0; // Default red
-        let mut transform = Transform::default();
-        //let mut parent_id: Option<NetEntId> = None;
+    // Check if this is a PlayerCamera component
+    let mut is_player_camera = false;
+    let mut player_name = None;
+    let mut player_color_hue = 0.0; // Default red
+    let mut transform = Transform::default();
+    //let mut parent_id: Option<NetEntId> = None;
 
-        for component in &unit.event.components {
-            match component {
-                NetComponent::Ents(ents) => {
-                    if matches!(
-                        ents,
-                        shared::net_components::ents::NetComponentEnts::PlayerCamera(_)
-                    ) {
-                        is_player_camera = true;
-                    }
-                }
-                NetComponent::Ours(ours) => match ours {
-                    shared::net_components::ours::NetComponentOurs::PlayerName(name) => {
-                        player_name = Some(name.name.clone());
-                    }
-                    shared::net_components::ours::NetComponentOurs::PlayerColor(color) => {
-                        player_color_hue = color.hue;
-                    }
-                    _ => {}
-                },
-                NetComponent::Foreign(foreign) => {
-                    if let shared::net_components::foreign::NetComponentForeign::Transform(tfm) =
-                        foreign
-                    {
-                        transform = *tfm;
-                    }
-                }
-                NetComponent::MyNetEntParentId(_pid) => {
-                    //parent_id = Some(NetEntId(pid.0));
-                }
-                NetComponent::Groups(_) | NetComponent::NetEntId(_) | NetComponent::PlayerId(_) => {
-                    // Ignore these for player camera spawning
+    for component in &unit.components {
+        match component {
+            NetComponent::Ents(ents) => {
+                if matches!(
+                    ents,
+                    shared::net_components::ents::NetComponentEnts::PlayerCamera(_)
+                ) {
+                    is_player_camera = true;
                 }
             }
-        }
-
-        if is_player_camera && let Some(name) = player_name {
-            // Spawn the camera tracking entity with proper spatial bundle
-            let camera_entity = commands
-                .spawn((
-                    unit.event.net_ent_id,
-                    RemotePlayerCamera,
-                    SendNetworkTranformUpdates,
-                    Transform::from_translation(transform.translation)
-                        .with_rotation(transform.rotation),
-                    GlobalTransform::default(),
-                    Visibility::default(),
-                    InheritedVisibility::default(),
-                    ViewVisibility::default(),
-                ))
-                .id();
-
-            // Spawn the G-Toilet model as a child, rotated 180° to face forward
-            commands.entity(camera_entity).with_children(|parent| {
-                parent.spawn((
-                    SceneRoot(model_assets.g_toilet_scene.clone()),
-                    Transform::from_xyz(0.0, 0.0, 0.0)
-                        .with_rotation(Quat::from_rotation_y(std::f32::consts::PI)) // 180° rotation
-                        .with_scale(Vec3::splat(0.5)),
-                    RemotePlayerModel,
-                    shared::net_components::ours::PlayerColor {
-                        hue: player_color_hue,
-                    },
-                    ApplyNoFrustumCulling, // Mark this scene to have NoFrustumCulling applied to all meshes
-                ));
-            });
-
-            // Spawn 2D UI name label (will be positioned via world-to-screen projection)
-            commands.spawn((
-                Node {
-                    position_type: PositionType::Absolute,
-                    ..default()
-                },
-                Text::new(name.clone()),
-                TextFont {
-                    font: font_assets.regular.clone(),
-                    font_size: 20.0,
-                    ..default()
-                },
-                TextColor(Color::WHITE),
-                NameLabel {
-                    target_entity: camera_entity,
-                },
-                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.6)), // Semi-transparent background
-            ));
-
-            info!("Player {} joined", name);
-            notif.write(Notification(format!("{} joined", name)));
+            NetComponent::Ours(ours) => match ours {
+                shared::net_components::ours::NetComponentOurs::PlayerName(name) => {
+                    player_name = Some(name.name.clone());
+                }
+                shared::net_components::ours::NetComponentOurs::PlayerColor(color) => {
+                    player_color_hue = color.hue;
+                }
+                _ => {}
+            },
+            NetComponent::Foreign(foreign) => {
+                if let shared::net_components::foreign::NetComponentForeign::Transform(tfm) =
+                    foreign
+                {
+                    transform = *tfm;
+                }
+            }
+            NetComponent::MyNetEntParentId(_pid) => {
+                //parent_id = Some(NetEntId(pid.0));
+            }
+            NetComponent::Groups(_) | NetComponent::NetEntId(_) | NetComponent::PlayerId(_) => {
+                // Ignore these for player camera spawning
+            }
         }
     }
+
+    if !is_player_camera {
+        // Not a player camera, ignore
+        return;
+    }
+
+    let Some(name) = player_name else {
+        warn!("Player camera spawned without PlayerName component");
+        return;
+    };
+
+    // Spawn the camera tracking entity with proper spatial bundle
+    let camera_entity = commands
+        .spawn((
+            unit.net_ent_id,
+            RemotePlayerCamera,
+            SendNetworkTranformUpdates,
+            Transform::from_translation(transform.translation)
+                .with_rotation(transform.rotation),
+            GlobalTransform::default(),
+            Visibility::default(),
+            InheritedVisibility::default(),
+            ViewVisibility::default(),
+        ))
+        .id();
+
+    // Spawn the G-Toilet model as a child, rotated 180° to face forward
+    commands.entity(camera_entity).with_children(|parent| {
+        parent.spawn((
+            SceneRoot(model_assets.g_toilet_scene.clone()),
+            Transform::from_xyz(0.0, 0.0, 0.0)
+                .with_rotation(Quat::from_rotation_y(std::f32::consts::PI)) // 180° rotation
+                .with_scale(Vec3::splat(0.5)),
+            RemotePlayerModel,
+            shared::net_components::ours::PlayerColor {
+                hue: player_color_hue,
+            },
+            ApplyNoFrustumCulling, // Mark this scene to have NoFrustumCulling applied to all meshes
+        ));
+    });
+
+    // Spawn 2D UI name label (will be positioned via world-to-screen projection)
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            ..default()
+        },
+        Text::new(name.clone()),
+        TextFont {
+            font: font_assets.regular.clone(),
+            font_size: 20.0,
+            ..default()
+        },
+        TextColor(Color::WHITE),
+        NameLabel {
+            target_entity: camera_entity,
+        },
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.6)), // Semi-transparent background
+    ));
+
+    info!("Player {} joined", name);
+    notif.write(Notification(format!("{} joined", name)));
 }
 
 /// Handle updating unit transforms (mainly for player cameras)
