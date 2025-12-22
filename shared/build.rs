@@ -18,28 +18,29 @@ fn generate_code_for_event_queue(req: &GenerateRequest) -> String {
         .map(|x| format_ident!("writer_{}", x.to_string().to_lowercase()))
         .collect();
 
-    let typename = format_ident!("EventTo{}", req.output_type_name);
+    let incoming_typename = format_ident!("EventTo{}", req.incoming_type_name);
+    let outgoing_typename = format_ident!("EventTo{}", req.outgoing_type_name);
 
     let code = quote!(
         #[derive(Debug, Clone, Serialize, Deserialize)]
         #[non_exhaustive]
-        pub enum #typename {
+        pub enum #incoming_typename {
             #( #all_types ( #all_types ) ),*
         }
 
-        pub fn drain_events (
-            sr: Res<NetworkingResources<#typename>>,
+        pub fn drain_incoming_events (
+            sr: Res<NetworkingResources<#incoming_typename, crate::netlib:: #outgoing_typename>>,
             #(
                 mut #all_types_lowercase: MessageWriter<EventFromEndpoint< #all_types >>
             ),*
         ) {
-            let mut new_events = sr.event_list.lock().unwrap();
+            let mut new_events = sr.event_list_incoming.lock().unwrap();
             let new_events = std::mem::replace(new_events.as_mut(), vec![]);
             for (endpoint, event) in new_events {
                 trace!(?event, "Received event from endpoint {:?}", endpoint);
                 match event {
                     #(
-                        #typename :: #all_types (data) => {
+                        #incoming_typename :: #all_types (data) => {
                             #all_types_lowercase . write(EventFromEndpoint::new(endpoint, data));
                         }
                     ),*
@@ -69,7 +70,8 @@ fn generate_systems_for_event_queue(req: GenerateRequest) {
 }
 struct GenerateRequest<'a> {
     output_filename: &'a str,
-    output_type_name: &'a str,
+    incoming_type_name: &'a str,
+    outgoing_type_name: &'a str,
     source: &'a str,
     struct_search_regex: &'a Regex,
 }
@@ -79,14 +81,16 @@ fn main() {
     generate_systems_for_event_queue(GenerateRequest {
         source: "src/event/client.rs",
         output_filename: "./client_event.rs",
-        output_type_name: "Client",
+        incoming_type_name: "Client",
+        outgoing_type_name: "Server",
         struct_search_regex: &r,
     });
 
     generate_systems_for_event_queue(GenerateRequest {
         source: "src/event/server.rs",
         output_filename: "./server_event.rs",
-        output_type_name: "Server",
+        incoming_type_name: "Server",
+        outgoing_type_name: "Client",
         struct_search_regex: &r,
     });
 

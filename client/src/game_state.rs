@@ -37,6 +37,15 @@ pub enum NetworkGameState {
     Quit,
 }
 
+/// Player control mode state - independent of GameState
+#[derive(States, Reflect, PartialEq, Eq, Debug, Clone, Hash, Default)]
+pub enum InputControlState {
+    #[default]
+    Menuing,
+    Freecam,
+    ThirdPerson,
+}
+
 pub struct StatePlugin;
 
 impl Plugin for StatePlugin {
@@ -44,6 +53,7 @@ impl Plugin for StatePlugin {
         app.init_state::<GameState>()
             .init_state::<MenuState>()
             .init_state::<NetworkGameState>()
+            .init_state::<InputControlState>()
             .add_systems(
                 OnEnter(GameState::MainMenu),
                 (despawn_world, enter_main_menu),

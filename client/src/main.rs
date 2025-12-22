@@ -71,6 +71,7 @@ fn main() {
             shared::ConfigPlugin,
             notification::NotificationPlugin,
             WaterPlugin,
+            shared::TickPlugin,
         ))
         .add_plugins((GrassPlugin, LogDiagnosticsPlugin::default()))
         .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue

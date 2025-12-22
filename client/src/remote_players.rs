@@ -2,7 +2,7 @@ use avian3d::prelude::LinearVelocity;
 use bevy::{camera::visibility::NoFrustumCulling, prelude::*};
 use shared::{
     event::{
-        ERFE, MyNetEntParentId, NetEntId,
+        MyNetEntParentId, NetEntId, UDPacketEvent,
         client::{DespawnUnit2, PlayerDisconnected, UpdateUnit2},
     },
     net_components::{NetComponent, ours::ControlledBy},
@@ -48,7 +48,7 @@ impl Plugin for RemotePlayersPlugin {
 
 /// Handle updating unit transforms (mainly for player cameras)
 fn handle_update_unit(
-    mut update_events: ERFE<UpdateUnit2>,
+    mut update_events: UDPacketEvent<UpdateUnit2>,
     mut remote_unit: Query<
         (&NetEntId, &mut Transform),
         With<shared::net_components::ents::SendNetworkTranformUpdates>,
@@ -95,7 +95,7 @@ fn handle_update_unit(
 
 /// Handle despawning units
 fn handle_despawn_unit(
-    mut despawn_events: ERFE<DespawnUnit2>,
+    mut despawn_events: UDPacketEvent<DespawnUnit2>,
     remote_entities: Query<(Entity, &NetEntId)>,
     remote_entities_2: Query<(Entity, &MyNetEntParentId)>,
     mut commands: Commands,
@@ -124,7 +124,7 @@ fn handle_despawn_unit(
 
 /// Handle player disconnections
 fn handle_player_disconnect(
-    mut disconnect_events: ERFE<PlayerDisconnected>,
+    mut disconnect_events: UDPacketEvent<PlayerDisconnected>,
     remote_cameras: Query<(Entity, &ControlledBy, &RemotePlayerCamera)>,
     mut commands: Commands,
     mut notif: MessageWriter<Notification>,

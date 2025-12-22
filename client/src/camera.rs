@@ -168,19 +168,18 @@ fn despawn_cameras(
 /// Handle pause toggling (Escape key)
 fn handle_pause_input(
     keyboard: Res<ButtonInput<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    config: Res<Config>,
     current_state: Res<State<GameState>>,
     mut next_state: ResMut<NextState<GameState>>,
-    mut time_scale: ResMut<GameTimeScale>,
 ) {
-    if keyboard.just_pressed(KeyCode::Escape) {
+    if config.just_pressed(&keyboard, &mouse, GameAction::Escape) {
         match current_state.get() {
             GameState::Paused => {
                 next_state.set(GameState::Playing);
-                time_scale.0 = 1.0;
             }
             GameState::Playing => {
                 next_state.set(GameState::Paused);
-                time_scale.0 = 0.0;
             }
             _ => {}
         }

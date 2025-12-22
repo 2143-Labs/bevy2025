@@ -9,35 +9,22 @@ use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
-    event::{
-        client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2},
-        server::{ChangeMovement, Heartbeat},
-        NetEntId, PlayerId, ERFE,
-    },
-    net_components::{
-        ents::{PlayerCamera, SendNetworkTranformUpdates},
-        foreign::ComponentColor,
-        make_ball, make_man,
-        ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName},
-        ToNetComponent,
-    },
-    netlib::{
-        send_event_to_server_now, send_event_to_server_now_batch, EventToClient, EventToServer,
-        NetworkConnectionTarget, ServerNetworkingResources, Tick,
-    },
-    physics::terrain::TerrainParams,
-    Config, ConfigPlugin,
+    Config, ConfigPlugin, CurrentTick, event::{
+        NetEntId, PlayerId, UDPacketEvent, client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2}, server::{ChangeMovement, Heartbeat}
+    }, net_components::{
+        ToNetComponent, ents::{PlayerCamera, SendNetworkTranformUpdates}, foreign::ComponentColor, make_ball, make_man, ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName}
+    }, netlib::{
+        EventToClient, EventToServer, NetworkConnectionTarget, ServerNetworkingResources, Tick, send_outgoing_event_next_tick, send_outgoing_event_next_tick_batch,
+    }, physics::terrain::TerrainParams
 };
 
 /// How often to run the system
 const HEARTBEAT_MILLIS: u64 = 200;
 /// How long until disconnect
-const HEARTBEAT_TIMEOUT: u64 = 1000;
+const HEARTBEAT_TIMEOUT: u64 = 2000;
 /// How long do you have to connect, as a multipler of the heartbeart timeout.
 /// If the timeout is 1000 ms, then `5` would mean you have `5000ms` to connect.
 const HEARTBEAT_CONNECTION_GRACE_PERIOD: u64 = 5;
-
-const BASE_TICKS_PER_SECOND: u16 = 15;
 
 #[derive(States, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 enum ServerState {
@@ -60,9 +47,6 @@ struct EndpointToPlayerId {
 #[derive(Debug, Component)]
 struct PlayerEndpoint(Endpoint);
 
-#[derive(Resource, Debug)]
-struct CurrentTick(Tick);
-
 //#[derive(Resource, Debug)]
 //struct ServerSettings {
 //tick_rate: u16,
@@ -81,8 +65,6 @@ fn main() {
     shared::event::server::register_events(&mut app);
     app.insert_resource(EndpointToPlayerId::default())
         .insert_resource(HeartbeatList::default())
-        .insert_resource(Time::<Fixed>::from_hz(BASE_TICKS_PER_SECOND as _))
-        .insert_resource(CurrentTick(Tick(1)))
         .add_message::<PlayerDisconnected>()
         .add_message::<DespawnUnit2>()
         .add_plugins(DefaultPlugins)
@@ -97,6 +79,7 @@ fn main() {
             spawns::SpawnPlugin,
             shared::physics::water::SharedWaterPlugin,
             terrain::TerrainPlugin,
+            shared::TickPlugin,
             //StatusPlugin,
         ))
         .init_state::<ServerState>()
@@ -110,7 +93,7 @@ fn main() {
         .add_systems(
             OnEnter(ServerState::Starting),
             (
-                shared::netlib::setup_server::<EventToServer>,
+                shared::netlib::setup_incoming_server::<EventToServer, EventToClient>,
                 |mut state: ResMut<NextState<ServerState>>| {
                     info!("Server started, switching to running state");
                     state.set(ServerState::Running)
@@ -130,14 +113,20 @@ fn main() {
                 on_player_connect,
                 on_player_heartbeat,
                 on_unit_despawn,
-                shared::event::server::drain_events,
+                shared::event::server::drain_incoming_events,
                 on_movement,
             )
                 .run_if(in_state(ServerState::Running)),
         )
         .add_systems(
             FixedUpdate,
-            (broadcast_movement_updates, increment_ticks).run_if(in_state(ServerState::Running)),
+            (broadcast_movement_updates, shared::increment_ticks)
+                .run_if(in_state(ServerState::Running)),
+        )
+        .add_systems(
+            FixedPostUpdate,
+            (shared::netlib::flush_outgoing_events::<EventToServer, EventToClient>)
+                .run_if(in_state(ServerState::Running)),
         )
         .add_systems(
             Update,
@@ -167,7 +156,7 @@ pub struct DisconnectedPlayer {
 
 #[allow(clippy::too_many_arguments)]
 fn on_player_connect(
-    mut new_players: ERFE<shared::event::server::ConnectRequest>,
+    mut new_players: UDPacketEvent<shared::event::server::ConnectRequest>,
     mut heartbeat_mapping: ResMut<HeartbeatList>,
     mut endpoint_to_player_id: ResMut<EndpointToPlayerId>,
 
@@ -279,8 +268,8 @@ fn on_player_connect(
             });
 
             // Tell all connected clients about your new player and camera
-            send_event_to_server_now_batch(
-                &sr.handler,
+            send_outgoing_event_next_tick_batch(
+                &sr,
                 c_net_client.0,
                 &[
                     // their camera
@@ -351,7 +340,7 @@ fn on_player_connect(
             world_data.units.len()
         );
         let event = EventToClient::WorldData2(world_data);
-        send_event_to_server_now(&sr.handler, player.endpoint, &event);
+        send_outgoing_event_next_tick(&sr, player.endpoint, &event);
 
         // send remaining world data in batches
         for ball_unit in unit_list_to_new_client_balls_and_men.chunks(100) {
@@ -360,7 +349,7 @@ fn on_player_connect(
                 .map(|u| EventToClient::SpawnUnit2(u.clone()))
                 .collect::<Vec<_>>();
 
-            send_event_to_server_now_batch(&sr.handler, player.endpoint, &events);
+            send_outgoing_event_next_tick_batch(&sr, player.endpoint, &events);
         }
     }
 }
@@ -408,7 +397,7 @@ fn on_player_disconnect(
         }
 
         for (c_ent, net_client, player_id) in &clients {
-            send_event_to_server_now_batch(&sr.handler, net_client.0, &events);
+            send_outgoing_event_next_tick_batch(&sr, net_client.0, &events);
             if player_id == &player.id {
                 commands
                     .entity(c_ent)
@@ -451,12 +440,12 @@ fn on_unit_despawn(
     }
 
     for net_client in &clients {
-        send_event_to_server_now_batch(&sr.handler, net_client.0, &events);
+        send_outgoing_event_next_tick_batch(&sr, net_client.0, &events);
     }
 }
 
 fn on_player_heartbeat(
-    mut pd: ERFE<Heartbeat>,
+    mut pd: UDPacketEvent<Heartbeat>,
     heartbeat_mapping: Res<HeartbeatList>,
     endpoint_mapping: Res<EndpointToPlayerId>,
 ) {
@@ -471,7 +460,7 @@ fn on_player_heartbeat(
 }
 
 fn on_movement(
-    mut pd: ERFE<ChangeMovement>,
+    mut pd: UDPacketEvent<ChangeMovement>,
     mut ent_to_move: Query<(&NetEntId, &mut Transform), With<SendNetworkTranformUpdates>>,
 ) {
     'event: for movement in pd.read() {
@@ -526,15 +515,7 @@ fn broadcast_movement_updates(
             events_to_send.len()
         );
         for c_net_client in &clients {
-            send_event_to_server_now_batch(&sr.handler, c_net_client.0, &events_to_send);
+            send_outgoing_event_next_tick_batch(&sr, c_net_client.0, &events_to_send);
         }
-    }
-}
-
-fn increment_ticks(mut current_tick: ResMut<CurrentTick>) {
-    current_tick.0.increment();
-
-    if current_tick.0 .0.is_multiple_of(100) {
-        debug!("Server Tick: {:?}", current_tick.0);
     }
 }

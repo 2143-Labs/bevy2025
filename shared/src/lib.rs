@@ -4,10 +4,14 @@ use bevy::prelude::*;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
+use crate::netlib::Tick;
+
 pub mod event;
 pub mod net_components;
 pub mod netlib;
 pub mod physics;
+
+pub const BASE_TICKS_PER_SECOND: u16 = 15;
 
 #[derive(Reflect, Hash, Eq, PartialEq, Clone, Deserialize, Serialize, Debug)]
 pub enum GameAction {
@@ -27,6 +31,7 @@ pub enum GameAction {
     Special1,
     Ascend,
     Descend,
+    Escape,
 
     Chat,
 }
@@ -51,6 +56,7 @@ static DEFAULT_BINDS: Lazy<Keybinds> = Lazy::new(|| {
         (GameAction::Fire2, vec![mb(MouseButton::Right)]),
         (GameAction::Mod1, vec![kk(KeyCode::ShiftLeft)]),
         (GameAction::Special1, vec![kk(KeyCode::KeyQ)]),
+        (GameAction::Escape, vec![kk(KeyCode::Escape)]),
         (GameAction::Chat, vec![kk(KeyCode::Enter)]),
     ])
 });
@@ -261,5 +267,25 @@ impl Config {
                 e => panic!("Failed to open config file {e:?}"),
             },
         }
+    }
+}
+
+pub struct TickPlugin;
+
+impl Plugin for TickPlugin {
+    fn build(&self, app: &mut App) {
+        app.insert_resource(Time::<Fixed>::from_hz(BASE_TICKS_PER_SECOND as _))
+            .insert_resource(CurrentTick(Tick(1)));
+    }
+}
+
+#[derive(Resource, Debug)]
+pub struct CurrentTick(pub Tick);
+
+pub fn increment_ticks(mut current_tick: ResMut<CurrentTick>) {
+    current_tick.0.increment();
+
+    if current_tick.0 .0.is_multiple_of(100) {
+        debug!("Server Tick: {:?}", current_tick.0);
     }
 }

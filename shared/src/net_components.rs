@@ -59,7 +59,7 @@ impl ToNetComponent for PlayerId {
 impl SpawnUnit2 {
     pub fn spawn_entity(self, commands: &mut Commands) -> Entity {
         let mut ent_commands = commands.spawn_empty();
-        error!(?self.net_ent_id, "Spawning entity with net_ent_id");
+        trace!(?self.net_ent_id, "Spawning entity with net_ent_id");
         if !self.net_ent_id.is_none() {
             ent_commands.insert(self.net_ent_id);
         }
@@ -108,6 +108,7 @@ pub fn make_man(net_ent_id: NetEntId, transform: Transform, owner: ControlledBy)
             owner.to_net_component(),
             ents::Man(3.0).to_net_component(),
             ents::SendNetworkTranformUpdates.to_net_component(),
+            ents::Interactable.to_net_component(),
             transform.to_net_component(),
             avian3d::prelude::RigidBody::Dynamic.to_net_component(),
             avian3d::prelude::Collider::sphere(3.0).to_net_component(),

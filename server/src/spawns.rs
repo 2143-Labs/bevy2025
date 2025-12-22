@@ -1,14 +1,13 @@
 use bevy::prelude::*;
 use shared::{
     event::{
-        server::{SpawnCircle, SpawnMan},
-        NetEntId, ERFE,
+        NetEntId, UDPacketEvent, client::BeginThirdpersonControllingUnit, server::{SpawnCircle, SpawnMan}
     },
     net_components::{
         make_man,
         ours::{ControlledBy, DespawnOnPlayerDisconnect},
     },
-    netlib::{send_event_to_server_now, EventToClient, ServerNetworkingResources},
+    netlib::{EventToClient, ServerNetworkingResources, send_outgoing_event_next_tick},
 };
 
 use crate::{make_ball, ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint, ServerState};
@@ -32,7 +31,7 @@ impl Plugin for SpawnPlugin {
 }
 
 fn on_circle_spawn(
-    mut spawns: ERFE<SpawnCircle>,
+    mut spawns: UDPacketEvent<SpawnCircle>,
     mut commands: Commands,
     endpoint_to_player_id: Res<EndpointToPlayerId>,
     sr: Res<ServerNetworkingResources>,
@@ -70,13 +69,13 @@ fn on_circle_spawn(
         info!("Notifying clients of new unit: {:?}", event);
         for endpoint in &clients {
             info!("Sending spawn event to endpoint: {:?}", endpoint.0);
-            send_event_to_server_now(&sr.handler, endpoint.0, &event);
+            send_outgoing_event_next_tick(&sr, endpoint.0, &event);
         }
     }
 }
 
 fn on_man_spawn(
-    mut spawns: ERFE<SpawnMan>,
+    mut spawns: UDPacketEvent<SpawnMan>,
     mut commands: Commands,
     endpoint_to_player_id: Res<EndpointToPlayerId>,
     sr: Res<ServerNetworkingResources>,
@@ -112,8 +111,18 @@ fn on_man_spawn(
         info!("Notifying clients of new unit: {:?}", event);
         for endpoint in &clients {
             info!("Sending spawn event to endpoint: {:?}", endpoint.0);
-            send_event_to_server_now(&sr.handler, endpoint.0, &event);
+            send_outgoing_event_next_tick(&sr, endpoint.0, &event);
         }
+
+        // Now, we send the user control event to this client
+        send_outgoing_event_next_tick(
+            &sr,
+            spawn_ev.endpoint,
+            &EventToClient::BeginThirdpersonControllingUnit(BeginThirdpersonControllingUnit {
+                player_id: *player_id_of_spawner,
+                unit: Some(ent_id),
+            }),
+        );
     }
 }
 

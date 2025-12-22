@@ -4,19 +4,17 @@ use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
     Config,
     event::{
-        ERFE, MyNetEntParentId, NetEntId,
-        client::{SpawnUnit2, WorldData2},
+        MyNetEntParentId, NetEntId, PlayerId, UDPacketEvent,
+        client::{BeginThirdpersonControllingUnit, SpawnUnit2, WorldData2},
         server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle, SpawnMan},
     },
     net_components::{
-        ents::{Ball, Man, PlayerCamera},
+        ents::{Ball, Interactable, Man, PlayerCamera},
         foreign::ComponentColor,
         ours::{PlayerColor, PlayerName},
     },
     netlib::{
-        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint,
-        NetworkingResources, send_event_to_server_now, send_event_to_server_now_batch,
-        setup_client,
+        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, send_outgoing_event_next_tick, send_outgoing_event_now, send_outgoing_event_now_batch, setup_incoming_client
     },
     physics::terrain::TerrainParams,
 };
@@ -24,7 +22,7 @@ use shared::{
 use crate::{
     assets::{FontAssets, ModelAssets},
     camera::LocalCamera,
-    game_state::{GameState, NetworkGameState, WorldEntity},
+    game_state::{GameState, InputControlState, NetworkGameState, WorldEntity},
     notification::Notification,
     remote_players::{ApplyNoFrustumCulling, NameLabel, RemotePlayerCamera, RemotePlayerModel},
     terrain::SetupTerrain,
@@ -37,6 +35,9 @@ pub struct DespawnOnWorldData;
 #[derive(Resource)]
 struct PendingCameraId(NetEntId);
 
+#[derive(Resource)]
+struct LocalPlayerId(pub PlayerId);
+
 pub struct NetworkingPlugin;
 impl Plugin for NetworkingPlugin {
     fn build(&self, app: &mut App) {
@@ -45,7 +46,7 @@ impl Plugin for NetworkingPlugin {
             OnEnter(NetworkGameState::ClientConnecting),
             (
                 // Setup the client and immediatly advance the state
-                setup_client::<EventToClient>,
+                setup_incoming_client::<EventToClient, EventToServer>,
                 |mut state: ResMut<NextState<NetworkGameState>>| {
                     state.set(NetworkGameState::ClientSendRequestPacket)
                 },
@@ -59,10 +60,14 @@ impl Plugin for NetworkingPlugin {
         // alive
         .add_systems(
             Update,
-            (shared::event::client::drain_events, receive_world_data).run_if(
-                in_state(NetworkGameState::ClientSendRequestPacket)
-                    .or(in_state(NetworkGameState::ClientConnected)),
-            ),
+            (
+                shared::event::client::drain_incoming_events,
+                receive_world_data,
+            )
+                .run_if(
+                    in_state(NetworkGameState::ClientSendRequestPacket)
+                        .or(in_state(NetworkGameState::ClientConnected)),
+                ),
         )
         .add_systems(
             Update,
@@ -81,6 +86,17 @@ impl Plugin for NetworkingPlugin {
             )
                 .run_if(in_state(NetworkGameState::ClientConnected)),
         )
+        .add_systems(
+            FixedUpdate,
+            (shared::increment_ticks)
+                .run_if(in_state(NetworkGameState::ClientConnected)),
+        )
+        .add_systems(
+            FixedPostUpdate,
+            (shared::netlib::flush_outgoing_events::<EventToClient, EventToServer>)
+                .run_if(in_state(NetworkGameState::ClientSendRequestPacket)
+                        .or(in_state(NetworkGameState::ClientConnected))),
+        )
         //.add_systems(
         //Update,
         //cast_skill_1
@@ -91,14 +107,15 @@ impl Plugin for NetworkingPlugin {
         .add_systems(
             FixedUpdate,
             (send_movement_camera)
-                .chain()
                 .run_if(in_state(NetworkGameState::ClientConnected))
+                .run_if(in_state(InputControlState::Freecam))
                 .run_if(in_state(GameState::Playing)),
         )
         .add_systems(
             Update,
             (
                 // TODO receive new world data at any time?
+                on_begin_controlling_unit,
                 spawn_networked_unit_forward_local,
                 on_general_spawn_network_unit,
                 on_special_unit_spawn_remote_camera,
@@ -120,7 +137,7 @@ impl Plugin for NetworkingPlugin {
 }
 
 fn spawn_networked_unit_forward_local(
-    mut unit_spawns: ERFE<SpawnUnit2>,
+    mut unit_spawns: UDPacketEvent<SpawnUnit2>,
     mut unit_spawn_writer: MessageWriter<SpawnUnit2>,
     //mut commands: Commands,
     //mut meshes: ResMut<Assets<Mesh>>,
@@ -134,6 +151,9 @@ fn spawn_networked_unit_forward_local(
 
 #[derive(Component)]
 pub struct NeedsClientConstruction;
+
+#[derive(Component)]
+pub struct CurrentThirdPersonControlledUnit;
 
 // Given some unit
 fn on_general_spawn_network_unit(
@@ -211,13 +231,13 @@ fn on_special_unit_spawn_man(
 fn on_special_unit_spawn_remote_camera(
     mut commands: Commands,
     mut unit_query: Query<
-        (Entity, &NetEntId, &PlayerColor, &PlayerCamera),
+        (Entity, &NetEntId, &PlayerColor, &PlayerCamera, &PlayerName),
         With<NeedsClientConstruction>,
     >,
     model_assets: Res<ModelAssets>,
     font_assets: Res<FontAssets>,
 ) {
-    for (entity, ent_id, player_color, _player_camera) in unit_query.iter_mut() {
+    for (entity, ent_id, player_color, _player_camera, player_name) in unit_query.iter_mut() {
         commands
             .entity(entity)
             .insert(RemotePlayerCamera)
@@ -246,7 +266,7 @@ fn on_special_unit_spawn_remote_camera(
                 position_type: PositionType::Absolute,
                 ..default()
             },
-            Text::new("Test"),
+            Text::new(player_name.name.clone()),
             TextFont {
                 font: font_assets.regular.clone(),
                 font_size: 20.0,
@@ -260,7 +280,7 @@ fn on_special_unit_spawn_remote_camera(
 }
 
 fn send_connect_packet(
-    sr: Res<NetworkingResources<EventToClient>>,
+    sr: Res<ClientNetworkingResources>,
     //args: Res<CliArgs>,
     mse: Res<MainServerEndpoint>,
     config: Res<Config>,
@@ -284,8 +304,70 @@ fn send_connect_packet(
         "Connecting server={} name={name:?}",
         mse.0.addr(),
     )));
-    send_event_to_server_now(&sr.handler, mse.0, &event);
+    send_outgoing_event_now(&sr.handler, mse.0, &event);
     info!("Sent connection packet to {}", mse.0);
+}
+
+fn on_begin_controlling_unit(
+    mut commands: Commands,
+    mut unit_event: UDPacketEvent<BeginThirdpersonControllingUnit>,
+    units: Query<(Entity, &NetEntId), With<Interactable>>,
+    current_thirdperson_unit: Query<(Entity, &NetEntId), With<CurrentThirdPersonControlledUnit>>,
+    our_player_id: Res<LocalPlayerId>,
+    mut next_control_state: ResMut<NextState<crate::game_state::InputControlState>>,
+) {
+    for event in unit_event.read() {
+        warn!(
+            "Received BeginThirdpersonControllingUnit for player {:?}, unit {:?}",
+            event.event.player_id, event.event.unit
+        );
+        if event.event.player_id != our_player_id.0 {
+            // Not for us
+            warn!(
+                "Received BeginThirdpersonControllingUnit for player {:?}, but we are {:?}",
+                event.event.player_id, our_player_id.0
+            );
+            continue;
+        }
+
+        let maybe_unit = event.event.unit;
+
+        if let Ok((cur_thirdperson_ent, cur_thirdperson_ent_id)) = current_thirdperson_unit.single()
+        {
+            if let Some(unit_ent_id) = maybe_unit
+                && &unit_ent_id == cur_thirdperson_ent_id
+            {
+                // Already controlling this unit
+                info!(
+                    "Already controlling unit {:?}, ignoring BeginThirdpersonControllingUnit",
+                    unit_ent_id
+                );
+                continue;
+            }
+
+            // We know its a different unit, so remove the component from this ent
+            commands
+                .entity(cur_thirdperson_ent)
+                .remove::<CurrentThirdPersonControlledUnit>();
+        }
+
+        if let Some(unit_ent_id) = maybe_unit {
+            // Find the entity with this NetEntId
+            for (ent, ent_id) in units.iter() {
+                if *ent_id == unit_ent_id {
+                    info!("Now controlling unit {:?}", unit_ent_id);
+                    commands
+                        .entity(ent)
+                        .insert(CurrentThirdPersonControlledUnit);
+                    next_control_state.set(crate::game_state::InputControlState::ThirdPerson);
+                    break;
+                }
+            }
+        } else {
+            error!("No unit found locally to control, staying freecam");
+            next_control_state.set(crate::game_state::InputControlState::Freecam);
+        }
+    }
 }
 
 //fn build_healthbar(
@@ -314,7 +396,7 @@ fn send_connect_packet(
 /// This function is called when we receive the world data from the server on first connect
 #[allow(unused, clippy::too_many_arguments, clippy::type_complexity)]
 fn receive_world_data(
-    mut world_data: ERFE<WorldData2>,
+    mut world_data: UDPacketEvent<WorldData2>,
     mut commands: Commands,
     mut notif: MessageWriter<Notification>,
     mut local_player: Query<(Entity, &mut Transform), With<LocalCamera>>,
@@ -326,9 +408,13 @@ fn receive_world_data(
     mut terrain_data: ResMut<TerrainParams>,
     ents_to_despawn: Query<Entity, Or<(With<DespawnOnWorldData>, With<WorldEntity>)>>,
     mut msg_terrain_events: MessageWriter<SetupTerrain>,
+    mut next_control_state: ResMut<NextState<crate::game_state::InputControlState>>,
 ) {
     for event in world_data.read() {
         game_state.set(NetworkGameState::ClientConnected);
+        commands.insert_resource(LocalPlayerId(event.event.your_player_id));
+        // We spawn in freecam
+        next_control_state.set(crate::game_state::InputControlState::Freecam);
         info!("Connected to server");
 
         // Tell the client to update the terrain with the server's seed
@@ -348,7 +434,7 @@ fn receive_world_data(
         info!("Received {} units from server", event.event.units.len());
         for unit in &event.event.units {
             if unit.net_ent_id == my_camera_id {
-                // Skip our own player and camera units - they're already set up locally
+                // Skip our own camera units - they're already set up locally
                 info!("  Skipping own unit {:?}", unit.net_ent_id);
             } else {
                 info!(
@@ -372,49 +458,12 @@ fn receive_world_data(
                 spawn_units.write(unit.clone());
             }
         }
-
-        //commands.spawn((
-        //HPIndicator::HP,
-        //TextBundle::from_section(
-        //"HP: #",
-        //TextStyle {
-        //font: asset_server.load("fonts/ttf/JetBrainsMono-Regular.ttf"),
-        //font_size: 45.0,
-        //color: Color::rgb(0.4, 0.5, 0.75),
-        //},
-        //)
-        //.with_text_justify(JustifyText::Center)
-        //.with_style(Style {
-        //position_type: PositionType::Absolute,
-        //right: Val::Px(10.0),
-        //bottom: Val::Px(10.0),
-        //..default()
-        //}),
-        //));
-        //commands.spawn((
-        //HPIndicator::Deaths,
-        //TextBundle::from_section(
-        //"",
-        //TextStyle {
-        //font: asset_server.load("fonts/ttf/JetBrainsMono-Regular.ttf"),
-        //font_size: 45.0,
-        //color: Color::rgb(0.9, 0.2, 0.2),
-        //},
-        //)
-        //.with_text_justify(JustifyText::Center)
-        //.with_style(Style {
-        //position_type: PositionType::Absolute,
-        //right: Val::Px(10.0),
-        //bottom: Val::Px(50.0),
-        //..default()
-        //}),
-        //));
     }
 }
 
 fn send_heartbeat(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoint>) {
     let event = EventToServer::Heartbeat(Heartbeat {});
-    send_event_to_server_now(&sr.handler, mse.0, &event);
+    send_outgoing_event_now(&sr.handler, mse.0, &event);
 }
 
 //fn send_interp(
@@ -441,6 +490,7 @@ fn apply_pending_camera_id(
                 .entity(cam_entity)
                 .insert(pending_id.0)
                 .insert(PlayerCamera);
+
             commands.remove_resource::<PendingCameraId>();
         }
     }
@@ -461,7 +511,7 @@ fn send_movement_camera(
             transform: *transform,
         }));
 
-        send_event_to_server_now_batch(&sr.handler, mse.0, &events);
+        send_outgoing_event_now_batch(&sr.handler, mse.0, &events);
     }
 }
 
@@ -539,7 +589,7 @@ fn our_client_wants_to_spawn_circle(
     for thing in ev_sa.read() {
         let event = EventToServer::SpawnCircle(thing.clone());
         info!("Sending spawn circle event to server");
-        send_event_to_server_now(&sr.handler, mse.0, &event);
+        send_outgoing_event_next_tick(&sr, mse.0, &event);
     }
 }
 
@@ -551,7 +601,7 @@ fn our_client_wants_to_spawn_man(
     for thing in ev_sa.read() {
         let event = EventToServer::SpawnMan(thing.clone());
         info!("Sending spawn man event to server");
-        send_event_to_server_now(&sr.handler, mse.0, &event);
+        send_outgoing_event_next_tick(&sr, mse.0, &event);
     }
 }
 

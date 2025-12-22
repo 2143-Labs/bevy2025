@@ -45,4 +45,10 @@ pub struct Chat {
     pub text: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct BeginThirdpersonControllingUnit {
+    pub player_id: PlayerId,
+    pub unit: Option<NetEntId>,
+}
+
 include!(concat!(env!("OUT_DIR"), "/client_event.rs"));

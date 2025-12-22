@@ -52,7 +52,7 @@ pub struct EventFromEndpoint<E> {
 }
 
 /// Event Reader with endpoint data.
-pub type ERFE<'w, 's, E> = MessageReader<'w, 's, EventFromEndpoint<E>>;
+pub type UDPacketEvent<'w, 's, E> = MessageReader<'w, 's, EventFromEndpoint<E>>;
 
 impl<E> EventFromEndpoint<E> {
     pub fn new(endpoint: Endpoint, e: E) -> Self {
