@@ -256,7 +256,6 @@ fn freecam_controller(
     if movement != Vec3::ZERO {
         transform.translation += movement;
     }
-
 }
 
 /// Start transition from playing to paused

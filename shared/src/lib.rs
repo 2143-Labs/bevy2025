@@ -43,9 +43,7 @@ static DEFAULT_BINDS: Lazy<Keybinds> = Lazy::new(|| {
         (GameAction::RotateRight, vec![kk(KeyCode::KeyE)]),
         (GameAction::Ascend, vec![kk(KeyCode::Space)]),
         (GameAction::Descend, vec![kk(KeyCode::ShiftLeft)]),
-
         (GameAction::Jump, vec![kk(KeyCode::Space)]),
-
         (GameAction::Use, vec![kk(KeyCode::KeyE)]),
         (GameAction::ChangeCamera, vec![kk(KeyCode::KeyC)]),
         (GameAction::UnlockCursor, vec![kk(KeyCode::KeyX)]),
@@ -61,8 +59,11 @@ impl GameAction {
     /// Run condition that returns true if this keycode was just pressed
     pub const fn just_pressed(
         &'static self,
-    ) -> impl Fn(Res<ButtonInput<KeyCode>>, Res<ButtonInput<MouseButton>>, Res<Config>) -> bool {
-        move |keyboard_input, mouse_input, config| config.just_pressed(&keyboard_input, &mouse_input, self.clone())
+    ) -> impl Fn(Res<ButtonInput<KeyCode>>, Res<ButtonInput<MouseButton>>, Res<Config>) -> bool
+    {
+        move |keyboard_input, mouse_input, config| {
+            config.just_pressed(&keyboard_input, &mouse_input, self.clone())
+        }
     }
 }
 
@@ -123,30 +124,42 @@ impl Config {
                     if keyboard_input(*c) {
                         return true;
                     }
-                },
+                }
                 KeyCodeOrMouseButton::MouseButton(mb) => {
                     if mouse_input(*mb) {
                         return true;
                     }
-                },
+                }
             }
         }
 
         false
     }
 
-    pub fn just_pressed(&self, keyboard_input: &Res<ButtonInput<KeyCode>>, mouse_input: &Res<ButtonInput<MouseButton>>, ga: GameAction) -> bool {
+    pub fn just_pressed(
+        &self,
+        keyboard_input: &Res<ButtonInput<KeyCode>>,
+        mouse_input: &Res<ButtonInput<MouseButton>>,
+        ga: GameAction,
+    ) -> bool {
         self.pressing_keybind(
             |x| keyboard_input.just_pressed(x),
             |x| mouse_input.just_pressed(x),
-        ga)
+            ga,
+        )
     }
 
-    pub fn pressed(&self, keyboard_input: &Res<ButtonInput<KeyCode>>, mouse_input: &Res<ButtonInput<MouseButton>>, ga: GameAction) -> bool {
+    pub fn pressed(
+        &self,
+        keyboard_input: &Res<ButtonInput<KeyCode>>,
+        mouse_input: &Res<ButtonInput<MouseButton>>,
+        ga: GameAction,
+    ) -> bool {
         self.pressing_keybind(
             |x| keyboard_input.pressed(x),
             |x| mouse_input.pressed(x),
-        ga)
+            ga,
+        )
     }
 
     pub fn just_released(

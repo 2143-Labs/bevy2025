@@ -36,8 +36,8 @@ pub struct PlayerColor {
 ///// This struct represents all the possible things a unit might be trying to do this tick.
 //#[derive(Serialize, Deserialize, Component, Debug, PartialEq, Clone)]
 //pub enum ControlIntent {
-    //MoveTo3D(Vec3),
-    //Stop,
+//MoveTo3D(Vec3),
+//Stop,
 //}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

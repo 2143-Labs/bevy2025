@@ -1,6 +1,8 @@
 use avian3d::prelude::*;
 use bevy::{pbr::ExtendedMaterial, prelude::*};
-use shared::physics::terrain::{generate_terrain_mesh, spawn_boundary_walls, BoundaryWall, Terrain, TerrainParams};
+use shared::physics::terrain::{
+    BoundaryWall, Terrain, TerrainParams, generate_terrain_mesh, spawn_boundary_walls,
+};
 
 use crate::{
     grass::{GrassMaterial, WindSettings, create_grass_bundles},
@@ -21,8 +23,7 @@ pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .insert_resource(WorldSpawned(false))
+        app.insert_resource(WorldSpawned(false))
             .add_systems(OnEnter(GameState::Playing), setup_terrain_client)
             .add_systems(OnEnter(GameState::MainMenu), despawn_terrain)
             // Temporarily disabled to test if this is causing the red rectangle

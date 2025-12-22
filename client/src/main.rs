@@ -1,34 +1,31 @@
+mod assets;
 mod camera;
+mod debug;
 pub mod game_state;
 mod grass;
 mod network;
 pub mod notification;
 mod physics;
 mod picking;
+mod remote_players;
 mod terrain;
 mod ui;
 mod water;
-mod assets;
-mod debug;
-mod remote_players;
 
-use bevy::{
-    diagnostic::LogDiagnosticsPlugin,
-    prelude::*,
-};
+use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
 
+use assets::AssetsPlugin;
 use camera::CameraPlugin;
 use clap::Parser;
+use debug::DebugPlugin;
 use grass::GrassPlugin;
 use physics::PhysicsPlugin;
 use picking::PickingPlugin;
+use remote_players::RemotePlayersPlugin;
 use shared::Config;
 use terrain::TerrainPlugin;
 use ui::UIPlugin;
 use water::WaterPlugin;
-use assets::AssetsPlugin;
-use debug::DebugPlugin;
-use remote_players::RemotePlayersPlugin;
 
 #[derive(Parser, Resource, Debug)]
 struct ClapArgs {
@@ -75,10 +72,7 @@ fn main() {
             notification::NotificationPlugin,
             WaterPlugin,
         ))
-        .add_plugins((
-            GrassPlugin,
-            LogDiagnosticsPlugin::default(),
-        ))
+        .add_plugins((GrassPlugin, LogDiagnosticsPlugin::default()))
         .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue
         .insert_resource(args)
         .add_systems(Startup, check_all_clap_args)
@@ -86,10 +80,7 @@ fn main() {
 }
 
 /// This looks for the clap args like autoconnect and modifys the config if neede
-fn check_all_clap_args(
-    mut config: ResMut<Config>,
-    args: Res<ClapArgs>,
-) {
+fn check_all_clap_args(mut config: ResMut<Config>, args: Res<ClapArgs>) {
     if let Some(ip_and_port) = &args.autoconnect {
         // 2 choices: ip:port or just ip and then default port
         let mut parts = ip_and_port.split(':');

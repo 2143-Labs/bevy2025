@@ -34,7 +34,6 @@ impl Tick {
     }
 }
 
-
 pub use crate::event::client::EventToClient;
 pub use crate::event::server::EventToServer;
 
@@ -77,10 +76,7 @@ pub fn send_event_to_server_now_batch<T: NetworkingEvent>(
     trace!(?event, "Sending batch event");
     let data = postcard::to_stdvec(&EventGroupingRef::Batch(event)).unwrap();
     info!(data_len = data.len(), "Sending batch event of size");
-    handler.network().send(
-        endpoint,
-        &data,
-    );
+    handler.network().send(endpoint, &data);
 }
 
 pub fn setup_server<T: NetworkingEvent>(commands: Commands, config: Res<NetworkConnectionTarget>) {

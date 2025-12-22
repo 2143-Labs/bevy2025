@@ -21,8 +21,7 @@ pub struct PhysicsPlugin;
 
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .add_plugins(avian3d::PhysicsPlugins::default())
+        app.add_plugins(avian3d::PhysicsPlugins::default())
             .add_systems(OnEnter(GameState::Playing), setup_ball_counter_ui)
             .add_systems(OnEnter(GameState::MainMenu), despawn_ball_counter_ui)
             .add_systems(
@@ -35,9 +34,10 @@ impl Plugin for PhysicsPlugin {
             )
             .add_systems(
                 Update,
-                (spawn_ball_on_space, update_ball_counter, spawn_man_on_use1).run_if(in_state(GameState::Playing)),
+                (spawn_ball_on_space, update_ball_counter, spawn_man_on_use1)
+                    .run_if(in_state(GameState::Playing)),
             )
-        .insert_resource(Gravity(Vec3::new(0.0, -9.81, 0.0)));
+            .insert_resource(Gravity(Vec3::new(0.0, -9.81, 0.0)));
     }
 }
 /// Manage physics pause state based on game state
@@ -114,7 +114,6 @@ fn spawn_man_on_use1(
         });
     }
 }
-
 
 fn spawn_networked_unit(
     mut unit_spawns: ERFE<SpawnUnit2>,

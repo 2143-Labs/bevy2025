@@ -13,7 +13,10 @@ use bevy::prelude::*;
 use bevy_pbr::StandardMaterial;
 use serde::{Deserialize, Serialize};
 
-use crate::{event::{MyNetEntParentId, NetEntId, PlayerId, client::SpawnUnit2}, net_components::ours::ControlledBy};
+use crate::{
+    event::{client::SpawnUnit2, MyNetEntParentId, NetEntId, PlayerId},
+    net_components::ours::ControlledBy,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MeshGenerator(pub String, pub f32);
@@ -187,7 +190,12 @@ pub trait ToNetComponent {
     fn to_net_component(self) -> NetComponent;
 }
 
-pub fn make_ball(net_ent_id: NetEntId, transform: Transform, color: Color, owner: ControlledBy)-> SpawnUnit2 {
+pub fn make_ball(
+    net_ent_id: NetEntId,
+    transform: Transform,
+    color: Color,
+    owner: ControlledBy,
+) -> SpawnUnit2 {
     let sphere_size = 0.5;
     SpawnUnit2 {
         net_ent_id,
@@ -220,10 +228,11 @@ pub fn make_man(net_ent_id: NetEntId, transform: Transform, owner: ControlledBy)
             groups::NormalMeshMaterial {
                 mesh: MeshGenerator::new("sphere", 3.0),
                 material: MaterialGenerator::new("basic", Color::linear_rgb(0.8, 0.7, 0.6)),
-            }.to_net_component(),
+            }
+            .to_net_component(),
             avian3d::prelude::RigidBody::Dynamic.to_net_component(),
             avian3d::prelude::Collider::sphere(3.0).to_net_component(),
             avian3d::prelude::Mass(70.0).to_net_component(),
-        ]
+        ],
     }
 }

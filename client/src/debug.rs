@@ -5,9 +5,9 @@ use bevy::prelude::*;
 
 #[cfg(feature = "inspector")]
 use bevy_inspector_egui::{
-    quick::WorldInspectorPlugin,
     bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass},
     egui,
+    quick::WorldInspectorPlugin,
 };
 
 pub struct DebugPlugin;
@@ -20,12 +20,14 @@ impl Plugin for DebugPlugin {
     fn build(&self, app: &mut App) {
         #[cfg(feature = "inspector")]
         {
-
             app.add_plugins(EguiPlugin::default())
                 .add_plugins(WorldInspectorPlugin::new())
                 .init_resource::<EguiReady>()
                 .add_systems(First, mark_egui_ready)
-                .add_systems(EguiPrimaryContextPass, visibility_toggle_ui.run_if(|ready: Res<EguiReady>| ready.0));
+                .add_systems(
+                    EguiPrimaryContextPass,
+                    visibility_toggle_ui.run_if(|ready: Res<EguiReady>| ready.0),
+                );
         }
 
         #[cfg(not(feature = "inspector"))]
@@ -38,10 +40,7 @@ impl Plugin for DebugPlugin {
 
 /// Mark egui as ready after a short delay to allow initialization
 #[cfg(feature = "inspector")]
-fn mark_egui_ready(
-    mut ready: ResMut<EguiReady>,
-    mut frame_count: Local<u32>,
-) {
+fn mark_egui_ready(mut ready: ResMut<EguiReady>, mut frame_count: Local<u32>) {
     if !ready.0 {
         *frame_count += 1;
         // Wait a few frames for egui to initialize
@@ -160,7 +159,12 @@ fn visibility_toggle_ui(
             // Toggle children recursively
             if let Some(children) = children {
                 let children_list: Vec<Entity> = children.iter().collect();
-                toggle_children_visibility_list(&children_list, &children_query, &mut query, is_visible);
+                toggle_children_visibility_list(
+                    &children_list,
+                    &children_query,
+                    &mut query,
+                    is_visible,
+                );
             }
         }
     }
@@ -185,7 +189,13 @@ fn render_entity_tree(
     name: &str,
     is_visible: bool,
     children: &Option<Vec<Entity>>,
-    all_entities: &[(Entity, Option<String>, bool, Option<Vec<Entity>>, Option<Entity>)],
+    all_entities: &[(
+        Entity,
+        Option<String>,
+        bool,
+        Option<Vec<Entity>>,
+        Option<Entity>,
+    )],
     tree_state: &mut TreeState,
     changes: &mut Vec<(Entity, bool)>,
 ) {
@@ -224,8 +234,9 @@ fn render_entity_tree(
             ui.indent(entity, |ui| {
                 for &child_entity in child_list {
                     // Find child data
-                    if let Some((_, child_name, child_visible, child_children, _)) =
-                        all_entities.iter().find(|(e, _, _, _, _)| *e == child_entity)
+                    if let Some((_, child_name, child_visible, child_children, _)) = all_entities
+                        .iter()
+                        .find(|(e, _, _, _, _)| *e == child_entity)
                     {
                         if let Some(child_name_str) = child_name {
                             render_entity_tree(

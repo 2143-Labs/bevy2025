@@ -6,16 +6,28 @@ use std::{
 
 use avian3d::prelude::LinearVelocity;
 use bevy::{
-    app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, time::common_conditions::on_timer,
+    app::ScheduleRunnerPlugin, prelude::*,
 };
 use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
-    Config, ConfigPlugin, event::{
-        ERFE, MyNetEntParentId, NetEntId, PlayerId, client::{PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2}, server::{ChangeMovement, Heartbeat}
-    }, net_components::{ToNetComponent, ents::{PlayerCamera, SendNetworkTranformUpdates}, make_ball, make_man, ours::{ControlledBy, PlayerColor, PlayerName}}, netlib::{
-        EventToClient, EventToServer, NetworkConnectionTarget, ServerNetworkingResources, Tick, send_event_to_server_now, send_event_to_server_now_batch
-    }, physics::terrain::TerrainParams
+    event::{
+        client::{PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2},
+        server::{ChangeMovement, Heartbeat},
+        MyNetEntParentId, NetEntId, PlayerId, ERFE,
+    },
+    net_components::{
+        ents::{PlayerCamera, SendNetworkTranformUpdates},
+        make_ball, make_man,
+        ours::{ControlledBy, PlayerColor, PlayerName},
+        ToNetComponent,
+    },
+    netlib::{
+        send_event_to_server_now, send_event_to_server_now_batch, EventToClient, EventToServer,
+        NetworkConnectionTarget, ServerNetworkingResources, Tick,
+    },
+    physics::terrain::TerrainParams,
+    Config, ConfigPlugin,
 };
 
 /// How often to run the system
@@ -124,9 +136,7 @@ fn main() {
         )
         .add_systems(
             FixedUpdate,
-            (broadcast_movement_updates,
-             increment_ticks,)
-                .run_if(in_state(ServerState::Running)),
+            (broadcast_movement_updates, increment_ticks).run_if(in_state(ServerState::Running)),
         )
         .add_systems(
             Update,
@@ -157,8 +167,20 @@ fn on_player_connect(
     mut endpoint_to_player_id: ResMut<EndpointToPlayerId>,
 
     clients: Query<(&PlayerEndpoint, &PlayerId, &PlayerName, &PlayerColor), With<ConnectedPlayer>>,
-    cameras: Query<(&NetEntId, &ControlledBy, &Transform, &PlayerName, &PlayerColor), With<PlayerCamera>>,
-    balls: Query<(&Transform, &ControlledBy, &NetEntId, &HasColor), With<shared::net_components::ents::Ball>>,
+    cameras: Query<
+        (
+            &NetEntId,
+            &ControlledBy,
+            &Transform,
+            &PlayerName,
+            &PlayerColor,
+        ),
+        With<PlayerCamera>,
+    >,
+    balls: Query<
+        (&Transform, &ControlledBy, &NetEntId, &HasColor),
+        With<shared::net_components::ents::Ball>,
+    >,
     men: Query<(&Transform, &ControlledBy, &NetEntId), With<shared::net_components::ents::Man>>,
 
     sr: Res<ServerNetworkingResources>,
@@ -176,7 +198,9 @@ fn on_player_connect(
             .unwrap_or_else(|| format!("Player #{}", rand::rng().random_range(1..10000)));
 
         let spawn_location = player.event.my_location;
-        let player_color = PlayerColor { hue: player.event.color_hue };
+        let player_color = PlayerColor {
+            hue: player.event.color_hue,
+        };
 
         let new_player_id = PlayerId::random();
 
@@ -209,9 +233,15 @@ fn on_player_connect(
         let mut unit_list_to_new_client = vec![];
 
         // Next, add all cameras, clients, balls, and men to the unit list
-        info!("Found {} existing cameras to send to new player", cameras.iter().len());
+        info!(
+            "Found {} existing cameras to send to new player",
+            cameras.iter().len()
+        );
         for (c_net_ent, c_controlled_by, c_tfm, c_name, c_color) in &cameras {
-            info!("  - Camera {:?} at {:?} for player {:?}", c_net_ent, c_tfm.translation, c_controlled_by);
+            info!(
+                "  - Camera {:?} at {:?} for player {:?}",
+                c_net_ent, c_tfm.translation, c_controlled_by
+            );
             // SPAWN B
             unit_list_to_new_client.push(SpawnUnit2 {
                 net_ent_id: *c_net_ent,
@@ -267,12 +297,21 @@ fn on_player_connect(
 
         // gather the balls in the unit list
         for (&transform, controlled_by, &ent_id, has_color) in &balls {
-            unit_list_to_new_client_balls_and_men.push(make_ball(ent_id, transform, has_color.0, controlled_by.clone()));
+            unit_list_to_new_client_balls_and_men.push(make_ball(
+                ent_id,
+                transform,
+                has_color.0,
+                controlled_by.clone(),
+            ));
         }
 
         // gather the men in the unit list
         for (&transform, controlled_by, &ent_id) in &men {
-            unit_list_to_new_client_balls_and_men.push(make_man(ent_id, transform, controlled_by.clone()));
+            unit_list_to_new_client_balls_and_men.push(make_man(
+                ent_id,
+                transform,
+                controlled_by.clone(),
+            ));
         }
 
         // Each time we miss a heartbeat, we increment the Atomic counter.
@@ -299,7 +338,10 @@ fn on_player_connect(
         };
 
         // send initial world data
-        info!("Player connected - sending {} existing units", world_data.units.len());
+        info!(
+            "Player connected - sending {} existing units",
+            world_data.units.len()
+        );
         let event = EventToClient::WorldData2(world_data);
         send_event_to_server_now(&sr.handler, player.endpoint, &event);
 
@@ -383,7 +425,10 @@ fn on_player_heartbeat(
 
 fn on_movement(
     mut pd: ERFE<ChangeMovement>,
-    mut ent_to_move: Query<(&NetEntId, &MyNetEntParentId, &mut Transform), With<SendNetworkTranformUpdates>>,
+    mut ent_to_move: Query<
+        (&NetEntId, &MyNetEntParentId, &mut Transform),
+        With<SendNetworkTranformUpdates>,
+    >,
 ) {
     for movement in pd.read() {
         // The camera NetEntId is directly in the movement event
@@ -400,14 +445,19 @@ fn on_movement(
     }
 }
 
-
 // TODO make this more efficient by batching updates per client and only sending changed components
 // for physics if we think the client needs them
 fn broadcast_movement_updates(
     clients: Query<(&PlayerEndpoint, &NetEntId), With<ConnectedPlayer>>,
     sr: Res<ServerNetworkingResources>,
-    changed_transforms: Query<(&NetEntId, &Transform), (With<SendNetworkTranformUpdates>, Changed<Transform>)>,
-    changed_phys: Query<(&NetEntId, &LinearVelocity), (With<SendNetworkTranformUpdates>, Changed<LinearVelocity>)>,
+    changed_transforms: Query<
+        (&NetEntId, &Transform),
+        (With<SendNetworkTranformUpdates>, Changed<Transform>),
+    >,
+    changed_phys: Query<
+        (&NetEntId, &LinearVelocity),
+        (With<SendNetworkTranformUpdates>, Changed<LinearVelocity>),
+    >,
     //current_tick: Res<CurrentTick>,
 ) {
     let mut events_to_send = vec![];
@@ -432,7 +482,10 @@ fn broadcast_movement_updates(
     }
 
     if !events_to_send.is_empty() {
-        info!("Broadcasting {} movement updates to clients", events_to_send.len());
+        info!(
+            "Broadcasting {} movement updates to clients",
+            events_to_send.len()
+        );
         for (c_net_client, _c_net_ent) in &clients {
             send_event_to_server_now_batch(&sr.handler, c_net_client.0, &events_to_send);
         }

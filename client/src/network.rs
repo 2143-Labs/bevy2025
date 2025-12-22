@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, time::Duration};
+use std::time::Duration;
 
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
@@ -10,8 +10,7 @@ use shared::{
     },
     net_components::{ents::PlayerCamera, ours::PlayerName},
     netlib::{
-        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint,
-        NetworkConnectionTarget, NetworkingResources, send_event_to_server_now,
+        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, NetworkingResources, send_event_to_server_now,
         send_event_to_server_now_batch, setup_client,
     },
     physics::terrain::TerrainParams,
@@ -101,7 +100,6 @@ impl Plugin for NetworkingPlugin {
             )
             .add_message::<SpawnCircle>()
             .add_message::<SpawnMan>();
-
     }
 }
 
@@ -197,7 +195,11 @@ fn receive_world_data(
                 // Skip our own player and camera units - they're already set up locally
                 info!("  Skipping own unit {:?}", unit.net_ent_id);
             } else {
-                info!("  Processing remote unit {:?} with {} components", unit.net_ent_id, unit.components.len());
+                info!(
+                    "  Processing remote unit {:?} with {} components",
+                    unit.net_ent_id,
+                    unit.components.len()
+                );
                 // TOOD do this gracefully?
                 for component in &unit.components {
                     if let shared::net_components::NetComponent::Ours(ours) = component {
@@ -279,7 +281,8 @@ fn apply_pending_camera_id(
 ) {
     if let Some(pending_id) = pending {
         if let Ok(cam_entity) = local_cam.single() {
-            commands.entity(cam_entity)
+            commands
+                .entity(cam_entity)
                 .insert(pending_id.0)
                 .insert(PlayerCamera);
             commands.remove_resource::<PendingCameraId>();
@@ -290,7 +293,10 @@ fn apply_pending_camera_id(
 fn send_movement_camera(
     sr: Res<ClientNetworkingResources>,
     mse: Res<MainServerEndpoint>,
-    our_transform: Query<(&Transform, &NetEntId), (With<LocalCamera>, With<PlayerCamera>, Changed<Transform>)>,
+    our_transform: Query<
+        (&Transform, &NetEntId),
+        (With<LocalCamera>, With<PlayerCamera>, Changed<Transform>),
+    >,
 ) {
     if let Ok((transform, ent_id)) = our_transform.single() {
         let mut events = vec![];

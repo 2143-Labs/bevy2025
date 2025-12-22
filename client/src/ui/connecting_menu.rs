@@ -1,7 +1,7 @@
+use super::styles::*;
+use crate::game_state::{GameState, MenuState, NetworkGameState};
 use bevy::prelude::*;
 use shared::{Config, netlib::NetworkConnectionTarget};
-use crate::game_state::{GameState, MenuState, NetworkGameState};
-use super::styles::*;
 
 /// Marker for the connecting menu root entity
 #[derive(Component)]
@@ -16,7 +16,11 @@ pub struct ConnectionStatusText;
 pub struct CancelButton;
 
 /// Spawn the connecting menu UI
-pub fn spawn_connecting_menu_and_connect(mut commands: Commands, config: Res<Config>, mut next_network_state: ResMut<NextState<NetworkGameState>>) {
+pub fn spawn_connecting_menu_and_connect(
+    mut commands: Commands,
+    config: Res<Config>,
+    mut next_network_state: ResMut<NextState<NetworkGameState>>,
+) {
     let server_display = format!("{}:{}", config.ip, config.port);
     let username_display = config.name.clone().unwrap_or_else(|| "Player".to_string());
 
@@ -88,7 +92,13 @@ pub fn spawn_connecting_menu_and_connect(mut commands: Commands, config: Res<Con
                     let (node, bg_color, border_color) = menu_button_bundle();
                     let (text, font, color) = menu_button_text("Cancel");
                     button_parent
-                        .spawn((node, bg_color, border_color, Interaction::default(), CancelButton))
+                        .spawn((
+                            node,
+                            bg_color,
+                            border_color,
+                            Interaction::default(),
+                            CancelButton,
+                        ))
                         .with_children(|button| {
                             button.spawn((text, font, color));
                         });

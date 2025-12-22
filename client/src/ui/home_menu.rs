@@ -1,6 +1,9 @@
-use bevy::{prelude::*, math::Rot2, ui::UiTransform};
-use crate::{assets::ImageAssets, game_state::{GameState, MenuState}};
 use super::styles::*;
+use crate::{
+    assets::ImageAssets,
+    game_state::{GameState, MenuState},
+};
+use bevy::{math::Rot2, prelude::*, ui::UiTransform};
 
 /// Marker for the home menu root entity
 #[derive(Component)]
@@ -74,7 +77,13 @@ pub fn spawn_home_menu(mut commands: Commands, image_assets: Res<ImageAssets>) {
                 let (node, bg_color, border_color) = menu_button_bundle();
                 let (text, font, color) = menu_button_text("Play");
                 parent
-                    .spawn((node, bg_color, border_color, Interaction::default(), PlayButton))
+                    .spawn((
+                        node,
+                        bg_color,
+                        border_color,
+                        Interaction::default(),
+                        PlayButton,
+                    ))
                     .with_children(|button| {
                         button.spawn((text, font, color));
                     });
@@ -85,7 +94,13 @@ pub fn spawn_home_menu(mut commands: Commands, image_assets: Res<ImageAssets>) {
                 let (node, bg_color, border_color) = menu_button_bundle();
                 let (text, font, color) = menu_button_text("Multiplayer");
                 parent
-                    .spawn((node, bg_color, border_color, Interaction::default(), MultiplayerButton))
+                    .spawn((
+                        node,
+                        bg_color,
+                        border_color,
+                        Interaction::default(),
+                        MultiplayerButton,
+                    ))
                     .with_children(|button| {
                         button.spawn((text, font, color));
                     });
@@ -105,7 +120,11 @@ pub fn handle_home_buttons(
     mut play_query: Query<&Interaction, (Changed<Interaction>, With<PlayButton>)>,
     mut multiplayer_query: Query<
         &Interaction,
-        (Changed<Interaction>, With<MultiplayerButton>, Without<PlayButton>),
+        (
+            Changed<Interaction>,
+            With<MultiplayerButton>,
+            Without<PlayButton>,
+        ),
     >,
     mut next_game_state: ResMut<NextState<GameState>>,
     mut next_menu_state: ResMut<NextState<MenuState>>,

@@ -1,7 +1,7 @@
+use super::{styles::*, text_input::*};
+use crate::game_state::MenuState;
 use bevy::prelude::*;
 use shared::Config;
-use crate::game_state::MenuState;
-use super::{styles::*, text_input::*};
 
 /// Marker for the multiplayer menu root entity
 #[derive(Component)]
@@ -83,32 +83,34 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
 
                     // Input field
                     let input = TextInput::new("127.0.0.1:25565", 100).with_value(&server_address);
-                    section.spawn((
-                        Node {
-                            width: Val::Px(400.0),
-                            height: Val::Px(50.0),
-                            border: UiRect::all(Val::Px(2.0)),
-                            padding: UiRect::all(Val::Px(10.0)),
-                            justify_content: JustifyContent::Start,
-                            align_items: AlignItems::Center,
-                            ..default()
-                        },
-                        BorderColor::all(Color::srgb(0.4, 0.4, 0.4)),
-                        BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
-                        Interaction::default(),
-                        input,
-                        ServerAddressInput,
-                    )).with_children(|input_parent| {
-                        input_parent.spawn((
-                            Text::new(&server_address),
-                            TextFont {
-                                font_size: 20.0,
+                    section
+                        .spawn((
+                            Node {
+                                width: Val::Px(400.0),
+                                height: Val::Px(50.0),
+                                border: UiRect::all(Val::Px(2.0)),
+                                padding: UiRect::all(Val::Px(10.0)),
+                                justify_content: JustifyContent::Start,
+                                align_items: AlignItems::Center,
                                 ..default()
                             },
-                            TextColor(Color::WHITE),
-                            TextInputDisplay,
-                        ));
-                    });
+                            BorderColor::all(Color::srgb(0.4, 0.4, 0.4)),
+                            BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
+                            Interaction::default(),
+                            input,
+                            ServerAddressInput,
+                        ))
+                        .with_children(|input_parent| {
+                            input_parent.spawn((
+                                Text::new(&server_address),
+                                TextFont {
+                                    font_size: 20.0,
+                                    ..default()
+                                },
+                                TextColor(Color::WHITE),
+                                TextInputDisplay,
+                            ));
+                        });
                 });
 
             // Username section
@@ -129,32 +131,34 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
 
                     // Input field
                     let input = TextInput::new("Player", 32).with_value(&username);
-                    section.spawn((
-                        Node {
-                            width: Val::Px(400.0),
-                            height: Val::Px(50.0),
-                            border: UiRect::all(Val::Px(2.0)),
-                            padding: UiRect::all(Val::Px(10.0)),
-                            justify_content: JustifyContent::Start,
-                            align_items: AlignItems::Center,
-                            ..default()
-                        },
-                        BorderColor::all(Color::srgb(0.4, 0.4, 0.4)),
-                        BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
-                        Interaction::default(),
-                        input,
-                        UsernameInput,
-                    )).with_children(|input_parent| {
-                        input_parent.spawn((
-                            Text::new(&username),
-                            TextFont {
-                                font_size: 20.0,
+                    section
+                        .spawn((
+                            Node {
+                                width: Val::Px(400.0),
+                                height: Val::Px(50.0),
+                                border: UiRect::all(Val::Px(2.0)),
+                                padding: UiRect::all(Val::Px(10.0)),
+                                justify_content: JustifyContent::Start,
+                                align_items: AlignItems::Center,
                                 ..default()
                             },
-                            TextColor(Color::WHITE),
-                            TextInputDisplay,
-                        ));
-                    });
+                            BorderColor::all(Color::srgb(0.4, 0.4, 0.4)),
+                            BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
+                            Interaction::default(),
+                            input,
+                            UsernameInput,
+                        ))
+                        .with_children(|input_parent| {
+                            input_parent.spawn((
+                                Text::new(&username),
+                                TextFont {
+                                    font_size: 20.0,
+                                    ..default()
+                                },
+                                TextColor(Color::WHITE),
+                                TextInputDisplay,
+                            ));
+                        });
                 });
 
             // Player Color section
@@ -193,7 +197,11 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                                     Node {
                                         width: Val::Px(45.0),
                                         height: Val::Px(45.0),
-                                        border: UiRect::all(Val::Px(if is_selected { 4.0 } else { 2.0 })),
+                                        border: UiRect::all(Val::Px(if is_selected {
+                                            4.0
+                                        } else {
+                                            2.0
+                                        })),
                                         ..default()
                                     },
                                     BackgroundColor(color),
@@ -222,7 +230,13 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                         let (node, bg_color, border_color) = menu_button_bundle();
                         let (text, font, color) = menu_button_text("Back");
                         buttons
-                            .spawn((node, bg_color, border_color, Interaction::default(), BackButton))
+                            .spawn((
+                                node,
+                                bg_color,
+                                border_color,
+                                Interaction::default(),
+                                BackButton,
+                            ))
                             .with_children(|button| {
                                 button.spawn((text, font, color));
                             });
@@ -233,7 +247,13 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                         let (node, bg_color, border_color) = menu_button_bundle();
                         let (text, font, color) = menu_button_text("Connect");
                         buttons
-                            .spawn((node, bg_color, border_color, Interaction::default(), ConnectButton))
+                            .spawn((
+                                node,
+                                bg_color,
+                                border_color,
+                                Interaction::default(),
+                                ConnectButton,
+                            ))
                             .with_children(|button| {
                                 button.spawn((text, font, color));
                             });
@@ -278,7 +298,14 @@ pub fn handle_color_buttons(
 /// Handle button interactions in multiplayer menu
 pub fn handle_multiplayer_buttons(
     connect_query: Query<&Interaction, (Changed<Interaction>, With<ConnectButton>)>,
-    back_query: Query<&Interaction, (Changed<Interaction>, With<BackButton>, Without<ConnectButton>)>,
+    back_query: Query<
+        &Interaction,
+        (
+            Changed<Interaction>,
+            With<BackButton>,
+            Without<ConnectButton>,
+        ),
+    >,
     server_input_query: Query<&TextInput, With<ServerAddressInput>>,
     username_input_query: Query<&TextInput, (With<UsernameInput>, Without<ServerAddressInput>)>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
@@ -296,8 +323,12 @@ pub fn handle_multiplayer_buttons(
     for interaction in connect_query.iter() {
         if *interaction == Interaction::Pressed {
             // Get input values
-            let Ok(server_input) = server_input_query.single() else { continue; };
-            let Ok(username_input) = username_input_query.single() else { continue; };
+            let Ok(server_input) = server_input_query.single() else {
+                continue;
+            };
+            let Ok(username_input) = username_input_query.single() else {
+                continue;
+            };
 
             let server_address = server_input.value.clone();
             let username = username_input.value.clone();
@@ -311,8 +342,10 @@ pub fn handle_multiplayer_buttons(
                 (server_address.clone(), config.port)
             };
 
-            info!("Connect button pressed - IP: {}, Port: {}, Username: {}, Color: {}",
-                  ip, port, username, config.player_color_hue);
+            info!(
+                "Connect button pressed - IP: {}, Port: {}, Username: {}, Color: {}",
+                ip, port, username, config.player_color_hue
+            );
 
             // Update config (temporary, not persisted)
             config.ip = ip;
