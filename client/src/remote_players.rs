@@ -119,8 +119,7 @@ pub fn handle_spawn_unit_maybe_camera(
             unit.net_ent_id,
             RemotePlayerCamera,
             SendNetworkTranformUpdates,
-            Transform::from_translation(transform.translation)
-                .with_rotation(transform.rotation),
+            Transform::from_translation(transform.translation).with_rotation(transform.rotation),
             GlobalTransform::default(),
             Visibility::default(),
             InheritedVisibility::default(),
@@ -218,17 +217,21 @@ fn handle_despawn_unit(
     mut despawn_events: ERFE<DespawnUnit2>,
     remote_entities: Query<
         (Entity, &NetEntId),
-        Or<(With<RemotePlayerCamera>, With<RemotePlayerModel>)>,
     >,
     mut commands: Commands,
 ) {
-    for despawn in despawn_events.read() {
+    'next_despawn: for despawn in despawn_events.read() {
         for (entity, net_id) in &remote_entities {
             if net_id == &despawn.event.net_ent_id {
                 info!("Despawning remote entity {:?}", despawn.event.net_ent_id);
                 commands.entity(entity).despawn();
+                continue 'next_despawn;
             }
         }
+        error!(
+            "Could not find remote entity to despawn: {:?}",
+            despawn.event.net_ent_id
+        );
     }
 }
 

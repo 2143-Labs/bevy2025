@@ -19,18 +19,15 @@ pub struct ControlledBy {
     pub players: Vec<PlayerId>,
 }
 
-impl ControlledBy {
-    pub fn single(player_id: PlayerId) -> Self {
-        ControlledBy {
-            players: vec![player_id],
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Component, Debug, PartialEq, Clone)]
 pub struct PlayerColor {
     /// HSL hue value (0.0-360.0)
     pub hue: f32,
+}
+
+#[derive(Serialize, Deserialize, Component, Debug, PartialEq, Clone)]
+pub struct DespawnOnPlayerDisconnect {
+    pub player_id: PlayerId,
 }
 
 ///// This struct represents all the possible things a unit might be trying to do this tick.
@@ -45,6 +42,7 @@ pub enum NetComponentOurs {
     Health(Health),
     PlayerName(PlayerName),
     ControlledBy(ControlledBy),
+    DespawnOnPlayerDisconnect(DespawnOnPlayerDisconnect),
     PlayerColor(PlayerColor),
 }
 
@@ -61,6 +59,9 @@ impl NetComponentOurs {
                 entity.insert(c);
             }
             NetComponentOurs::ControlledBy(c) => {
+                entity.insert(c);
+            }
+            NetComponentOurs::DespawnOnPlayerDisconnect(c) => {
                 entity.insert(c);
             }
         }
@@ -91,6 +92,12 @@ impl ToNetComponent for ControlledBy {
     }
 }
 
+impl ToNetComponent for DespawnOnPlayerDisconnect {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::DespawnOnPlayerDisconnect(self))
+    }
+}
+
 //commands.spawn((
 //Ball, // Marker component for counting
 //Mesh3d(meshes.add(Sphere::new(0.5))),
@@ -110,3 +117,17 @@ impl ToNetComponent for ControlledBy {
 //pub mesh: super::MeshRef,
 //pub material: super::MaterialRef,
 //}
+
+impl ControlledBy {
+    pub fn single(player_id: PlayerId) -> Self {
+        ControlledBy {
+            players: vec![player_id],
+        }
+    }
+}
+
+impl DespawnOnPlayerDisconnect {
+    pub fn new(player_id: PlayerId) -> Self {
+        DespawnOnPlayerDisconnect { player_id }
+    }
+}

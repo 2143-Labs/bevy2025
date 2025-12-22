@@ -5,29 +5,17 @@ use std::{
 };
 
 use avian3d::prelude::LinearVelocity;
-use bevy::{
-    app::ScheduleRunnerPlugin, prelude::*,
-};
+use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
-    event::{
-        client::{PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2},
-        server::{ChangeMovement, Heartbeat},
-        MyNetEntParentId, NetEntId, PlayerId, ERFE,
-    },
-    net_components::{
-        ents::{PlayerCamera, SendNetworkTranformUpdates},
-        make_ball, make_man,
-        ours::{ControlledBy, PlayerColor, PlayerName},
-        ToNetComponent,
-    },
-    netlib::{
-        send_event_to_server_now, send_event_to_server_now_batch, EventToClient, EventToServer,
-        NetworkConnectionTarget, ServerNetworkingResources, Tick,
-    },
-    physics::terrain::TerrainParams,
-    Config, ConfigPlugin,
+    Config, ConfigPlugin, event::{
+        ERFE, NetEntId, PlayerId, client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2}, server::{ChangeMovement, Heartbeat}
+    }, net_components::{
+        ToNetComponent, ents::{PlayerCamera, SendNetworkTranformUpdates}, make_ball, make_man, ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName}
+    }, netlib::{
+        EventToClient, EventToServer, NetworkConnectionTarget, ServerNetworkingResources, Tick, send_event_to_server_now, send_event_to_server_now_batch
+    }, physics::terrain::TerrainParams
 };
 
 /// How often to run the system
@@ -66,8 +54,8 @@ struct CurrentTick(Tick);
 
 //#[derive(Resource, Debug)]
 //struct ServerSettings {
-    //tick_rate: u16,
-    //cheats: bool,
+//tick_rate: u16,
+//cheats: bool,
 //}
 
 //pub mod chat;
@@ -85,6 +73,7 @@ fn main() {
         .insert_resource(Time::<Fixed>::from_hz(BASE_TICKS_PER_SECOND as _))
         .insert_resource(CurrentTick(Tick(1)))
         .add_message::<PlayerDisconnected>()
+        .add_message::<DespawnUnit2>()
         .add_plugins(DefaultPlugins)
         .add_plugins((
             ScheduleRunnerPlugin::run_loop(Duration::from_millis(1)),
@@ -129,6 +118,7 @@ fn main() {
                 on_player_disconnect,
                 on_player_connect,
                 on_player_heartbeat,
+                on_unit_despawn,
                 shared::event::server::drain_events,
                 on_movement,
             )
@@ -158,6 +148,11 @@ fn add_network_connection_info_from_config(config: Res<Config>, mut commands: Co
 /// This component is added to each of the meta entities representing a connected player
 #[derive(Component)]
 pub struct ConnectedPlayer;
+
+#[derive(Component)]
+pub struct DisconnectedPlayer {
+    pub disconnect_tick: Tick,
+}
 
 #[derive(Component)]
 pub struct HasColor(pub Color);
@@ -376,10 +371,14 @@ fn check_heartbeats(
 
 fn on_player_disconnect(
     mut pd: MessageReader<PlayerDisconnected>,
-    clients: Query<(Entity, &PlayerEndpoint, &PlayerId), With<PlayerName>>,
-    //clients_owned_items: Query<(Entity, &NetEntId, &MyNetEntParentId)>,
+
+    clients: Query<(Entity, &PlayerEndpoint, &PlayerId), With<ConnectedPlayer>>,
+    clients_owned_items: Query<(&NetEntId, &DespawnOnPlayerDisconnect)>,
+
+    mut despawn_unit: MessageWriter<DespawnUnit2>,
     mut commands: Commands,
     mut heartbeat_mapping: ResMut<HeartbeatList>,
+    tick: Res<CurrentTick>,
     sr: Res<ServerNetworkingResources>,
 ) {
     for player in pd.read() {
@@ -390,24 +389,59 @@ fn on_player_disconnect(
             id: player.id,
         }));
 
-        //for (owned_ent, net_ent_id, owner_id) in &clients_owned_items {
-            //if owner_id == player.id {
-                //events.push(EventToClient::DespawnUnit2(
-                    //shared::event::client::DespawnUnit2 {
-                        //net_ent_id: *net_ent_id,
-                    //},
-                //));
-
-                //commands.entity(owned_ent).despawn();
-            //}
-        //}
+        for (owned_ent_id, despawn_tag) in &clients_owned_items {
+            if despawn_tag.player_id == player.id {
+                despawn_unit.write(DespawnUnit2 {
+                    net_ent_id: *owned_ent_id,
+                });
+            }
+        }
 
         for (c_ent, net_client, player_id) in &clients {
             send_event_to_server_now_batch(&sr.handler, net_client.0, &events);
             if player_id == &player.id {
-                commands.entity(c_ent).despawn();
+                commands
+                    .entity(c_ent)
+                    .remove::<ConnectedPlayer>()
+                    .insert(DisconnectedPlayer {
+                        disconnect_tick: tick.0,
+                    });
             }
         }
+    }
+}
+
+fn on_unit_despawn(
+    mut pd: MessageReader<DespawnUnit2>,
+    clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
+    units: Query<(Entity, &NetEntId)>,
+    mut commands: Commands,
+    sr: Res<ServerNetworkingResources>,
+) {
+    let mut events = vec![];
+    for despawn in pd.read() {
+        'unit: for (unit_ent, unit_net_ent_id) in &units {
+            if unit_net_ent_id == &despawn.net_ent_id {
+                commands.entity(unit_ent).despawn();
+                break 'unit;
+            }
+        }
+
+        info!("Despawning unit {:?}", despawn.net_ent_id);
+
+        // Now tell all clients to also despawn
+        let event = EventToClient::DespawnUnit2(DespawnUnit2 {
+            net_ent_id: despawn.net_ent_id,
+        });
+        events.push(event);
+    }
+
+    if events.is_empty() {
+        return;
+    }
+
+    for net_client in &clients {
+        send_event_to_server_now_batch(&sr.handler, net_client.0, &events);
     }
 }
 
@@ -428,10 +462,7 @@ fn on_player_heartbeat(
 
 fn on_movement(
     mut pd: ERFE<ChangeMovement>,
-    mut ent_to_move: Query<
-        (&NetEntId, &mut Transform),
-        With<SendNetworkTranformUpdates>,
-    >,
+    mut ent_to_move: Query<(&NetEntId, &mut Transform), With<SendNetworkTranformUpdates>>,
 ) {
     'event: for movement in pd.read() {
         // The camera NetEntId is directly in the movement event
@@ -456,7 +487,7 @@ fn on_movement(
 // TODO make this more efficient by batching updates per client and only sending changed components
 // for physics if we think the client needs them
 fn broadcast_movement_updates(
-    clients: Query<(&PlayerEndpoint), With<ConnectedPlayer>>,
+    clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
     sr: Res<ServerNetworkingResources>,
     changed_transforms: Query<
         (&NetEntId, &Transform, Option<&LinearVelocity>),
@@ -466,7 +497,7 @@ fn broadcast_movement_updates(
 ) {
     let mut events_to_send = vec![];
     for (cam_net_id, cam_transform, cam_lv) in &changed_transforms {
-        let mut components =  vec![ cam_transform.to_net_component(), ];
+        let mut components = vec![cam_transform.to_net_component()];
         if let Some(lv) = cam_lv {
             components.push(lv.to_net_component());
         }
@@ -484,7 +515,7 @@ fn broadcast_movement_updates(
             "Broadcasting {} movement updates to clients",
             events_to_send.len()
         );
-        for (c_net_client) in &clients {
+        for c_net_client in &clients {
             send_event_to_server_now_batch(&sr.handler, c_net_client.0, &events_to_send);
         }
     }
@@ -493,7 +524,7 @@ fn broadcast_movement_updates(
 fn increment_ticks(mut current_tick: ResMut<CurrentTick>) {
     current_tick.0.increment();
 
-    if current_tick.0.0.is_multiple_of(100) {
+    if current_tick.0 .0.is_multiple_of(100) {
         info!("Server Tick: {:?}", current_tick.0);
     }
 }

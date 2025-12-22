@@ -12,7 +12,7 @@ pub struct Ball;
 pub struct Interactable;
 
 /// Anything with this component will have its transform sent over the network regularly from the
-/// server.
+/// server. (should maybe move to "ours" category)
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct SendNetworkTranformUpdates;
 

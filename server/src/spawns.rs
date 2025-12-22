@@ -1,11 +1,10 @@
 use bevy::prelude::*;
 use shared::{
     event::{
-        server::{SpawnCircle, SpawnMan},
-        NetEntId, ERFE,
+        ERFE, NetEntId, server::{SpawnCircle, SpawnMan}
     },
-    net_components::{make_man, ours::ControlledBy},
-    netlib::{send_event_to_server_now, EventToClient, ServerNetworkingResources},
+    net_components::{make_man, ours::{ControlledBy, DespawnOnPlayerDisconnect}},
+    netlib::{EventToClient, ServerNetworkingResources, send_event_to_server_now},
 };
 
 use crate::{
@@ -60,7 +59,12 @@ fn on_circle_spawn(
             ControlledBy::single(*player_id_of_spawner),
         );
         let unit_ent = unit.clone().spawn_entity_srv(&mut commands);
-        commands.entity(unit_ent).insert(HasColor(spawn.color));
+        commands
+            .entity(unit_ent)
+            .insert(HasColor(spawn.color))
+            .insert(DespawnOnPlayerDisconnect {
+                player_id: *player_id_of_spawner,
+            });
 
         // Notify all clients about the new unit
         let event = EventToClient::SpawnUnit2(unit);

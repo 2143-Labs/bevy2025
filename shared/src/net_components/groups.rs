@@ -18,7 +18,7 @@ pub enum NetComponentGroups {
 }
 
 impl NetComponentGroups {
-    pub fn insert_components(
+    pub fn insert_components_client(
         self,
         entity: &mut EntityCommands<'_>,
         meshes: &mut ResMut<Assets<Mesh>>,

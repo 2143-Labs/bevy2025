@@ -5,19 +5,25 @@ use shared::{
     Config,
     event::{
         ERFE, NetEntId,
-        client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2},
+        client::{SpawnUnit2, WorldData2},
         server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle, SpawnMan},
     },
     net_components::{ents::PlayerCamera, ours::PlayerName},
     netlib::{
-        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, NetworkingResources, send_event_to_server_now,
-        send_event_to_server_now_batch, setup_client,
+        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint,
+        NetworkingResources, send_event_to_server_now, send_event_to_server_now_batch,
+        setup_client,
     },
     physics::terrain::TerrainParams,
 };
 
 use crate::{
-    assets::{FontAssets, ModelAssets}, camera::LocalCamera, game_state::{GameState, NetworkGameState}, notification::Notification, remote_players::handle_spawn_unit_maybe_camera, terrain::SetupTerrain
+    assets::{FontAssets, ModelAssets},
+    camera::LocalCamera,
+    game_state::{GameState, NetworkGameState, WorldEntity},
+    notification::Notification,
+    remote_players::handle_spawn_unit_maybe_camera,
+    terrain::SetupTerrain,
 };
 
 #[derive(Component)]
@@ -31,80 +37,78 @@ pub struct NetworkingPlugin;
 impl Plugin for NetworkingPlugin {
     fn build(&self, app: &mut App) {
         shared::event::client::register_events(app);
-        app
-            .add_systems(
-                OnEnter(NetworkGameState::ClientConnecting),
-                (
-                    // Setup the client and immediatly advance the state
-                    setup_client::<EventToClient>,
-                    |mut state: ResMut<NextState<NetworkGameState>>| {
-                        state.set(NetworkGameState::ClientSendRequestPacket)
-                    },
-                ),
+        app.add_systems(
+            OnEnter(NetworkGameState::ClientConnecting),
+            (
+                // Setup the client and immediatly advance the state
+                setup_client::<EventToClient>,
+                |mut state: ResMut<NextState<NetworkGameState>>| {
+                    state.set(NetworkGameState::ClientSendRequestPacket)
+                },
+            ),
+        )
+        // .add_systems(
+        //     Update,
+        //     (check_connect_button).run_if(in_state(NetworkGameState::MainMenu)),
+        // )
+        // After sending the first packet, resend it every so often to see if the server comes
+        // alive
+        .add_systems(
+            Update,
+            (shared::event::client::drain_events, receive_world_data).run_if(
+                in_state(NetworkGameState::ClientSendRequestPacket)
+                    .or(in_state(NetworkGameState::ClientConnected)),
+            ),
+        )
+        .add_systems(
+            Update,
+            (send_connect_packet)
+                .run_if(on_timer(Duration::from_millis(1000)))
+                .run_if(in_state(NetworkGameState::ClientSendRequestPacket)),
+        )
+        // Once we are connected, advance normally
+        .add_systems(
+            Update,
+            (
+                // TODO receive new world data at any time?
+                our_client_wants_to_spawn_circle,
+                our_client_wants_to_spawn_man,
+                apply_pending_camera_id,
             )
-            // .add_systems(
-            //     Update,
-            //     (check_connect_button).run_if(in_state(NetworkGameState::MainMenu)),
-            // )
-            // After sending the first packet, resend it every so often to see if the server comes
-            // alive
-            .add_systems(
-                Update,
-                (shared::event::client::drain_events, receive_world_data).run_if(
-                    in_state(NetworkGameState::ClientSendRequestPacket)
-                        .or(in_state(NetworkGameState::ClientConnected)),
-                ),
+                .run_if(in_state(NetworkGameState::ClientConnected)),
+        )
+        //.add_systems(
+        //Update,
+        //cast_skill_1
+        //.run_if(shared::GameAction::Fire1.just_pressed())
+        ////.run_if(in_state(ChatState::NotChatting))
+        ////.run_if(any_with_component::<Player>),
+        //)
+        .add_systems(
+            FixedUpdate,
+            (send_movement_camera)
+                .chain()
+                .run_if(in_state(NetworkGameState::ClientConnected))
+                .run_if(in_state(GameState::Playing)),
+        )
+        .add_systems(
+            Update,
+            (
+                // TODO receive new world data at any time?
+                spawn_networked_unit_forward_local,
+                on_general_spawn_network_unit,
             )
-            .add_systems(
-                Update,
-                (send_connect_packet)
-                    .run_if(on_timer(Duration::from_millis(1000)))
-                    .run_if(in_state(NetworkGameState::ClientSendRequestPacket)),
-            )
-            // Once we are connected, advance normally
-            .add_systems(
-                Update,
-                (
-                    // TODO receive new world data at any time?
-                    our_client_wants_to_spawn_circle,
-                    our_client_wants_to_spawn_man,
-                    apply_pending_camera_id,
-                )
-                    .run_if(in_state(NetworkGameState::ClientConnected)),
-            )
-            //.add_systems(
-            //Update,
-            //cast_skill_1
-            //.run_if(shared::GameAction::Fire1.just_pressed())
-            ////.run_if(in_state(ChatState::NotChatting))
-            ////.run_if(any_with_component::<Player>),
-            //)
-            .add_systems(
-                FixedUpdate,
-                (send_movement_camera)
-                    .chain()
-                    .run_if(in_state(NetworkGameState::ClientConnected))
-                    .run_if(in_state(GameState::Playing)),
-            )
-            .add_systems(
-                Update,
-                (
-                    // TODO receive new world data at any time?
-                    spawn_networked_unit_forward_local,
-                    on_general_spawn_network_unit,
-                )
-                    .run_if(in_state(NetworkGameState::ClientConnected)),
-
-            )
-            .add_systems(
-                Update,
-                send_heartbeat
-                    .run_if(on_timer(Duration::from_millis(200)))
-                    .run_if(in_state(NetworkGameState::ClientConnected)),
-            )
-            .add_message::<SpawnUnit2>()
-            .add_message::<SpawnCircle>()
-            .add_message::<SpawnMan>();
+                .run_if(in_state(NetworkGameState::ClientConnected)),
+        )
+        .add_systems(
+            Update,
+            send_heartbeat
+                .run_if(on_timer(Duration::from_millis(200)))
+                .run_if(in_state(NetworkGameState::ClientConnected)),
+        )
+        .add_message::<SpawnUnit2>()
+        .add_message::<SpawnCircle>()
+        .add_message::<SpawnMan>();
     }
 }
 
@@ -151,7 +155,10 @@ fn on_general_spawn_network_unit(
             &mut notif,
         );
 
-        info!("Spawned from networked SpawnUnit2, has {} components", spawn.components.len());
+        info!(
+            "Spawned from networked SpawnUnit2, has {} components",
+            spawn.components.len()
+        );
     }
 }
 
@@ -191,7 +198,7 @@ fn send_connect_packet(
 //offset: Vec3,
 //) {
 //let player_id = s.parent_entity();
-/// spawn their hp bar
+// spawn their hp bar
 //let mut hp_bar = PbrBundle {
 //mesh: meshes.add(Mesh::from(Cuboid {
 //half_size: Vec3::splat(0.5),
@@ -201,14 +208,14 @@ fn send_connect_packet(
 //..Default::default()
 //};
 
-/// make it invisible until it's updated
+// make it invisible until it's updated
 //hp_bar.transform.scale = Vec3::ZERO;
 
 //s.spawn((hp_bar, crate::network::stats::HPBar(player_id)));
 //}
 
 /// This function is called when we receive the world data from the server on first connect
-#[allow(unused)]
+#[allow(unused, clippy::too_many_arguments, clippy::type_complexity)]
 fn receive_world_data(
     mut world_data: ERFE<WorldData2>,
     mut commands: Commands,
@@ -220,7 +227,7 @@ fn receive_world_data(
     mut game_state: ResMut<NextState<NetworkGameState>>,
     asset_server: ResMut<AssetServer>,
     mut terrain_data: ResMut<TerrainParams>,
-    ents_to_despawn: Query<Entity, With<DespawnOnWorldData>>,
+    ents_to_despawn: Query<Entity, Or<(With<DespawnOnWorldData>, With<WorldEntity>)>>,
     mut msg_terrain_events: MessageWriter<SetupTerrain>,
 ) {
     for event in world_data.read() {

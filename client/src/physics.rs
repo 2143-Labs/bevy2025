@@ -1,13 +1,12 @@
 use avian3d::prelude::*;
 use bevy::prelude::*;
 use shared::Config;
-use shared::event::ERFE;
 use shared::event::server::SpawnMan;
-use shared::event::{client::SpawnUnit2, server::SpawnCircle};
+use shared::event::server::SpawnCircle;
 use shared::net_components::ents::Ball;
 
 use crate::camera::LocalCamera;
-use crate::game_state::{GameState, NetworkGameState};
+use crate::game_state::GameState;
 
 /// UI component for the ball counter parent
 #[derive(Component)]
@@ -34,22 +33,22 @@ impl Plugin for PhysicsPlugin {
 }
 /// Manage physics pause state based on game state
 //fn manage_physics_pause(
-    //game_state: Res<State<GameState>>,
-    //mut physics_time: ResMut<Time<Physics>>,
+//game_state: Res<State<GameState>>,
+//mut physics_time: ResMut<Time<Physics>>,
 //) {
-    //match game_state.get() {
-        //GameState::Paused | GameState::MainMenu => {
-            //if !physics_time.is_paused() {
-                //physics_time.pause();
-            //}
-        //}
-        //GameState::Playing => {
-            //if physics_time.is_paused() {
-                //physics_time.unpause();
-            //}
-        //}
-        //_ => {}
-    //}
+//match game_state.get() {
+//GameState::Paused | GameState::MainMenu => {
+//if !physics_time.is_paused() {
+//physics_time.pause();
+//}
+//}
+//GameState::Playing => {
+//if physics_time.is_paused() {
+//physics_time.unpause();
+//}
+//}
+//_ => {}
+//}
 //}
 
 /// Spawn balls every frame while holding spacebar (from active camera's view)

@@ -99,7 +99,7 @@ impl NetComponent {
             NetComponent::Foreign(foreign) => foreign.insert_components(ent_commands),
             NetComponent::Ours(ours) => ours.insert_components(ent_commands),
             NetComponent::Groups(groups) => {
-                groups.insert_components(ent_commands, meshes, materials)
+                groups.insert_components_client(ent_commands, meshes, materials)
             }
             NetComponent::Ents(ents) => ents.insert_components(ent_commands),
             NetComponent::MyNetEntParentId(my_net_ent_parent_id) => {
