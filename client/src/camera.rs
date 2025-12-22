@@ -48,13 +48,13 @@ struct BirdsEyeCam;
 #[derive(Component)]
 struct InterpolationCam;
 
-/// Marker component for pause UI
-//#[derive(Component)]
-//struct PauseUI;
-
 /// Marker for the player camera that we control
 #[derive(Component)]
 pub struct LocalCamera;
+
+/// This component marks the currently active camera
+#[derive(Component)]
+pub struct ActiveCamera;
 
 pub struct CameraPlugin;
 
@@ -102,6 +102,7 @@ fn setup_cameras(mut commands: Commands, mut cameras_spawned: ResMut<CamerasSpaw
         Transform::from_xyz(50.0, 30.0, 50.0).looking_at(Vec3::ZERO, Vec3::Y),
         Projection::Perspective(PerspectiveProjection::default()),
         LocalCamera,
+        ActiveCamera,
         FreeCam {
             yaw: -std::f32::consts::FRAC_PI_4,
             pitch: -0.6,

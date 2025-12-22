@@ -4,11 +4,15 @@ use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
     Config,
     event::{
-        ERFE, NetEntId,
+        ERFE, MyNetEntParentId, NetEntId,
         client::{SpawnUnit2, WorldData2},
         server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle, SpawnMan},
     },
-    net_components::{ents::PlayerCamera, ours::PlayerName},
+    net_components::{
+        ents::PlayerCamera,
+        groups::SpecialConstructor,
+        ours::{PlayerColor, PlayerName},
+    },
     netlib::{
         ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint,
         NetworkingResources, send_event_to_server_now, send_event_to_server_now_batch,
@@ -22,7 +26,7 @@ use crate::{
     camera::LocalCamera,
     game_state::{GameState, NetworkGameState, WorldEntity},
     notification::Notification,
-    remote_players::handle_spawn_unit_maybe_camera,
+    remote_players::{ApplyNoFrustumCulling, NameLabel, RemotePlayerCamera, RemotePlayerModel},
     terrain::SetupTerrain,
 };
 
@@ -97,6 +101,7 @@ impl Plugin for NetworkingPlugin {
                 // TODO receive new world data at any time?
                 spawn_networked_unit_forward_local,
                 on_general_spawn_network_unit,
+                on_special_unit_spawn_remote_camera,
             )
                 .run_if(in_state(NetworkGameState::ClientConnected)),
         )
@@ -131,10 +136,9 @@ fn on_general_spawn_network_unit(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-
-    model_assets: Res<ModelAssets>,
-    font_assets: Res<FontAssets>,
-    mut notif: MessageWriter<Notification>,
+    //model_assets: Res<ModelAssets>,
+    //font_assets: Res<FontAssets>,
+    //mut notif: MessageWriter<Notification>,
 ) {
     use crate::game_state::WorldEntity;
 
@@ -147,18 +151,62 @@ fn on_general_spawn_network_unit(
         // Add WorldEntity component to balls so they get cleaned up properly
         commands.entity(entity).insert(WorldEntity);
 
-        handle_spawn_unit_maybe_camera(
-            spawn,
-            &mut commands,
-            &model_assets,
-            &font_assets,
-            &mut notif,
-        );
-
         info!(
             "Spawned from networked SpawnUnit2, has {} components",
             spawn.components.len()
         );
+    }
+}
+
+fn on_special_unit_spawn_remote_camera(
+    mut commands: Commands,
+    mut unit_query: Query<
+        (Entity, &NetEntId, &PlayerColor, &PlayerCamera),
+        With<SpecialConstructor>,
+    >,
+    model_assets: Res<ModelAssets>,
+    font_assets: Res<FontAssets>,
+    notif: MessageWriter<Notification>,
+) {
+    for (entity, ent_id, player_color, _player_camera) in unit_query.iter_mut() {
+        commands
+            .entity(entity)
+            .insert(RemotePlayerCamera)
+            .insert((
+                Visibility::default(),
+                InheritedVisibility::default(),
+                GlobalTransform::default(),
+                ViewVisibility::default(),
+            ))
+            .remove::<SpecialConstructor>()
+            .with_children(|parent| {
+                // Spawn the remote player camera visuals
+                parent.spawn((
+                    SceneRoot(model_assets.g_toilet_scene.clone()),
+                    Transform::from_xyz(0.0, 0.0, 0.0)
+                        .with_rotation(Quat::from_rotation_y(std::f32::consts::PI))
+                        .with_scale(Vec3::splat(0.5)),
+                    RemotePlayerModel,
+                    player_color.clone(),
+                    ApplyNoFrustumCulling,
+                ));
+            });
+
+        commands.spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                ..default()
+            },
+            Text::new("Test"),
+            TextFont {
+                font: font_assets.regular.clone(),
+                font_size: 20.0,
+                ..default()
+            },
+            TextColor(Color::WHITE),
+            NameLabel,
+            MyNetEntParentId(ent_id.0),
+        ));
     }
 }
 

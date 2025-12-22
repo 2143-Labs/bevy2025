@@ -10,11 +10,16 @@ pub struct NormalMeshMaterial {
     pub material: super::MaterialGenerator,
 }
 
+/// Hint from server that the client may need to do extra client-side logic.
+#[derive(Component, Serialize, Deserialize, Debug, Clone)]
+pub struct SpecialConstructor;
+
 //include!(concat!(env!("OUT_DIR"), "/net_components_groups.rs"));
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NetComponentGroups {
     NormalMeshMaterial(NormalMeshMaterial),
+    SpecialConstructor(SpecialConstructor),
 }
 
 impl NetComponentGroups {
@@ -34,12 +39,18 @@ impl NetComponentGroups {
                     bevy_pbr::MeshMaterial3d(material_handle),
                 ));
             }
+            NetComponentGroups::SpecialConstructor(c) => {
+                entity.insert(c);
+            }
         }
     }
 
     pub fn insert_components_srv(self, entity: &mut EntityCommands<'_>) {
         match self {
             NetComponentGroups::NormalMeshMaterial(c) => {
+                entity.insert(c);
+            }
+            NetComponentGroups::SpecialConstructor(c) => {
                 entity.insert(c);
             }
         }
@@ -49,5 +60,11 @@ impl NetComponentGroups {
 impl ToNetComponent for NormalMeshMaterial {
     fn to_net_component(self) -> super::NetComponent {
         super::NetComponent::Groups(NetComponentGroups::NormalMeshMaterial(self))
+    }
+}
+
+impl ToNetComponent for SpecialConstructor {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Groups(NetComponentGroups::SpecialConstructor(self))
     }
 }

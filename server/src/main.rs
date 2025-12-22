@@ -9,13 +9,24 @@ use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
-    Config, ConfigPlugin, event::{
-        ERFE, NetEntId, PlayerId, client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2}, server::{ChangeMovement, Heartbeat}
-    }, net_components::{
-        ToNetComponent, ents::{PlayerCamera, SendNetworkTranformUpdates}, make_ball, make_man, ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName}
-    }, netlib::{
-        EventToClient, EventToServer, NetworkConnectionTarget, ServerNetworkingResources, Tick, send_event_to_server_now, send_event_to_server_now_batch
-    }, physics::terrain::TerrainParams
+    event::{
+        client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2},
+        server::{ChangeMovement, Heartbeat},
+        NetEntId, PlayerId, ERFE,
+    },
+    net_components::{
+        ents::{PlayerCamera, SendNetworkTranformUpdates},
+        groups::SpecialConstructor,
+        make_ball, make_man,
+        ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName},
+        ToNetComponent,
+    },
+    netlib::{
+        send_event_to_server_now, send_event_to_server_now_batch, EventToClient, EventToServer,
+        NetworkConnectionTarget, ServerNetworkingResources, Tick,
+    },
+    physics::terrain::TerrainParams,
+    Config, ConfigPlugin,
 };
 
 /// How often to run the system
@@ -222,10 +233,15 @@ fn on_player_connect(
                 player_color.clone().to_net_component(),
                 ControlledBy::single(new_player_id).to_net_component(),
                 SendNetworkTranformUpdates.to_net_component(),
+                SpecialConstructor.to_net_component(),
             ],
         };
 
-        spawn_camera_unit.clone().spawn_entity_srv(&mut commands);
+        // Mark the camera to despawn when the player disconnects (server-side only)
+        let ent = spawn_camera_unit.clone().spawn_entity_srv(&mut commands);
+        commands.entity(ent).insert(DespawnOnPlayerDisconnect {
+            player_id: new_player_id,
+        });
 
         let mut unit_list_to_new_client = vec![];
 
@@ -249,12 +265,13 @@ fn on_player_connect(
                     c_color.clone().to_net_component(),
                     c_controlled_by.clone().to_net_component(),
                     SendNetworkTranformUpdates.to_net_component(),
+                    SpecialConstructor.to_net_component(),
                 ],
             });
         }
 
-        // Send each existing player's info to the new client
-        for (_c_net_client, c_player_id, c_name, c_color) in &clients {
+        for (c_net_client, c_player_id, c_name, c_color) in &clients {
+            // Send each existing player's info to the new client
             // SPAWN A
             unit_list_to_new_client.push(SpawnUnit2 {
                 net_ent_id: NetEntId::none(),
@@ -265,10 +282,8 @@ fn on_player_connect(
                     //ConnectedPlayer.to_net_component(),
                 ],
             });
-        }
 
-        // Tell all connected clients about your new player and camera
-        for (c_net_client, _c_net_ent, _c_name, _c_color) in &clients {
+            // Tell all connected clients about your new player and camera
             send_event_to_server_now_batch(
                 &sr.handler,
                 c_net_client.0,
@@ -511,7 +526,7 @@ fn broadcast_movement_updates(
     }
 
     if !events_to_send.is_empty() {
-        info!(
+        trace!(
             "Broadcasting {} movement updates to clients",
             events_to_send.len()
         );
@@ -525,6 +540,6 @@ fn increment_ticks(mut current_tick: ResMut<CurrentTick>) {
     current_tick.0.increment();
 
     if current_tick.0 .0.is_multiple_of(100) {
-        info!("Server Tick: {:?}", current_tick.0);
+        debug!("Server Tick: {:?}", current_tick.0);
     }
 }

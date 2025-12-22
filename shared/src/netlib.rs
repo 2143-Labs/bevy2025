@@ -75,7 +75,9 @@ pub fn send_event_to_server_now_batch<T: NetworkingEvent>(
 ) {
     trace!(?event, "Sending batch event");
     let data = postcard::to_stdvec(&EventGroupingRef::Batch(event)).unwrap();
-    info!(data_len = data.len(), "Sending batch event of size");
+    if data.len() > 4000 {
+        warn!(data_len = data.len(), "Sending large batch event");
+    }
     handler.network().send(endpoint, &data);
 }
 

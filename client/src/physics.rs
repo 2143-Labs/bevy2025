@@ -1,8 +1,8 @@
 use avian3d::prelude::*;
 use bevy::prelude::*;
 use shared::Config;
-use shared::event::server::SpawnMan;
 use shared::event::server::SpawnCircle;
+use shared::event::server::SpawnMan;
 use shared::net_components::ents::Ball;
 
 use crate::camera::LocalCamera;
