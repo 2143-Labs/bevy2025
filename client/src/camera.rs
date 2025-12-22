@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use shared::{Config, GameAction};
 
-use crate::game_state::GameState;
+use crate::game_state::{GameState, InputControlState};
 
 /// Resource for global time scaling
 #[derive(Resource)]
@@ -70,7 +70,8 @@ impl Plugin for CameraPlugin {
                 (
                     handle_pause_input
                         .run_if(in_state(GameState::Playing).or(in_state(GameState::Paused))),
-                    freecam_controller,
+                    freecam_controller
+                        .run_if(in_state(InputControlState::Freecam)),
                     update_camera_transition,
                     manage_camera_visibility,
                     //manage_physics_pause,

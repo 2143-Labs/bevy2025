@@ -17,7 +17,7 @@ pub struct Man(pub f32);
 
 /// Simple Interactable entity
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
-pub struct Interactable;
+pub struct CanAssumeControl;
 
 /// Anything with this component will have its transform sent over the network regularly from the
 /// server. (should maybe move to "ours" category)
@@ -29,7 +29,7 @@ pub struct SendNetworkTranformUpdates;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NetComponentEnts {
     Ball(Ball),
-    Interactable(Interactable),
+    CanAssumeControl(CanAssumeControl),
     SendNetworkTranformUpdates(SendNetworkTranformUpdates),
     PlayerCamera(PlayerCamera),
     Man(Man),
@@ -41,7 +41,7 @@ impl NetComponentEnts {
             NetComponentEnts::Ball(c) => {
                 entity.insert(c);
             }
-            NetComponentEnts::Interactable(c) => {
+            NetComponentEnts::CanAssumeControl(c) => {
                 entity.insert(c);
             }
             NetComponentEnts::SendNetworkTranformUpdates(c) => {
@@ -63,9 +63,9 @@ impl ToNetComponent for Ball {
     }
 }
 
-impl ToNetComponent for Interactable {
+impl ToNetComponent for CanAssumeControl {
     fn to_net_component(self) -> super::NetComponent {
-        super::NetComponent::Ents(NetComponentEnts::Interactable(self))
+        super::NetComponent::Ents(NetComponentEnts::CanAssumeControl(self))
     }
 }
 

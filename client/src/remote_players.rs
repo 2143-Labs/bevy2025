@@ -20,7 +20,9 @@ pub struct RemotePlayerModel;
 
 /// Marker component for player name labels (2D UI nodes)
 #[derive(Component)]
-pub struct NameLabel;
+pub struct NameLabel {
+    pub target_entity: Entity,
+}
 
 /// Marker component for scenes that need NoFrustumCulling applied to all their meshes
 #[derive(Component)]
@@ -152,17 +154,17 @@ fn handle_player_disconnect(
 
 /// Update 2D UI name label positions based on 3D world positions
 fn update_name_label_positions(
-    mut labels: Query<&mut Node, With<NameLabel>>,
-    targets: Query<&GlobalTransform, With<ActiveCamera>>,
+    mut labels: Query<(&mut Node, &NameLabel)>,
+    targets: Query<&GlobalTransform>,
     camera: Query<(&Camera, &GlobalTransform), With<crate::camera::LocalCamera>>,
 ) {
     let Ok((camera, camera_transform)) = camera.single() else {
         return;
     };
 
-    for mut node in labels.iter_mut() {
+    for (mut node, name_label) in labels.iter_mut() {
         // Get the target entity's world position
-        if let Ok(target_transform) = targets.single() {
+        if let Ok(target_transform) = targets.get(name_label.target_entity) {
             // Calculate position above the player (3 units up)
             let world_pos = target_transform.translation() + Vec3::new(0.0, 3.0, 0.0);
 

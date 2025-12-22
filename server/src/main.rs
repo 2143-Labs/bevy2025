@@ -426,7 +426,7 @@ fn on_unit_despawn(
             }
         }
 
-        info!("Despawning unit {:?}", despawn.net_ent_id);
+        trace!("Despawning unit {:?}", despawn.net_ent_id);
 
         // Now tell all clients to also despawn
         let event = EventToClient::DespawnUnit2(DespawnUnit2 {

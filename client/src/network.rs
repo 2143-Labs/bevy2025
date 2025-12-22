@@ -9,7 +9,7 @@ use shared::{
         server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle, SpawnMan},
     },
     net_components::{
-        ents::{Ball, Interactable, Man, PlayerCamera},
+        ents::{Ball, CanAssumeControl, Man, PlayerCamera},
         foreign::ComponentColor,
         ours::{PlayerColor, PlayerName},
     },
@@ -88,7 +88,12 @@ impl Plugin for NetworkingPlugin {
         )
         .add_systems(
             FixedUpdate,
-            (shared::increment_ticks)
+            (
+                shared::increment_ticks, 
+                on_general_spawn_network_unit,
+                on_begin_controlling_unit,
+            )
+                .chain()
                 .run_if(in_state(NetworkGameState::ClientConnected)),
         )
         .add_systems(
@@ -108,16 +113,14 @@ impl Plugin for NetworkingPlugin {
             FixedUpdate,
             (send_movement_camera)
                 .run_if(in_state(NetworkGameState::ClientConnected))
-                .run_if(in_state(InputControlState::Freecam))
+                //.run_if(in_state(InputControlState::Freecam))
                 .run_if(in_state(GameState::Playing)),
         )
         .add_systems(
             Update,
             (
                 // TODO receive new world data at any time?
-                on_begin_controlling_unit,
                 spawn_networked_unit_forward_local,
-                on_general_spawn_network_unit,
                 on_special_unit_spawn_remote_camera,
                 on_special_unit_spawn_ball,
                 on_special_unit_spawn_man,
@@ -273,7 +276,9 @@ fn on_special_unit_spawn_remote_camera(
                 ..default()
             },
             TextColor(Color::WHITE),
-            NameLabel,
+            NameLabel {
+                target_entity: entity,
+            },
             MyNetEntParentId(ent_id.0),
         ));
     }
@@ -311,7 +316,7 @@ fn send_connect_packet(
 fn on_begin_controlling_unit(
     mut commands: Commands,
     mut unit_event: UDPacketEvent<BeginThirdpersonControllingUnit>,
-    units: Query<(Entity, &NetEntId), With<Interactable>>,
+    units: Query<(Entity, &NetEntId), With<CanAssumeControl>>,
     current_thirdperson_unit: Query<(Entity, &NetEntId), With<CurrentThirdPersonControlledUnit>>,
     our_player_id: Res<LocalPlayerId>,
     mut next_control_state: ResMut<NextState<crate::game_state::InputControlState>>,
