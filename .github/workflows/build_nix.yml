@@ -146,20 +146,29 @@ jobs:
       - name: Collect Windows executable
         shell: pwsh
         run: |
-          Copy-Item "target\release\bevy2025.exe" "bevy2025-windows.exe"
+          Copy-Item "target\release\client.exe" "bevy2025-client-windows.exe"
+          Copy-Item "target\release\server.exe" "bevy2025-server-windows.exe"
 
-      - name: Upload Windows artifact
+      - name: Upload Windows artifact client
         uses: actions/upload-artifact@v4
         with:
-          name: windows-executable
-          path: bevy2025-windows.exe
+          name: windows-executable-client
+          path: bevy2025-client-windows.exe
           if-no-files-found: error
+
+      - name: Upload Windows artifact server
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-executable-server
+          path: bevy2025-server-windows.exe
+          if-no-files-found: error
+
 
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs:
-      - build-linux
+      #- build-linux
       - build-windows
     permissions:
       contents: write
@@ -179,7 +188,7 @@ jobs:
           prerelease: false
           target_commitish: main
           files: |
-            dist/bevy2025-linux
-            dist/bevy2025-windows.exe
+            dist/bevy2025-client-windows.exe
+            dist/bevy2025-server-windows.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
