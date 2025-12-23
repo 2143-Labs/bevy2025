@@ -7,6 +7,7 @@ use shared::net_components::ents::Ball;
 
 use crate::camera::LocalCamera;
 use crate::game_state::GameState;
+use crate::game_state::OverlayMenuState;
 
 /// UI component for the ball counter parent
 #[derive(Component)]
@@ -25,8 +26,13 @@ impl Plugin for PhysicsPlugin {
             .add_systems(OnEnter(GameState::MainMenu), despawn_ball_counter_ui)
             .add_systems(
                 Update,
-                (spawn_ball_on_space, update_ball_counter, spawn_man_on_use1)
-                    .run_if(in_state(GameState::Playing)),
+                (spawn_ball_on_space, spawn_man_on_use1)
+                    .run_if(in_state(GameState::Playing))
+                    .run_if(in_state(OverlayMenuState::Hidden)),
+            )
+            .add_systems(
+                Update,
+                (update_ball_counter).run_if(in_state(GameState::Playing)),
             )
             .insert_resource(Gravity(Vec3::new(0.0, -9.81, 0.0)));
     }

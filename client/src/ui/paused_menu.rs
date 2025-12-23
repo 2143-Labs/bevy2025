@@ -1,5 +1,5 @@
 use super::styles::*;
-use crate::game_state::GameState;
+use crate::game_state::{GameState, OverlayMenuState};
 use bevy::prelude::*;
 
 /// Marker for the paused menu root entity
@@ -101,12 +101,13 @@ pub fn handle_paused_menu_buttons(
         ),
     >,
     mut next_state: ResMut<NextState<GameState>>,
+    mut next_menu_state: ResMut<NextState<OverlayMenuState>>,
 ) {
     // Resume button - go back to Playing
     for interaction in resume_query.iter() {
         if *interaction == Interaction::Pressed {
             info!("Resume button pressed");
-            next_state.set(GameState::Playing);
+            next_menu_state.set(OverlayMenuState::Hidden);
         }
     }
 
@@ -115,6 +116,7 @@ pub fn handle_paused_menu_buttons(
         if *interaction == Interaction::Pressed {
             info!("Main Menu button pressed from pause menu");
             next_state.set(GameState::MainMenu);
+            next_menu_state.set(OverlayMenuState::Hidden);
         }
     }
 }

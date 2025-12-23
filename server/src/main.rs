@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use avian3d::prelude::LinearVelocity;
+use avian3d::prelude::{Gravity, LinearVelocity};
 use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use message_io::network::Endpoint;
 use rand::Rng;
@@ -82,6 +82,7 @@ fn main() {
             ScheduleRunnerPlugin::run_loop(Duration::from_millis(1)),
             avian3d::PhysicsPlugins::default(),
         ))
+        .insert_resource(Gravity(Vec3::new(0.0, -9.81, 0.0)))
         .add_plugins((
             ConfigPlugin,
             //chat::ChatPlugin,

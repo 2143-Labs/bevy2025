@@ -32,6 +32,8 @@ pub enum GameAction {
     Ascend,
     Descend,
     Escape,
+    ZoomCameraIn,
+    ZoomCameraOut,
 
     Chat,
 }
@@ -58,6 +60,8 @@ static DEFAULT_BINDS: Lazy<Keybinds> = Lazy::new(|| {
         (GameAction::Special1, vec![kk(KeyCode::KeyQ)]),
         (GameAction::Escape, vec![kk(KeyCode::Escape)]),
         (GameAction::Chat, vec![kk(KeyCode::Enter)]),
+        (GameAction::ZoomCameraIn, vec![kk(KeyCode::Equal)]),
+        (GameAction::ZoomCameraOut, vec![kk(KeyCode::Minus)]),
     ])
 });
 

@@ -5,7 +5,7 @@ pub mod paused_menu;
 pub mod styles;
 pub mod text_input;
 
-use crate::game_state::{GameState, MenuState};
+use crate::game_state::{MenuState, OverlayMenuState};
 use bevy::prelude::*;
 
 pub use text_input::FocusedInput;
@@ -65,12 +65,15 @@ impl Plugin for UIPlugin {
                     .run_if(in_state(MenuState::Connecting)),
             )
             // Paused Menu
-            .add_systems(OnEnter(GameState::Paused), paused_menu::spawn_paused_menu)
-            .add_systems(OnExit(GameState::Paused), paused_menu::despawn_paused_menu)
             .add_systems(
-                Update,
-                paused_menu::handle_paused_menu_buttons.run_if(in_state(GameState::Paused)),
+                OnEnter(OverlayMenuState::Paused),
+                paused_menu::spawn_paused_menu,
             )
+            .add_systems(
+                OnExit(OverlayMenuState::Paused),
+                paused_menu::despawn_paused_menu,
+            )
+            .add_systems(Update, paused_menu::handle_paused_menu_buttons)
             // Global button feedback
             .add_systems(Update, styles::button_visual_feedback);
     }

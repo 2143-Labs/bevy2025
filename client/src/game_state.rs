@@ -11,10 +11,9 @@ pub enum GameState {
     AssetLoading,
     MainMenu,
     Playing,
-    Paused,
 }
 
-/// Menu navigation state - independent of GameState
+/// Main Menu navigation states - independent of GameState
 #[derive(States, Reflect, PartialEq, Eq, Debug, Clone, Hash, Default)]
 pub enum MenuState {
     #[default]
@@ -22,6 +21,16 @@ pub enum MenuState {
     Home,        // Main menu with Play/Multiplayer buttons
     Multiplayer, // IP/username input form
     Connecting,  // Connecting to server with status display
+}
+
+/// Like main menu states, but for while we are playing
+#[derive(States, Reflect, PartialEq, Eq, Debug, Clone, Hash, Default)]
+pub enum OverlayMenuState {
+    #[default]
+    Hidden,
+    Paused,
+    /// TO DO
+    Settings,
 }
 
 /// Network connection state - independent of GameState
@@ -54,6 +63,7 @@ impl Plugin for StatePlugin {
             .init_state::<MenuState>()
             .init_state::<NetworkGameState>()
             .init_state::<InputControlState>()
+            .init_state::<OverlayMenuState>()
             .add_systems(
                 OnEnter(GameState::MainMenu),
                 (despawn_world, enter_main_menu),
