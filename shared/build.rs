@@ -48,10 +48,14 @@ fn generate_code_for_event_queue(req: &GenerateRequest) -> String {
             }
         }
 
-        pub fn register_events(app: &mut App) {
-            #(
-                app.add_message::< EventFromEndpoint< #all_types > >();
-            )*
+        pub struct NetworkEventPlugin;
+
+        impl Plugin for NetworkEventPlugin {
+            fn build(&self, app: &mut App) {
+                #(
+                    app.add_message::< EventFromEndpoint< #all_types > >();
+                )*
+            }
         }
     );
 

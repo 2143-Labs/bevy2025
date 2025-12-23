@@ -9,13 +9,24 @@ use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
-    Config, ConfigPlugin, CurrentTick, event::{
-        NetEntId, PlayerId, UDPacketEvent, client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2}, server::{ChangeMovement, Heartbeat}
-    }, net_components::{
-        ToNetComponent, ents::{PlayerCamera, SendNetworkTranformUpdates}, foreign::ComponentColor, make_ball, make_man, ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName}
-    }, netlib::{
-        EventToClient, EventToServer, NetworkConnectionTarget, ServerNetworkingResources, Tick, send_outgoing_event_next_tick, send_outgoing_event_next_tick_batch,
-    }, physics::terrain::TerrainParams
+    event::{
+        client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2},
+        server::{ChangeMovement, Heartbeat},
+        NetEntId, PlayerId, UDPacketEvent,
+    },
+    net_components::{
+        ents::{PlayerCamera, SendNetworkTranformUpdates},
+        foreign::ComponentColor,
+        make_ball, make_man,
+        ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName},
+        ToNetComponent,
+    },
+    netlib::{
+        send_outgoing_event_next_tick, send_outgoing_event_next_tick_batch, EventToClient,
+        EventToServer, NetworkConnectionTarget, ServerNetworkingResources, Tick,
+    },
+    physics::terrain::TerrainParams,
+    Config, ConfigPlugin, CurrentTick,
 };
 
 /// How often to run the system
@@ -62,7 +73,6 @@ fn main() {
     info!("Main Start");
     let mut app = App::new();
 
-    shared::event::server::register_events(&mut app);
     app.insert_resource(EndpointToPlayerId::default())
         .insert_resource(HeartbeatList::default())
         .add_message::<PlayerDisconnected>()
@@ -80,6 +90,7 @@ fn main() {
             shared::physics::water::SharedWaterPlugin,
             terrain::TerrainPlugin,
             shared::TickPlugin,
+            shared::event::server::NetworkEventPlugin,
             //StatusPlugin,
         ))
         .init_state::<ServerState>()

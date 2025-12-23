@@ -3,10 +3,6 @@ use shared::{Config, GameAction};
 
 use crate::game_state::{GameState, InputControlState};
 
-/// Resource for global time scaling
-#[derive(Resource)]
-pub struct GameTimeScale(pub f32);
-
 /// Resource to track if cameras are spawned
 #[derive(Resource, Default)]
 struct CamerasSpawned(bool);
@@ -60,7 +56,7 @@ pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(GameTimeScale(1.0))
+        app
             .insert_resource(CameraTransition::default())
             .insert_resource(CamerasSpawned(false))
             .add_systems(OnEnter(GameState::Playing), setup_cameras)
@@ -70,8 +66,7 @@ impl Plugin for CameraPlugin {
                 (
                     handle_pause_input
                         .run_if(in_state(GameState::Playing).or(in_state(GameState::Paused))),
-                    freecam_controller
-                        .run_if(in_state(InputControlState::Freecam)),
+                    freecam_controller.run_if(in_state(InputControlState::Freecam)),
                     update_camera_transition,
                     manage_camera_visibility,
                     //manage_physics_pause,

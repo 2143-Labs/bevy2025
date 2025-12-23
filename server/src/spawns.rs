@@ -1,13 +1,15 @@
 use bevy::prelude::*;
 use shared::{
     event::{
-        NetEntId, UDPacketEvent, client::BeginThirdpersonControllingUnit, server::{SpawnCircle, SpawnMan}
+        client::BeginThirdpersonControllingUnit,
+        server::{SpawnCircle, SpawnMan},
+        NetEntId, UDPacketEvent,
     },
     net_components::{
         make_man,
         ours::{ControlledBy, DespawnOnPlayerDisconnect},
     },
-    netlib::{EventToClient, ServerNetworkingResources, send_outgoing_event_next_tick},
+    netlib::{send_outgoing_event_next_tick, EventToClient, ServerNetworkingResources},
 };
 
 use crate::{make_ball, ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint, ServerState};

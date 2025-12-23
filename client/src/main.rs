@@ -73,7 +73,11 @@ fn main() {
             WaterPlugin,
             shared::TickPlugin,
         ))
-        .add_plugins((GrassPlugin, LogDiagnosticsPlugin::default()))
+        .add_plugins((
+            GrassPlugin,
+            LogDiagnosticsPlugin::default(),
+            shared::event::client::NetworkEventPlugin,
+        ))
         .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue
         .insert_resource(args)
         .add_systems(Startup, check_all_clap_args)

@@ -14,7 +14,9 @@ use shared::{
         ours::{PlayerColor, PlayerName},
     },
     netlib::{
-        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, send_outgoing_event_next_tick, send_outgoing_event_now, send_outgoing_event_now_batch, setup_incoming_client
+        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint,
+        send_outgoing_event_next_tick, send_outgoing_event_now, send_outgoing_event_now_batch,
+        setup_incoming_client,
     },
     physics::terrain::TerrainParams,
 };
@@ -22,7 +24,7 @@ use shared::{
 use crate::{
     assets::{FontAssets, ModelAssets},
     camera::LocalCamera,
-    game_state::{GameState, InputControlState, NetworkGameState, WorldEntity},
+    game_state::{GameState, NetworkGameState, WorldEntity},
     notification::Notification,
     remote_players::{ApplyNoFrustumCulling, NameLabel, RemotePlayerCamera, RemotePlayerModel},
     terrain::SetupTerrain,
@@ -41,7 +43,6 @@ struct LocalPlayerId(pub PlayerId);
 pub struct NetworkingPlugin;
 impl Plugin for NetworkingPlugin {
     fn build(&self, app: &mut App) {
-        shared::event::client::register_events(app);
         app.add_systems(
             OnEnter(NetworkGameState::ClientConnecting),
             (
@@ -89,7 +90,7 @@ impl Plugin for NetworkingPlugin {
         .add_systems(
             FixedUpdate,
             (
-                shared::increment_ticks, 
+                shared::increment_ticks,
                 on_general_spawn_network_unit,
                 on_begin_controlling_unit,
             )
@@ -98,9 +99,10 @@ impl Plugin for NetworkingPlugin {
         )
         .add_systems(
             FixedPostUpdate,
-            (shared::netlib::flush_outgoing_events::<EventToClient, EventToServer>)
-                .run_if(in_state(NetworkGameState::ClientSendRequestPacket)
-                        .or(in_state(NetworkGameState::ClientConnected))),
+            (shared::netlib::flush_outgoing_events::<EventToClient, EventToServer>).run_if(
+                in_state(NetworkGameState::ClientSendRequestPacket)
+                    .or(in_state(NetworkGameState::ClientConnected)),
+            ),
         )
         //.add_systems(
         //Update,

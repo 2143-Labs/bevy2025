@@ -8,7 +8,7 @@ use shared::{
     net_components::{NetComponent, ours::ControlledBy},
 };
 
-use crate::{camera::ActiveCamera, game_state::NetworkGameState, notification::Notification};
+use crate::{game_state::NetworkGameState, notification::Notification};
 
 /// Marker component for remote player camera entities (not our local camera)
 #[derive(Component)]
