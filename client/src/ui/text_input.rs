@@ -1,4 +1,4 @@
-use bevy::{prelude::*, input::keyboard::KeyboardInput};
+use bevy::{input::keyboard::KeyboardInput, prelude::*};
 
 /// Text input component that handles user keyboard input
 #[derive(Component, Debug, Clone)]
@@ -102,7 +102,10 @@ pub fn handle_text_input_keyboard(
         }
 
         // Handle printable characters
-        if let Some(text_char) = keycode_to_char(event.key_code, keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight)) {
+        if let Some(text_char) = keycode_to_char(
+            event.key_code,
+            keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight),
+        ) {
             if input.value.len() < input.max_length {
                 input.value.push(text_char);
                 changed = true;

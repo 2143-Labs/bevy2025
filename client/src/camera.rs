@@ -2,9 +2,9 @@ use bevy::prelude::*;
 use shared::{Config, GameAction};
 
 use crate::assets::ImageAssets;
+use crate::game_state::GameState;
 use crate::inventory::{Inventory, Item, TetrominoShape};
 use crate::player::Player;
-use crate::game_state::GameState;
 
 /// Resource for global time scaling
 #[derive(Resource)]
@@ -102,14 +102,38 @@ fn setup_cameras(
     let mut inventory = Inventory::default();
 
     // Add items with different shapes
-    inventory.add_item(Item::new("Tornado", image_assets.tornado.clone(), TetrominoShape::Single));
-    inventory.add_item(Item::new("Cake", image_assets.cake.clone(), TetrominoShape::Square2x2));
-    inventory.add_item(Item::new("Star", image_assets.star.clone(), TetrominoShape::Horizontal2));
-    inventory.add_item(Item::new("Star", image_assets.star.clone(), TetrominoShape::Vertical2));
-    inventory.add_item(Item::new("Bucket", image_assets.bucket.clone(), TetrominoShape::Square2x2));
+    inventory.add_item(Item::new(
+        "Tornado",
+        image_assets.tornado.clone(),
+        TetrominoShape::Single,
+    ));
+    inventory.add_item(Item::new(
+        "Cake",
+        image_assets.cake.clone(),
+        TetrominoShape::Square2x2,
+    ));
+    inventory.add_item(Item::new(
+        "Star",
+        image_assets.star.clone(),
+        TetrominoShape::Horizontal2,
+    ));
+    inventory.add_item(Item::new(
+        "Star",
+        image_assets.star.clone(),
+        TetrominoShape::Vertical2,
+    ));
+    inventory.add_item(Item::new(
+        "Bucket",
+        image_assets.bucket.clone(),
+        TetrominoShape::Square2x2,
+    ));
 
     // Add the Hammer item with TPiece shape (3x3 cross)
-    inventory.add_item(Item::new("Hammer", image_assets.t_3x3.clone(), TetrominoShape::TPiece));
+    inventory.add_item(Item::new(
+        "Hammer",
+        image_assets.t_3x3.clone(),
+        TetrominoShape::TPiece,
+    ));
 
     // FreeCam - Perspective, active by default
     commands.spawn((

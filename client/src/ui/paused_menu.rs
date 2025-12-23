@@ -1,6 +1,6 @@
-use bevy::prelude::*;
-use crate::game_state::GameState;
 use super::styles::*;
+use crate::game_state::GameState;
+use bevy::prelude::*;
 
 /// Marker for the paused menu root entity
 #[derive(Component)]
@@ -51,7 +51,13 @@ pub fn spawn_paused_menu(mut commands: Commands) {
                 let (node, bg_color, border_color) = menu_button_bundle();
                 let (text, font, color) = menu_button_text("Resume");
                 parent
-                    .spawn((node, bg_color, border_color, Interaction::default(), ResumeButton))
+                    .spawn((
+                        node,
+                        bg_color,
+                        border_color,
+                        Interaction::default(),
+                        ResumeButton,
+                    ))
                     .with_children(|button| {
                         button.spawn((text, font, color));
                     });
@@ -62,7 +68,13 @@ pub fn spawn_paused_menu(mut commands: Commands) {
                 let (node, bg_color, border_color) = menu_button_bundle();
                 let (text, font, color) = menu_button_text("Main Menu");
                 parent
-                    .spawn((node, bg_color, border_color, Interaction::default(), MainMenuButton))
+                    .spawn((
+                        node,
+                        bg_color,
+                        border_color,
+                        Interaction::default(),
+                        MainMenuButton,
+                    ))
                     .with_children(|button| {
                         button.spawn((text, font, color));
                     });
@@ -82,7 +94,11 @@ pub fn handle_paused_menu_buttons(
     resume_query: Query<&Interaction, (Changed<Interaction>, With<ResumeButton>)>,
     main_menu_query: Query<
         &Interaction,
-        (Changed<Interaction>, With<MainMenuButton>, Without<ResumeButton>),
+        (
+            Changed<Interaction>,
+            With<MainMenuButton>,
+            Without<ResumeButton>,
+        ),
     >,
     mut next_state: ResMut<NextState<GameState>>,
 ) {

@@ -18,7 +18,7 @@ pub enum GameState {
 #[derive(States, Reflect, PartialEq, Eq, Debug, Clone, Hash, Default)]
 pub enum MenuState {
     #[default]
-    Hidden,      // When not in MainMenu GameState
+    Hidden, // When not in MainMenu GameState
     Home,        // Main menu with Play/Multiplayer buttons
     Multiplayer, // IP/username input form
     Connecting,  // Connecting to server with status display
@@ -44,7 +44,10 @@ impl Plugin for StatePlugin {
         app.init_state::<GameState>()
             .init_state::<MenuState>()
             .init_state::<NetworkGameState>()
-            .add_systems(OnEnter(GameState::MainMenu), (despawn_world, enter_main_menu))
+            .add_systems(
+                OnEnter(GameState::MainMenu),
+                (despawn_world, enter_main_menu),
+            )
             .add_systems(OnExit(GameState::MainMenu), exit_main_menu)
             .add_systems(OnEnter(NetworkGameState::Quit), quit_event);
     }

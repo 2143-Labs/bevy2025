@@ -1,14 +1,14 @@
 use bevy::{camera::visibility::NoFrustumCulling, prelude::*};
 use shared::{
     event::{
+        ERFE, NetEntId,
         client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2},
-        NetEntId, ERFE,
     },
     net_components::NetComponent,
 };
 
 use crate::{
-    assets::{ModelAssets, FontAssets},
+    assets::{FontAssets, ModelAssets},
     game_state::NetworkGameState,
     notification::Notification,
 };
@@ -92,7 +92,6 @@ fn handle_spawn_unit(
     mut notif: MessageWriter<Notification>,
 ) {
     for unit in spawn_events.read() {
-
         // Check if this is a PlayerCamera component
         let mut is_player_camera = false;
         let mut player_name = None;
@@ -103,23 +102,26 @@ fn handle_spawn_unit(
         for component in &unit.components {
             match component {
                 NetComponent::Ents(ents) => {
-                    if matches!(ents, shared::net_components::ents::NetComponentEnts::PlayerCamera(_)) {
+                    if matches!(
+                        ents,
+                        shared::net_components::ents::NetComponentEnts::PlayerCamera(_)
+                    ) {
                         is_player_camera = true;
                     }
                 }
-                NetComponent::Ours(ours) => {
-                    match ours {
-                        shared::net_components::ours::NetComponentOurs::PlayerName(name) => {
-                            player_name = Some(name.name.clone());
-                        }
-                        shared::net_components::ours::NetComponentOurs::PlayerColor(color) => {
-                            player_color_hue = color.hue;
-                        }
-                        _ => {}
+                NetComponent::Ours(ours) => match ours {
+                    shared::net_components::ours::NetComponentOurs::PlayerName(name) => {
+                        player_name = Some(name.name.clone());
                     }
-                }
+                    shared::net_components::ours::NetComponentOurs::PlayerColor(color) => {
+                        player_color_hue = color.hue;
+                    }
+                    _ => {}
+                },
                 NetComponent::Foreign(foreign) => {
-                    if let shared::net_components::foreign::NetComponentForeign::Transform(tfm) = foreign {
+                    if let shared::net_components::foreign::NetComponentForeign::Transform(tfm) =
+                        foreign
+                    {
                         transform = *tfm;
                     }
                 }
@@ -135,18 +137,20 @@ fn handle_spawn_unit(
         if is_player_camera {
             if let Some(name) = player_name {
                 // Spawn the camera tracking entity with proper spatial bundle
-                let camera_entity = commands.spawn((
-                    unit.net_ent_id,
-                    RemotePlayerCamera {
-                        player_net_id: parent_id.unwrap_or(unit.net_ent_id),
-                    },
-                    Transform::from_translation(transform.translation)
-                        .with_rotation(transform.rotation),
-                    GlobalTransform::default(),
-                    Visibility::default(),
-                    InheritedVisibility::default(),
-                    ViewVisibility::default(),
-                )).id();
+                let camera_entity = commands
+                    .spawn((
+                        unit.net_ent_id,
+                        RemotePlayerCamera {
+                            player_net_id: parent_id.unwrap_or(unit.net_ent_id),
+                        },
+                        Transform::from_translation(transform.translation)
+                            .with_rotation(transform.rotation),
+                        GlobalTransform::default(),
+                        Visibility::default(),
+                        InheritedVisibility::default(),
+                        ViewVisibility::default(),
+                    ))
+                    .id();
 
                 // Spawn the G-Toilet model as a child, rotated 180° to face forward
                 commands.entity(camera_entity).with_children(|parent| {
@@ -158,7 +162,9 @@ fn handle_spawn_unit(
                         RemotePlayerModel {
                             camera_net_id: unit.net_ent_id,
                         },
-                        shared::net_components::ours::PlayerColor { hue: player_color_hue },
+                        shared::net_components::ours::PlayerColor {
+                            hue: player_color_hue,
+                        },
                         ApplyNoFrustumCulling, // Mark this scene to have NoFrustumCulling applied to all meshes
                     ));
                 });
@@ -195,14 +201,16 @@ fn handle_update_unit(
     mut remote_cameras: Query<(&NetEntId, &mut Transform), With<RemotePlayerCamera>>,
 ) {
     for update in update_events.read() {
-
         // Find the entity with this NetEntId
         for (net_id, mut transform) in &mut remote_cameras {
             if net_id == &update.net_ent_id {
                 // Update the transform from components
                 for component in &update.components {
                     if let NetComponent::Foreign(foreign) = component {
-                        if let shared::net_components::foreign::NetComponentForeign::Transform(tfm) = foreign {
+                        if let shared::net_components::foreign::NetComponentForeign::Transform(
+                            tfm,
+                        ) = foreign
+                        {
                             *transform = *tfm;
                         }
                     }
@@ -216,11 +224,13 @@ fn handle_update_unit(
 /// Handle despawning units
 fn handle_despawn_unit(
     mut despawn_events: MessageReader<DespawnUnit2>,
-    remote_entities: Query<(Entity, &NetEntId), Or<(With<RemotePlayerCamera>, With<RemotePlayerModel>)>>,
+    remote_entities: Query<
+        (Entity, &NetEntId),
+        Or<(With<RemotePlayerCamera>, With<RemotePlayerModel>)>,
+    >,
     mut commands: Commands,
 ) {
     for despawn in despawn_events.read() {
-
         for (entity, net_id) in &remote_entities {
             if net_id == &despawn.net_ent_id {
                 info!("Despawning remote entity {:?}", despawn.net_ent_id);
@@ -245,7 +255,10 @@ fn handle_player_disconnect(
         // Find and despawn all entities belonging to this player
         for (entity, remote_cam) in &remote_cameras {
             if remote_cam.player_net_id == player_id {
-                info!("Despawning remote player camera and model for {:?}", player_id);
+                info!(
+                    "Despawning remote player camera and model for {:?}",
+                    player_id
+                );
                 // Despawn (automatically despawns children in Bevy 0.17)
                 commands.entity(entity).despawn();
             }
@@ -261,7 +274,9 @@ fn update_name_label_positions(
     targets: Query<&GlobalTransform, With<RemotePlayerCamera>>,
     camera: Query<(&Camera, &GlobalTransform), With<crate::camera::LocalCamera>>,
 ) {
-    let Ok((camera, camera_transform)) = camera.single() else { return };
+    let Ok((camera, camera_transform)) = camera.single() else {
+        return;
+    };
 
     for (mut node, label) in &mut labels {
         // Get the target entity's world position
@@ -291,7 +306,7 @@ struct ColorApplied;
 fn apply_player_color_tint(
     models: Query<
         (Entity, &shared::net_components::ours::PlayerColor),
-        (With<RemotePlayerModel>, Without<ColorApplied>)
+        (With<RemotePlayerModel>, Without<ColorApplied>),
     >,
     mut commands: Commands,
 ) {
@@ -303,8 +318,8 @@ fn apply_player_color_tint(
                 PointLight {
                     color: tint_color,
                     intensity: 500000.0, // Increased intensity
-                    range: 8.0, // Increased range
-                    radius: 1.0, // Larger radius for softer light
+                    range: 8.0,          // Increased range
+                    radius: 1.0,         // Larger radius for softer light
                     shadows_enabled: false,
                     ..default()
                 },
@@ -345,4 +360,3 @@ fn apply_no_frustum_culling_to_scene_meshes(
         }
     }
 }
-

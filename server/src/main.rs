@@ -15,7 +15,12 @@ use shared::{
         server::{ChangeMovement, Heartbeat},
         MyNetEntParentId, NetEntId, ERFE,
     },
-    net_components::{ents::PlayerCamera, make_ball, ours::{PlayerName, PlayerColor}, ToNetComponent},
+    net_components::{
+        ents::PlayerCamera,
+        make_ball,
+        ours::{PlayerColor, PlayerName},
+        ToNetComponent,
+    },
     netlib::{
         send_event_to_server, send_event_to_server_batch, EventToClient, EventToServer,
         NetworkConnectionTarget, ServerNetworkingResources,
@@ -143,7 +148,16 @@ fn on_player_connect(
     mut heartbeat_mapping: ResMut<HeartbeatList>,
     mut endpoint_to_net_id: ResMut<EndpointToNetId>,
     clients: Query<(&PlayerEndpoint, &NetEntId, &PlayerName, &PlayerColor), With<ConnectedPlayer>>,
-    cameras: Query<(&NetEntId, &MyNetEntParentId, &Transform, &PlayerName, &PlayerColor), With<PlayerCamera>>,
+    cameras: Query<
+        (
+            &NetEntId,
+            &MyNetEntParentId,
+            &Transform,
+            &PlayerName,
+            &PlayerColor,
+        ),
+        With<PlayerCamera>,
+    >,
     balls: Query<(&Transform, &NetEntId, &HasColor), With<shared::net_components::ents::Ball>>,
     sr: Res<ServerNetworkingResources>,
     terrain: Res<TerrainParams>,
@@ -160,7 +174,9 @@ fn on_player_connect(
             .unwrap_or_else(|| format!("Player #{}", rand::rng().random_range(1..10000)));
 
         let spawn_location = player.event.my_location;
-        let player_color = PlayerColor { hue: player.event.color_hue };
+        let player_color = PlayerColor {
+            hue: player.event.color_hue,
+        };
 
         let new_player_ent_id = NetEntId::random();
 
@@ -190,9 +206,15 @@ fn on_player_connect(
         let mut unit_list_to_new_client = vec![];
 
         // Add all existing cameras from other players to unit list as spawnunit2s
-        info!("Found {} existing cameras to send to new player", cameras.iter().len());
+        info!(
+            "Found {} existing cameras to send to new player",
+            cameras.iter().len()
+        );
         for (c_net_ent, c_parent_id, c_tfm, c_name, c_color) in &cameras {
-            info!("  - Camera {:?} at {:?} for player {:?}", c_net_ent, c_tfm.translation, c_parent_id);
+            info!(
+                "  - Camera {:?} at {:?} for player {:?}",
+                c_net_ent, c_tfm.translation, c_parent_id
+            );
             unit_list_to_new_client.push(SpawnUnit2 {
                 net_ent_id: *c_net_ent,
                 components: vec![
@@ -209,7 +231,10 @@ fn on_player_connect(
         for (_c_net_client, c_net_ent, c_name, c_color) in &clients {
             unit_list_to_new_client.push(SpawnUnit2 {
                 net_ent_id: *c_net_ent,
-                components: vec![c_name.clone().to_net_component(), c_color.clone().to_net_component()],
+                components: vec![
+                    c_name.clone().to_net_component(),
+                    c_color.clone().to_net_component(),
+                ],
             });
         }
 
@@ -261,7 +286,10 @@ fn on_player_connect(
             terrain_params: terrain.clone(),
             units: unit_list_to_new_client,
         };
-        info!("Player connected - sending {} existing units", world_data.units.len());
+        info!(
+            "Player connected - sending {} existing units",
+            world_data.units.len()
+        );
         let event = EventToClient::WorldData2(world_data);
         send_event_to_server(&sr.handler, player.endpoint, &event);
 

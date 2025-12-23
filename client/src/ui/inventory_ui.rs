@@ -1,19 +1,21 @@
-use bevy::prelude::*;
+use crate::game_state::GameState;
 use crate::inventory::{Inventory, Item, ItemId};
 use crate::player::Player;
-use crate::game_state::GameState;
 use crate::ui::styles::heading_text;
+use bevy::prelude::*;
 use shared::{Config, GameAction};
 
 pub struct InventoryPlugin;
 
 impl Plugin for InventoryPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .init_resource::<InventoryVisible>()
+        app.init_resource::<InventoryVisible>()
             .init_resource::<DragState>()
             .add_systems(OnEnter(GameState::Playing), spawn_inventory_ui)
-            .add_systems(OnExit(GameState::Playing), (despawn_inventory_ui, close_inventory_on_state_exit))
+            .add_systems(
+                OnExit(GameState::Playing),
+                (despawn_inventory_ui, close_inventory_on_state_exit),
+            )
             .add_systems(
                 Update,
                 (
@@ -24,7 +26,8 @@ impl Plugin for InventoryPlugin {
                     handle_cell_interaction,
                     handle_rotation_input,
                     update_drag_visual_position,
-                ).run_if(in_state(GameState::Playing)),
+                )
+                    .run_if(in_state(GameState::Playing)),
             );
     }
 }
@@ -80,9 +83,7 @@ pub fn handle_inventory_toggle(
 }
 
 /// Spawn the inventory UI with 10x8 grid
-pub fn spawn_inventory_ui(
-    mut commands: Commands,
-) {
+pub fn spawn_inventory_ui(mut commands: Commands) {
     // Main container - full screen overlay
     commands
         .spawn((
@@ -312,47 +313,76 @@ fn spawn_item_visuals(commands: &mut Commands, inventory: &Inventory, grid_entit
                             let item_height_percent = (max_y + 1) as f32 * cell_height_percent;
 
                             // Find top-left occupied cell for text positioning (first in reading order)
-                            let top_left_cell = occupied_cells.iter()
+                            let top_left_cell = occupied_cells
+                                .iter()
                                 .min_by_key(|(x, y)| (*y, *x))
                                 .copied()
                                 .unwrap_or((0, 0));
 
                             // Spawn item visual as child of grid
                             commands.entity(grid_entity).with_children(|parent| {
-                                parent.spawn((
-                                    Node {
-                                        position_type: PositionType::Absolute,
-                                        left: Val::Percent(anchor_x as f32 * cell_width_percent),
-                                        top: Val::Percent(anchor_y as f32 * cell_height_percent),
-                                        width: Val::Percent(item_width_percent),
-                                        height: Val::Percent(item_height_percent),
-                                        justify_content: JustifyContent::Center,
-                                        align_items: AlignItems::Center,
-                                        ..default()
-                                    },
-                                    ImageNode {
-                                        image: item.texture_2d.clone(),
-                                        ..default()
-                                    },
-                                    ItemVisual { item_id },
-                                )).with_children(|item_parent| {
-                                    // Add text at top-left occupied cell with black outline
-                                    let text_left_percent = top_left_cell.0 as f32 * cell_width_percent;
-                                    let text_top_percent = top_left_cell.1 as f32 * cell_height_percent;
+                                parent
+                                    .spawn((
+                                        Node {
+                                            position_type: PositionType::Absolute,
+                                            left: Val::Percent(
+                                                anchor_x as f32 * cell_width_percent,
+                                            ),
+                                            top: Val::Percent(
+                                                anchor_y as f32 * cell_height_percent,
+                                            ),
+                                            width: Val::Percent(item_width_percent),
+                                            height: Val::Percent(item_height_percent),
+                                            justify_content: JustifyContent::Center,
+                                            align_items: AlignItems::Center,
+                                            ..default()
+                                        },
+                                        ImageNode {
+                                            image: item.texture_2d.clone(),
+                                            ..default()
+                                        },
+                                        ItemVisual { item_id },
+                                    ))
+                                    .with_children(|item_parent| {
+                                        // Add text at top-left occupied cell with black outline
+                                        let text_left_percent =
+                                            top_left_cell.0 as f32 * cell_width_percent;
+                                        let text_top_percent =
+                                            top_left_cell.1 as f32 * cell_height_percent;
 
-                                    // Black outline (shadow)
-                                    for (offset_x, offset_y) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
+                                        // Black outline (shadow)
+                                        for (offset_x, offset_y) in
+                                            [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)]
+                                        {
+                                            item_parent.spawn((
+                                                Node {
+                                                    position_type: PositionType::Absolute,
+                                                    left: Val::Percent(text_left_percent),
+                                                    top: Val::Percent(text_top_percent),
+                                                    padding: UiRect {
+                                                        left: Val::Px(2.0 + offset_x),
+                                                        top: Val::Px(2.0 + offset_y),
+                                                        right: Val::Px(2.0),
+                                                        bottom: Val::Px(2.0),
+                                                    },
+                                                    ..default()
+                                                },
+                                                Text::new(&item.name),
+                                                TextFont {
+                                                    font_size: 12.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgba(0.0, 0.0, 0.0, 1.0)),
+                                            ));
+                                        }
+
+                                        // White text on top
                                         item_parent.spawn((
                                             Node {
                                                 position_type: PositionType::Absolute,
                                                 left: Val::Percent(text_left_percent),
                                                 top: Val::Percent(text_top_percent),
-                                                padding: UiRect {
-                                                    left: Val::Px(2.0 + offset_x),
-                                                    top: Val::Px(2.0 + offset_y),
-                                                    right: Val::Px(2.0),
-                                                    bottom: Val::Px(2.0),
-                                                },
+                                                padding: UiRect::all(Val::Px(2.0)),
                                                 ..default()
                                             },
                                             Text::new(&item.name),
@@ -360,27 +390,9 @@ fn spawn_item_visuals(commands: &mut Commands, inventory: &Inventory, grid_entit
                                                 font_size: 12.0,
                                                 ..default()
                                             },
-                                            TextColor(Color::srgba(0.0, 0.0, 0.0, 1.0)),
+                                            TextColor(Color::srgba(1.0, 1.0, 1.0, 1.0)),
                                         ));
-                                    }
-
-                                    // White text on top
-                                    item_parent.spawn((
-                                        Node {
-                                            position_type: PositionType::Absolute,
-                                            left: Val::Percent(text_left_percent),
-                                            top: Val::Percent(text_top_percent),
-                                            padding: UiRect::all(Val::Px(2.0)),
-                                            ..default()
-                                        },
-                                        Text::new(&item.name),
-                                        TextFont {
-                                            font_size: 12.0,
-                                            ..default()
-                                        },
-                                        TextColor(Color::srgba(1.0, 1.0, 1.0, 1.0)),
-                                    ));
-                                });
+                                    });
                             });
                         }
                     }
@@ -391,10 +403,7 @@ fn spawn_item_visuals(commands: &mut Commands, inventory: &Inventory, grid_entit
 }
 
 /// Handle R key for rotation during drag
-fn handle_rotation_input(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut drag_state: ResMut<DragState>,
-) {
+fn handle_rotation_input(keyboard: Res<ButtonInput<KeyCode>>, mut drag_state: ResMut<DragState>) {
     if drag_state.dragging && keyboard.just_pressed(KeyCode::KeyR) {
         if let Some(ref mut item) = drag_state.dragged_item {
             item.rotate();
@@ -495,19 +504,19 @@ fn handle_cell_interaction(
                         let occupied_cells = item.current_occupied_cells();
 
                         for (dx, dy) in &occupied_cells {
-                            if let (Some(target_x), Some(target_y)) = (
-                                hover_x.checked_add(*dx),
-                                hover_y.checked_add(*dy)
-                            ) {
+                            if let (Some(target_x), Some(target_y)) =
+                                (hover_x.checked_add(*dx), hover_y.checked_add(*dy))
+                            {
                                 if target_x == cell.x && target_y == cell.y {
                                     // Check if placement would be valid
-                                    let can_place = if let Some(dragged_id) = drag_state.dragged_item_id {
-                                        let mut temp_inventory = inventory.clone();
-                                        temp_inventory.remove_item(dragged_id);
-                                        temp_inventory.can_place_item(item, hover_x, hover_y)
-                                    } else {
-                                        inventory.can_place_item(item, hover_x, hover_y)
-                                    };
+                                    let can_place =
+                                        if let Some(dragged_id) = drag_state.dragged_item_id {
+                                            let mut temp_inventory = inventory.clone();
+                                            temp_inventory.remove_item(dragged_id);
+                                            temp_inventory.can_place_item(item, hover_x, hover_y)
+                                        } else {
+                                            inventory.can_place_item(item, hover_x, hover_y)
+                                        };
 
                                     bg_color.0 = if can_place {
                                         Color::srgba(0.3, 0.7, 0.3, 0.9) // Green for valid
@@ -554,7 +563,7 @@ fn handle_cell_interaction(
             drop_pos,
             drag_state.dragged_item_id,
             &drag_state.dragged_item,
-            drag_state.original_position
+            drag_state.original_position,
         ) {
             if let Ok(mut inventory) = inventory_query.single_mut() {
                 // Remove the item from inventory

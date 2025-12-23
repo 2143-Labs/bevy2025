@@ -1,7 +1,7 @@
+use super::styles::*;
+use crate::game_state::{GameState, MenuState, NetworkGameState};
 use bevy::prelude::*;
 use shared::Config;
-use crate::game_state::{GameState, MenuState, NetworkGameState};
-use super::styles::*;
 
 /// Marker for the connecting menu root entity
 #[derive(Component)]
@@ -95,7 +95,13 @@ pub fn spawn_connecting_menu(mut commands: Commands, config: Res<Config>) {
                     let (node, bg_color, border_color) = menu_button_bundle();
                     let (text, font, color) = menu_button_text("Cancel");
                     button_parent
-                        .spawn((node, bg_color, border_color, Interaction::default(), CancelButton))
+                        .spawn((
+                            node,
+                            bg_color,
+                            border_color,
+                            Interaction::default(),
+                            CancelButton,
+                        ))
                         .with_children(|button| {
                             button.spawn((text, font, color));
                         });

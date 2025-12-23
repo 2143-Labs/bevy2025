@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 // Visual constants for shape definition
-const X: bool = true;  // Occupied cell
+const X: bool = true; // Occupied cell
 const O: bool = false; // Empty cell
 
 /// Tetromino-style shapes for inventory items
@@ -19,30 +19,12 @@ impl TetrominoShape {
     /// Get the shape grid for this tetromino
     pub fn grid(&self) -> &'static [&'static [bool]] {
         match self {
-            TetrominoShape::Single => &[
-                &[X],
-            ],
-            TetrominoShape::Horizontal2 => &[
-                &[X, X],
-            ],
-            TetrominoShape::Vertical2 => &[
-                &[X],
-                &[X],
-            ],
-            TetrominoShape::Square2x2 => &[
-                &[X, X],
-                &[X, X],
-            ],
-            TetrominoShape::LPiece => &[
-                &[X, O],
-                &[X, O],
-                &[X, X],
-            ],
-            TetrominoShape::TPiece => &[
-                &[X, X, X],
-                &[O, X, O],
-                &[O, X, O],
-            ],
+            TetrominoShape::Single => &[&[X]],
+            TetrominoShape::Horizontal2 => &[&[X, X]],
+            TetrominoShape::Vertical2 => &[&[X], &[X]],
+            TetrominoShape::Square2x2 => &[&[X, X], &[X, X]],
+            TetrominoShape::LPiece => &[&[X, O], &[X, O], &[X, X]],
+            TetrominoShape::TPiece => &[&[X, X, X], &[O, X, O], &[O, X, O]],
         }
     }
 
@@ -136,7 +118,8 @@ impl Item {
             self.shape.grid().iter().map(|row| row.to_vec()).collect()
         } else {
             // Apply rotations
-            let mut grid: Vec<Vec<bool>> = self.shape.grid().iter().map(|row| row.to_vec()).collect();
+            let mut grid: Vec<Vec<bool>> =
+                self.shape.grid().iter().map(|row| row.to_vec()).collect();
             for _ in 0..self.rotation {
                 grid = Self::rotate_grid_clockwise(&grid);
             }

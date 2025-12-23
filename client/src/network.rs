@@ -5,7 +5,7 @@ use shared::{
     Config,
     event::{
         ERFE, NetEntId,
-        client::{SpawnUnit2, WorldData2, UpdateUnit2, DespawnUnit2, PlayerDisconnected},
+        client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2},
         server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle},
     },
     net_components::{ents::PlayerCamera, ours::PlayerName},
@@ -228,7 +228,11 @@ fn receive_world_data(
                 // Skip our own player and camera units - they're already set up locally
                 info!("  Skipping own unit {:?}", unit.net_ent_id);
             } else {
-                info!("  Processing remote unit {:?} with {} components", unit.net_ent_id, unit.components.len());
+                info!(
+                    "  Processing remote unit {:?} with {} components",
+                    unit.net_ent_id,
+                    unit.components.len()
+                );
                 // TOOD do this gracefully?
                 for component in &unit.components {
                     if let shared::net_components::NetComponent::Ours(ours) = component {
@@ -310,7 +314,8 @@ fn apply_pending_camera_id(
 ) {
     if let Some(pending_id) = pending {
         if let Ok(cam_entity) = local_cam.single() {
-            commands.entity(cam_entity)
+            commands
+                .entity(cam_entity)
                 .insert(pending_id.0)
                 .insert(PlayerCamera);
             commands.remove_resource::<PendingCameraId>();
