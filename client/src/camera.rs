@@ -30,7 +30,7 @@ impl Plugin for CameraPlugin {
                 (
                     handle_pause_input,
                     freecam_controller.run_if(in_state(InputControlState::Freecam)),
-                    tps_controller.run_if(in_state(InputControlState::ThirdPerson)),
+                    tps_camera_controller.run_if(in_state(InputControlState::ThirdPerson)),
                     update_freecam_transform_from_settings_tps
                         .run_if(in_state(InputControlState::ThirdPerson)),
                     //manage_physics_pause,
@@ -156,7 +156,7 @@ fn freecam_controller(
     }
 }
 
-fn tps_controller(
+fn tps_camera_controller(
     keyboard: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     mut mouse_motion: MessageReader<bevy::input::mouse::MouseMotion>,
