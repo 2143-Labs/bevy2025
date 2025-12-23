@@ -5,7 +5,7 @@ use std::{
 };
 
 use bevy::{
-    app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, time::common_conditions::on_timer,
+    app::ScheduleRunnerPlugin, prelude::*,
 };
 use message_io::network::Endpoint;
 use rand::Rng;
