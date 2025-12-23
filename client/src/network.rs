@@ -1,24 +1,21 @@
 use std::time::Duration;
 
+use avian3d::prelude::Collider;
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
-    Config,
-    event::{
+    Config, character_controller::CharacterControllerBundle, event::{
         MyNetEntParentId, NetEntId, PlayerId, UDPacketEvent,
         client::{BeginThirdpersonControllingUnit, SpawnUnit2, WorldData2},
         server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle, SpawnMan},
-    },
-    net_components::{
+    }, net_components::{
         ents::{Ball, CanAssumeControl, Man, PlayerCamera},
         foreign::ComponentColor,
         ours::{PlayerColor, PlayerName},
-    },
-    netlib::{
+    }, netlib::{
         ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint,
         send_outgoing_event_next_tick, send_outgoing_event_now, send_outgoing_event_now_batch,
         setup_incoming_client,
-    },
-    physics::terrain::TerrainParams,
+    }, physics::terrain::TerrainParams
 };
 
 use crate::{
@@ -228,6 +225,7 @@ fn on_special_unit_spawn_man(
                     ..default()
                 })),
                 Mesh3d(meshes.add(Mesh::from(Sphere { radius: man.0 }))),
+                CharacterControllerBundle::new(Collider::cylinder(0.3, 6.0), Vec3::NEG_Y * 9.81).with_movement(10.0, 1.0, 10.0, 35.0),
             ))
             .remove::<NeedsClientConstruction>();
     }

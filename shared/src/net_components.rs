@@ -110,9 +110,9 @@ pub fn make_man(net_ent_id: NetEntId, transform: Transform, owner: ControlledBy)
             ents::SendNetworkTranformUpdates.to_net_component(),
             ents::CanAssumeControl.to_net_component(),
             transform.to_net_component(),
-            avian3d::prelude::RigidBody::Dynamic.to_net_component(),
-            avian3d::prelude::Collider::sphere(3.0).to_net_component(),
-            avian3d::prelude::Mass(70.0).to_net_component(),
+            //avian3d::prelude::RigidBody::Dynamic.to_net_component(),
+            //avian3d::prelude::Collider::sphere(3.0).to_net_component(),
+            //avian3d::prelude::Mass(70.0).to_net_component(),
         ],
     }
 }

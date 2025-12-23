@@ -9,10 +9,10 @@ use crate::{
 /// Marker for FreeCam (playing mode, perspective)
 #[derive(Component, Clone, PartialEq)]
 pub struct FreeCam {
-    yaw: f32,
-    pitch: f32,
-    zoom: f32,
-    move_speed: f32,
+    pub yaw: f32,
+    pub pitch: f32,
+    pub zoom: f32,
+    pub move_speed: f32,
 }
 
 /// Marker for the player camera that we control
