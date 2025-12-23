@@ -1,0 +1,9 @@
+diff a/client/src/main.rs b/client/src/main.rs	(rejected hunks)
+@@ -1,5 +1,6 @@
+ mod camera;
+-pub mod components;
++pub mod player;
++pub mod inventory;
+ pub mod game_state;
+ mod grass;
+ mod network;

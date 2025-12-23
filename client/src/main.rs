@@ -62,6 +62,7 @@ fn main() {
             AssetsPlugin,
             DebugPlugin,
             UIPlugin,
+            InventoryPlugin,
             CameraPlugin,
             TerrainPlugin,
             PhysicsPlugin,
