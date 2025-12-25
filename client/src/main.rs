@@ -79,6 +79,7 @@ fn main() {
             LogDiagnosticsPlugin::default(),
             shared::event::client::NetworkEventPlugin,
             shared::character_controller::CharacterControllerPlugin,
+
         ))
         .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue
         .insert_resource(args)

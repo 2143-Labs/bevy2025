@@ -1,0 +1,440 @@
+use std::sync::{Arc, RwLock};
+
+use serde::{Deserialize, Serialize};
+
+use crate::stats::{HasMods, Mod, PlayerFinalStats};
+
+pub mod diary;
+pub mod footwear;
+pub mod page {
+    pub mod ranger_page;
+}
+
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Inventory<ItemRepr> {
+    pub id: InventoryId,
+    pub items: Vec<ItemInInventory<ItemRepr>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ItemInInventory<ItemRepr> {
+    pub item: ItemRepr,
+    pub stacksize: u16,
+    pub item_placement: ItemPlacement,
+}
+
+impl ItemInInventory<ItemId> {
+    pub fn as_full_item(&self, cache: &InventoryItemCache) -> ItemInInventory<Item> {
+        let cache_read = cache.cache.read().unwrap();
+        ItemInInventory {
+            stacksize: self.stacksize,
+            item_placement: self.item_placement.clone(),
+            item: (*cache_read.get(&self.item).unwrap()).as_ref().clone(),
+        }
+    }
+}
+
+impl Inventory<ItemId> {
+    pub fn as_full_inventory(&self, cache: &InventoryItemCache) -> Inventory<Item> {
+        Inventory {
+            id: self.id,
+            items: self
+                .items
+                .iter()
+                .map(|item_in_inv| item_in_inv.as_full_item(cache))
+                .collect(),
+        }
+    }
+}
+
+// TODO this is a very basic imlementation, needs to be expanded
+impl Inventory<Item> {
+    pub fn get_player_stats(&self) -> PlayerFinalStats {
+        let mut final_stats = PlayerFinalStats::default();
+
+        let mut delta_max_health = crate::decimal::Decimal::new(0.0);
+        let mut delta_movement_speed = crate::decimal::Decimal::new(0.0);
+        let mut delta_jump_height = crate::decimal::Decimal::new(0.0);
+        let mut delta_damage_reduction = crate::decimal::Decimal::new(0.0);
+        let mut delta_health_regen = crate::decimal::Decimal::new(0.0);
+        let mut delta_damage_reflection = crate::decimal::Decimal::new(0.0);
+        let mut delta_projectile_resistance = crate::decimal::Decimal::new(0.0);
+        let mut delta_magic_resistance = crate::decimal::Decimal::new(0.0);
+
+        for inv_item in &self.items {
+            let Some(_equip_slot) = inv_item.item.data.item_misc.iter().find_map(|misc| {
+                match misc {
+                    crate::items::ItemMiscModifiers::Equipped(i) => Some(i),
+                    _ => None,
+                }
+            }) else {
+                // not equipped, skip this item
+                continue;
+            };
+
+
+            let mods = inv_item.item.get_mods();
+            for modifier in mods {
+                match modifier {
+                    Mod::AddsLife { amount } => {
+                        delta_max_health += amount;
+                    }
+                    Mod::AddsMovementSpeed { amount } => {
+                        delta_movement_speed += amount;
+                    }
+                    Mod::AddsJumpHeight { amount } => {
+                        delta_jump_height += amount;
+                    }
+                    Mod::AddsDamageReduction { amount } => {
+                        delta_damage_reduction += amount;
+                    }
+                    Mod::AddsDamageReflection { amount } => {
+                        delta_damage_reflection += amount;
+                    }
+                    Mod::AddsProjectileResistance { amount } => {
+                        delta_projectile_resistance += amount;
+                    }
+                    Mod::AddsMagicResistance { amount } => {
+                        delta_magic_resistance += amount;
+                    }
+                }
+            }
+        }
+
+        delta_health_regen += crate::decimal::Decimal::new(0.5) * delta_max_health;
+
+        if delta_max_health != crate::decimal::Decimal::new(0.0) {
+            final_stats.max_health += delta_max_health;
+        }
+
+        if delta_movement_speed != crate::decimal::Decimal::new(0.0) {
+            final_stats
+                .movement_mods
+                .push(crate::stats::MovementModifier::MomementSpeed(
+                    delta_movement_speed,
+                ));
+        }
+        if delta_jump_height != crate::decimal::Decimal::new(0.0) {
+            final_stats
+                .movement_mods
+                .push(crate::stats::MovementModifier::JumpHeight(
+                    delta_jump_height,
+                ));
+        }
+        if delta_damage_reduction != crate::decimal::Decimal::new(0.0) {
+            final_stats
+                .defense_mods
+                .push(crate::stats::DefenseModifier::DamageReduction(
+                    delta_damage_reduction,
+                ));
+        }
+        if delta_health_regen != crate::decimal::Decimal::new(0.0)
+        {
+            final_stats
+                .defense_mods
+                .push(crate::stats::DefenseModifier::HealthRegen(
+                    delta_health_regen,
+                ));
+        }
+        if delta_damage_reflection != crate::decimal::Decimal::new(0.0)
+        {
+            final_stats
+                .defense_mods
+                .push(crate::stats::DefenseModifier::DamageReflection(
+                    delta_damage_reflection,
+                ));
+        }
+        if delta_projectile_resistance != crate::decimal::Decimal::new(0.0
+        ) {
+            final_stats
+                .resistance_mods
+                .push(crate::stats::ResistanceModifier::ProjectileResistance(
+                    delta_projectile_resistance,
+                ));
+        }
+        if delta_magic_resistance != crate::decimal::Decimal::new(0.0)
+        {
+            final_stats
+                .resistance_mods
+                .push(crate::stats::ResistanceModifier::MagicResistance(
+                    delta_magic_resistance,
+                ));
+        }
+
+        final_stats
+    }
+}
+
+// TODO always growing
+impl InventoryItemCache {
+    pub fn new() -> Self {
+        InventoryItemCache {
+            ..Default::default()
+        }
+    }
+
+    pub fn insert_item(&self, item: Item) {
+        let mut cache_write = self.cache.write().unwrap();
+        cache_write.insert(item.item_id, Arc::new(item));
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct InventoryItemCache {
+    cache: Arc<RwLock<std::collections::HashMap<ItemId, Arc<Item>>>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum ItemLayout {
+    /// A full rectangular item
+    Rectangular { width: u8, height: u8 },
+    /// A rectangular item with a custom shape defined by a mask: true = occupied, false = empty,
+    /// row-major order (left to right, top to bottom)
+    RectWithMask { width: u8, height: u8, mask: Vec<bool> },
+    /// Sparse item with individual occupied slots defined by coordinates
+    Sparse { occupied_slots: Vec<(u8, u8)> },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ItemPlacement {
+    pub flipped: bool,
+    pub rotated: u8,
+    // max: 13 bits
+    pub slot_index: u16,
+}
+
+// totally unnecessary optimization to pack into 2 bytes
+impl Serialize for ItemPlacement {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let flipped_bit = if self.flipped { 1u16 } else { 0 } << 15;
+        let rotated_bits = (self.rotated as u16 & 0b11) << 14;
+        let slot_index_bits = self.slot_index & (0x3FFF);
+        serializer.serialize_u16(flipped_bit | rotated_bits | slot_index_bits)
+    }
+}
+
+impl<'de> Deserialize<'de> for ItemPlacement {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bits = u16::deserialize(deserializer)?;
+        let flipped = (bits & 0x8000) != 0;
+        let rotated = ((bits & 0x6000) >> 14) as u8;
+        let slot_index = bits & 0x3FFF;
+        Ok(ItemPlacement {
+            flipped,
+            rotated,
+            slot_index,
+        })
+    }
+}
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct InventoryId(pub u128);
+
+impl Default for InventoryId {
+    fn default() -> Self {
+        let current_unix_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        let get_server_id = || -> u16 {
+            // TODO get actual server ID
+            0u16
+        };
+
+        let rng = rand::random_range(0u64..(u64::MAX << 16));
+        let inventory_id = ((current_unix_time as u128) << 64)
+            | ((get_server_id() as u128) << 48)
+            | (rng as u128);
+
+        InventoryId(inventory_id)
+    }
+}
+
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct ItemId(pub u128);
+
+
+impl Default for  ItemId {
+    fn default() -> Self {
+        Self(InventoryId::default().0)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct ItemData {
+    item_base: BaseItem,
+    // TODO replace this with a vec of statlines
+    mods: Vec<Mod>,
+    item_misc: Vec<ItemMiscModifiers>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct Item {
+    item_id: ItemId,
+    data: ItemData,
+}
+
+impl HasMods for Item {
+    fn get_mods(&self) -> Vec<Mod> {
+        let mut all_mods = self.data.mods.clone();
+        let base_mods = self.data.item_base.get_mods();
+        all_mods.extend(base_mods);
+        all_mods
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum BaseItem {
+    CurrencyPiece,
+    DiaryPage(diary::DiaryPage),
+    DiaryBook(diary::DiaryBook),
+    EnemyDiaryPage(diary::EnemyDiaryPage),
+    Footwear(footwear::Footwear),
+}
+
+pub trait HasItemLayout {
+    fn get_item_layout(&self) -> &ItemLayout;
+}
+
+impl HasMods for BaseItem {
+    fn get_mods(&self) -> Vec<Mod> {
+        match self {
+            BaseItem::CurrencyPiece => vec![],
+            BaseItem::DiaryPage(page) => page.get_mods(),
+            BaseItem::DiaryBook(book) => book.get_mods(),
+            BaseItem::EnemyDiaryPage(page) => page.get_mods(),
+            BaseItem::Footwear(footwear) => footwear.get_mods(),
+        }
+    }
+}
+
+/// These are properties that may affect an item but are not directly related to stats or mods
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum ItemMiscModifiers {
+    Rarity(ItemRarity),
+    /// This item is a container that can hold another inventory
+    Container(InventoryId),
+    Damaged(DamageLevels),
+    Unidentified,
+    Equipped(EquipSlot),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum EquipSlot {
+    Diary,
+    Footwear,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum ItemRarity {
+    Normal,
+    Enchanted,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum DamageLevels {
+    Perfect,
+    Scuffed,
+    Worn,
+    Tattered,
+    Shredded,
+    Broken,
+}
+
+// example: a goblin is kiled and drops:
+//    100 gold pieces
+//    a diary page of type "goblin"
+//    a pair of boots with no mods and misc Tattered
+//
+// example
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_item_drop_size() {
+        let item_cache = InventoryItemCache::new();
+        let gold = Item {
+            item_id: ItemId::default(),
+            data: ItemData {
+                item_base: BaseItem::CurrencyPiece,
+                mods: vec![],
+                item_misc: vec![],
+            },
+        };
+
+        item_cache.insert_item(gold.clone());
+
+        let goblin_diary_page = Item {
+            item_id: ItemId::default(),
+            data: ItemData {
+                item_base: BaseItem::EnemyDiaryPage(diary::EnemyDiaryPage::Goblin),
+                mods: vec![],
+                item_misc: vec![
+                    ItemMiscModifiers::Damaged(DamageLevels::Worn),
+                    ItemMiscModifiers::Equipped(EquipSlot::Footwear),
+                ],
+            },
+        };
+        item_cache.insert_item(goblin_diary_page.clone());
+
+        let boots = Item {
+            item_id: ItemId::default(),
+            data: ItemData {
+                item_base: BaseItem::Footwear(footwear::Footwear::Sandals),
+                mods: vec![],
+                item_misc: vec![
+                    ItemMiscModifiers::Damaged(DamageLevels::Tattered),
+                ],
+            },
+        };
+        item_cache.insert_item(boots.clone());
+
+        let goblin_drops = Inventory {
+            id: InventoryId::default(),
+            items: vec![
+                ItemInInventory {
+                    item: gold,
+                    stacksize: 100,
+                    item_placement: ItemPlacement {
+                        flipped: false,
+                        rotated: 0,
+                        slot_index: 0,
+                    },
+                },
+                ItemInInventory {
+                    item: goblin_diary_page,
+                    stacksize: 1,
+                    item_placement: ItemPlacement {
+                        flipped: false,
+                        rotated: 0,
+                        slot_index: 1,
+                    },
+                },
+                ItemInInventory {
+                    item: boots,
+                    stacksize: 1,
+                    item_placement: ItemPlacement {
+                        flipped: false,
+                        rotated: 0,
+                        slot_index: 2,
+                    },
+                },
+            ],
+        };
+
+        let as_payload = postcard::to_stdvec(&goblin_drops).unwrap();
+        println!("{}", as_payload.len());
+        assert!(as_payload.len() < 100); // ensure it's not too large
+    }
+}
+
