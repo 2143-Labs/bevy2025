@@ -27,7 +27,9 @@ pub struct WorldData2 {
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct UpdateUnit2 {
     pub net_ent_id: NetEntId,
-    pub components: Vec<NetComponent>,
+    pub changed_components: Vec<NetComponent>,
+    pub new_component: Vec<NetComponent>,
+    pub removed_components: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]

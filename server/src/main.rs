@@ -515,7 +515,9 @@ fn broadcast_movement_updates(
 
         let event = EventToClient::UpdateUnit2(UpdateUnit2 {
             net_ent_id: *cam_net_id,
-            components,
+            changed_components: components,
+            new_component: vec![],
+            removed_components: vec![],
         });
 
         events_to_send.push(event);

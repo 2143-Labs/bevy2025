@@ -362,6 +362,72 @@ pub enum DamageLevels {
     Broken,
 }
 
+pub fn goblin_drops() -> Inventory<Item> {
+    let gold = Item {
+        item_id: ItemId::default(),
+        data: ItemData {
+            item_base: BaseItem::CurrencyPiece,
+            mods: vec![],
+            item_misc: vec![],
+        },
+    };
+
+
+    let goblin_diary_page = Item {
+        item_id: ItemId::default(),
+        data: ItemData {
+            item_base: BaseItem::EnemyDiaryPage(diary::EnemyDiaryPage::Goblin),
+            mods: vec![],
+            item_misc: vec![
+                ItemMiscModifiers::Damaged(DamageLevels::Worn),
+                ItemMiscModifiers::Equipped(EquipSlot::Footwear),
+            ],
+        },
+    };
+
+    let boots = Item {
+        item_id: ItemId::default(),
+        data: ItemData {
+            item_base: BaseItem::Footwear(footwear::Footwear::Sandals),
+            mods: vec![],
+            item_misc: vec![ItemMiscModifiers::Damaged(DamageLevels::Tattered)],
+        },
+    };
+
+    Inventory {
+        id: InventoryId::default(),
+        items: vec![
+            ItemInInventory {
+                item: gold,
+                stacksize: 100,
+                item_placement: ItemPlacement {
+                    flipped: false,
+                    rotated: 0,
+                    slot_index: 0,
+                },
+            },
+            ItemInInventory {
+                item: goblin_diary_page,
+                stacksize: 1,
+                item_placement: ItemPlacement {
+                    flipped: false,
+                    rotated: 0,
+                    slot_index: 1,
+                },
+            },
+            ItemInInventory {
+                item: boots,
+                stacksize: 1,
+                item_placement: ItemPlacement {
+                    flipped: false,
+                    rotated: 0,
+                    slot_index: 2,
+                },
+            },
+        ],
+    }
+}
+
 // example: a goblin is kiled and drops:
 //    100 gold pieces
 //    a diary page of type "goblin"
@@ -374,73 +440,7 @@ mod test {
 
     #[test]
     fn test_item_drop_size() {
-        let item_cache = InventoryItemCache::new();
-        let gold = Item {
-            item_id: ItemId::default(),
-            data: ItemData {
-                item_base: BaseItem::CurrencyPiece,
-                mods: vec![],
-                item_misc: vec![],
-            },
-        };
-
-        item_cache.insert_item(gold.clone());
-
-        let goblin_diary_page = Item {
-            item_id: ItemId::default(),
-            data: ItemData {
-                item_base: BaseItem::EnemyDiaryPage(diary::EnemyDiaryPage::Goblin),
-                mods: vec![],
-                item_misc: vec![
-                    ItemMiscModifiers::Damaged(DamageLevels::Worn),
-                    ItemMiscModifiers::Equipped(EquipSlot::Footwear),
-                ],
-            },
-        };
-        item_cache.insert_item(goblin_diary_page.clone());
-
-        let boots = Item {
-            item_id: ItemId::default(),
-            data: ItemData {
-                item_base: BaseItem::Footwear(footwear::Footwear::Sandals),
-                mods: vec![],
-                item_misc: vec![ItemMiscModifiers::Damaged(DamageLevels::Tattered)],
-            },
-        };
-        item_cache.insert_item(boots.clone());
-
-        let goblin_drops = Inventory {
-            id: InventoryId::default(),
-            items: vec![
-                ItemInInventory {
-                    item: gold,
-                    stacksize: 100,
-                    item_placement: ItemPlacement {
-                        flipped: false,
-                        rotated: 0,
-                        slot_index: 0,
-                    },
-                },
-                ItemInInventory {
-                    item: goblin_diary_page,
-                    stacksize: 1,
-                    item_placement: ItemPlacement {
-                        flipped: false,
-                        rotated: 0,
-                        slot_index: 1,
-                    },
-                },
-                ItemInInventory {
-                    item: boots,
-                    stacksize: 1,
-                    item_placement: ItemPlacement {
-                        flipped: false,
-                        rotated: 0,
-                        slot_index: 2,
-                    },
-                },
-            ],
-        };
+        let goblin_drops = goblin_drops();
 
         let as_payload = postcard::to_stdvec(&goblin_drops).unwrap();
         println!("{}", as_payload.len());

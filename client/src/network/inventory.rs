@@ -19,6 +19,10 @@ impl Plugin for InventoryNetworkPlugin {
                 clear_inventory_cache,
             );
 
+        app.add_message::<NewInventory>();
+        app.add_message::<UpdateInventory>();
+        app.add_message::<UpdateItems>();
+
         app.add_systems(
             Update,
             (

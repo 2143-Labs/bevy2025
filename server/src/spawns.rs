@@ -1,15 +1,13 @@
 use bevy::prelude::*;
 use shared::{
     event::{
-        client::BeginThirdpersonControllingUnit,
-        server::{SpawnCircle, SpawnMan},
-        NetEntId, UDPacketEvent,
+        NetEntId, UDPacketEvent, client::BeginThirdpersonControllingUnit, server::{SpawnCircle, SpawnMan}
     },
     net_components::{
         make_man,
-        ours::{ControlledBy, DespawnOnPlayerDisconnect},
+        ours::{ControlledBy, DespawnOnPlayerDisconnect, HasInventory},
     },
-    netlib::{send_outgoing_event_next_tick, EventToClient, ServerNetworkingResources},
+    netlib::{EventToClient, ServerNetworkingResources, send_outgoing_event_next_tick},
 };
 
 use crate::{make_ball, ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint, ServerState};
@@ -99,6 +97,10 @@ fn on_man_spawn(
         let transform = Transform::from_translation(spawn.position);
         let ent_id = NetEntId::random();
 
+        // for now
+        let inventory = shared::items::goblin_drops();
+        //TODO add to server inventory
+
         let unit = make_man(
             ent_id,
             transform,
@@ -107,6 +109,8 @@ fn on_man_spawn(
         let unit_ent = unit.clone().spawn_entity(&mut commands);
         commands.entity(unit_ent).insert(DespawnOnPlayerDisconnect {
             player_id: *player_id_of_spawner,
+        }).insert(HasInventory {
+            inventory_id: inventory.id,
         });
 
         let event = EventToClient::SpawnUnit2(unit);
@@ -123,6 +127,14 @@ fn on_man_spawn(
             &EventToClient::BeginThirdpersonControllingUnit(BeginThirdpersonControllingUnit {
                 player_id: *player_id_of_spawner,
                 unit: Some(ent_id),
+            }),
+        );
+
+        send_outgoing_event_next_tick(
+            &sr,
+            spawn_ev.endpoint,
+            &EventToClient::NewInventory(shared::event::client::NewInventory {
+                inventory,
             }),
         );
     }

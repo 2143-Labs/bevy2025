@@ -50,6 +50,7 @@ impl Plugin for RemotePlayersPlugin {
 
 /// Handle updating unit transforms (mainly for player cameras)
 fn handle_update_unit(
+    mut commands: Commands,
     mut update_events: UDPacketEvent<UpdateUnit2>,
     mut remote_unit: Query<
         (&NetEntId, &mut Transform),
@@ -59,13 +60,17 @@ fn handle_update_unit(
         (&NetEntId, &mut LinearVelocity),
         With<shared::net_components::ents::SendNetworkTranformUpdates>,
     >,
+    // TODO should we add a tag here to restrict to only certain entities?
+    mut new_component_units: Query<
+        (Entity, &NetEntId),
+    >
 ) {
     for update in update_events.read() {
         // Find the entity with this NetEntId
         'a1: for (net_id, mut transform) in &mut remote_unit {
             if net_id == &update.event.net_ent_id {
                 // Update the transform from components
-                for component in &update.event.components {
+                for component in &update.event.changed_components {
                     if let NetComponent::Foreign(foreign) = component {
                         if let shared::net_components::foreign::NetComponentForeign::Transform(
                             tfm,
@@ -82,7 +87,7 @@ fn handle_update_unit(
         'a2: for (net_id, mut velocity) in &mut remote_unit2 {
             if net_id == &update.event.net_ent_id {
                 // Update the velocity from components
-                for component in &update.event.components {
+                for component in &update.event.changed_components {
                     if let NetComponent::Foreign(foreign) = component {
                         if let shared::net_components::foreign::NetComponentForeign::LinearVelocity(lv) = foreign {
                             *velocity = *lv;
@@ -90,6 +95,17 @@ fn handle_update_unit(
                     }
                 }
                 break 'a2;
+            }
+        }
+
+        'a3: for (ent, net_id) in &mut new_component_units {
+            if net_id == &update.event.net_ent_id {
+                // Add any new components
+                for component in &update.event.new_component {
+                    let mut ec = commands.entity(ent);
+                    component.clone().insert_components(&mut ec);
+                }
+                break 'a3;
             }
         }
     }
