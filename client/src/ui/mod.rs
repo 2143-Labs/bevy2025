@@ -4,6 +4,7 @@ pub mod multiplayer_menu;
 pub mod paused_menu;
 pub mod styles;
 pub mod text_input;
+pub mod inventory_menu;
 
 use crate::{
     camera::FreeCam,
@@ -78,6 +79,16 @@ impl Plugin for UIPlugin {
                 paused_menu::despawn_paused_menu,
             )
             .add_systems(Update, paused_menu::handle_paused_menu_buttons)
+            // Inventory
+            .add_systems(
+                OnEnter(OverlayMenuState::Inventory),
+                inventory_menu::spawn_inventory_menu,
+            )
+            .add_systems(
+                OnExit(OverlayMenuState::Inventory),
+                inventory_menu::despawn_inventory_menu,
+            )
+            .add_systems(Update, inventory_menu::handle_inventory_menu_buttons)
             .add_systems(Update, keyboard_input_tps)
             // Global button feedback
             .add_systems(Update, styles::button_visual_feedback);

@@ -4,8 +4,7 @@ use shared::{
         NetEntId, UDPacketEvent, client::BeginThirdpersonControllingUnit, server::{SpawnCircle, SpawnMan}
     },
     net_components::{
-        make_man,
-        ours::{ControlledBy, DespawnOnPlayerDisconnect, HasInventory},
+        ToNetComponent, make_man, ours::{ControlledBy, DespawnOnPlayerDisconnect, HasInventory}
     },
     netlib::{EventToClient, ServerNetworkingResources, send_outgoing_event_next_tick},
 };
@@ -101,16 +100,18 @@ fn on_man_spawn(
         let inventory = shared::items::goblin_drops();
         //TODO add to server inventory
 
-        let unit = make_man(
+        let mut unit = make_man(
             ent_id,
             transform,
             ControlledBy::single(*player_id_of_spawner),
         );
+        unit.components.push(HasInventory {
+            inventory_id: inventory.id,
+        }.to_net_component());
+
         let unit_ent = unit.clone().spawn_entity(&mut commands);
         commands.entity(unit_ent).insert(DespawnOnPlayerDisconnect {
             player_id: *player_id_of_spawner,
-        }).insert(HasInventory {
-            inventory_id: inventory.id,
         });
 
         let event = EventToClient::SpawnUnit2(unit);

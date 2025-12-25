@@ -182,6 +182,16 @@ impl InventoryItemCache {
         cache_write.insert(inventory.id, Arc::new(inventory));
     }
 
+    pub fn get_inventory(&self, inventory_id: &InventoryId) -> Option<Arc<Inventory<Item>>> {
+        let cache_read = self.inventory_cache.read().unwrap();
+        cache_read.get(inventory_id).cloned()
+    }
+
+    pub fn get_item(&self, item_id: &ItemId) -> Option<Arc<Item>> {
+        let cache_read = self.item_cache.read().unwrap();
+        cache_read.get(item_id).cloned()
+    }
+
     pub fn clear(&self) {
         let mut cache_write = self.item_cache.write().unwrap();
         cache_write.clear();
@@ -283,16 +293,16 @@ impl Default for ItemId {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct ItemData {
-    item_base: BaseItem,
+    pub item_base: BaseItem,
     // TODO replace this with a vec of statlines
-    mods: Vec<Mod>,
-    item_misc: Vec<ItemMiscModifiers>,
+    pub mods: Vec<Mod>,
+    pub item_misc: Vec<ItemMiscModifiers>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Item {
-    item_id: ItemId,
-    data: ItemData,
+    pub item_id: ItemId,
+    pub data: ItemData,
 }
 
 impl HasMods for Item {

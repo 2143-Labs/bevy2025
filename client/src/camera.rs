@@ -28,7 +28,7 @@ impl Plugin for CameraPlugin {
             .add_systems(
                 Update,
                 (
-                    handle_pause_input,
+                    handle_pause_and_inventory_input,
                     freecam_controller.run_if(in_state(InputControlState::Freecam)),
                     tps_camera_controller.run_if(in_state(InputControlState::ThirdPerson)),
                     update_freecam_transform_from_settings_tps
@@ -70,7 +70,7 @@ fn despawn_cameras(mut commands: Commands, freecam_query: Query<Entity, With<Fre
 }
 
 /// Handle pause toggling (Escape key)
-fn handle_pause_input(
+fn handle_pause_and_inventory_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     config: Res<Config>,
@@ -83,6 +83,21 @@ fn handle_pause_input(
                 next_state.set(OverlayMenuState::Paused);
             }
             OverlayMenuState::Paused => {
+                next_state.set(OverlayMenuState::Hidden);
+            }
+            OverlayMenuState::Inventory => {
+                next_state.set(OverlayMenuState::Hidden);
+            }
+            _ => {}
+        }
+    }
+
+    if config.just_pressed(&keyboard, &mouse, GameAction::OpenInventory) {
+        match current_state.get() {
+            OverlayMenuState::Hidden => {
+                next_state.set(OverlayMenuState::Inventory);
+            }
+            OverlayMenuState::Inventory => {
                 next_state.set(OverlayMenuState::Hidden);
             }
             _ => {}
