@@ -16,7 +16,7 @@ impl Plugin for CharacterControllerPlugin {
                     movement,
                     apply_movement_damping,
                 )
-                    .chain()
+                    .chain(),
             )
             .add_systems(
                 // Run collision handling after collision detection.
@@ -120,8 +120,13 @@ impl CharacterControllerBundle {
             character_controller: CharacterController,
             body: RigidBody::Kinematic,
             collider,
-            ground_caster: ShapeCaster::new(caster_shape, Vector::ZERO, Quat::from_rotation_y(0.0), Dir3::NEG_Y)
-                .with_max_distance(10.0),
+            ground_caster: ShapeCaster::new(
+                caster_shape,
+                Vector::ZERO,
+                Quat::from_rotation_y(0.0),
+                Dir3::NEG_Y,
+            )
+            .with_max_distance(10.0),
             gravity: ControllerGravity(gravity),
             movement: MovementBundle::default(),
         }

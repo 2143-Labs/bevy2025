@@ -3,19 +3,24 @@ use std::time::Duration;
 use avian3d::prelude::Collider;
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
-    Config, character_controller::CharacterControllerBundle, event::{
+    Config,
+    character_controller::CharacterControllerBundle,
+    event::{
         MyNetEntParentId, NetEntId, PlayerId, UDPacketEvent,
         client::{BeginThirdpersonControllingUnit, SpawnUnit2, WorldData2},
         server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle, SpawnMan},
-    }, net_components::{
+    },
+    net_components::{
         ents::{Ball, CanAssumeControl, Man, PlayerCamera},
         foreign::ComponentColor,
         ours::{PlayerColor, PlayerName},
-    }, netlib::{
+    },
+    netlib::{
         ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint,
         send_outgoing_event_next_tick, send_outgoing_event_now, send_outgoing_event_now_batch,
         setup_incoming_client,
-    }, physics::terrain::TerrainParams
+    },
+    physics::terrain::TerrainParams,
 };
 
 use crate::{
@@ -26,6 +31,8 @@ use crate::{
     remote_players::{ApplyNoFrustumCulling, NameLabel, RemotePlayerCamera, RemotePlayerModel},
     terrain::SetupTerrain,
 };
+
+pub mod inventory;
 
 #[derive(Component)]
 pub struct DespawnOnWorldData;
@@ -40,101 +47,102 @@ struct LocalPlayerId(pub PlayerId);
 pub struct NetworkingPlugin;
 impl Plugin for NetworkingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            OnEnter(NetworkGameState::ClientConnecting),
-            (
-                // Setup the client and immediatly advance the state
-                setup_incoming_client::<EventToClient, EventToServer>,
-                |mut state: ResMut<NextState<NetworkGameState>>| {
-                    state.set(NetworkGameState::ClientSendRequestPacket)
-                },
-            ),
-        )
-        // .add_systems(
-        //     Update,
-        //     (check_connect_button).run_if(in_state(NetworkGameState::MainMenu)),
-        // )
-        // After sending the first packet, resend it every so often to see if the server comes
-        // alive
-        .add_systems(
-            Update,
-            (
-                shared::event::client::drain_incoming_events,
-                receive_world_data,
+        app.add_plugins(inventory::InventoryNetworkPlugin)
+            .add_systems(
+                OnEnter(NetworkGameState::ClientConnecting),
+                (
+                    // Setup the client and immediatly advance the state
+                    setup_incoming_client::<EventToClient, EventToServer>,
+                    |mut state: ResMut<NextState<NetworkGameState>>| {
+                        state.set(NetworkGameState::ClientSendRequestPacket)
+                    },
+                ),
             )
-                .run_if(
+            // .add_systems(
+            //     Update,
+            //     (check_connect_button).run_if(in_state(NetworkGameState::MainMenu)),
+            // )
+            // After sending the first packet, resend it every so often to see if the server comes
+            // alive
+            .add_systems(
+                Update,
+                (
+                    shared::event::client::drain_incoming_events,
+                    receive_world_data,
+                )
+                    .run_if(
+                        in_state(NetworkGameState::ClientSendRequestPacket)
+                            .or(in_state(NetworkGameState::ClientConnected)),
+                    ),
+            )
+            .add_systems(
+                Update,
+                (send_connect_packet)
+                    .run_if(on_timer(Duration::from_millis(1000)))
+                    .run_if(in_state(NetworkGameState::ClientSendRequestPacket)),
+            )
+            // Once we are connected, advance normally
+            .add_systems(
+                Update,
+                (
+                    // TODO receive new world data at any time?
+                    our_client_wants_to_spawn_circle,
+                    our_client_wants_to_spawn_man,
+                    apply_pending_camera_id,
+                )
+                    .run_if(in_state(NetworkGameState::ClientConnected)),
+            )
+            .add_systems(
+                FixedUpdate,
+                (
+                    shared::increment_ticks,
+                    on_general_spawn_network_unit,
+                    on_begin_controlling_unit,
+                )
+                    .chain()
+                    .run_if(in_state(NetworkGameState::ClientConnected)),
+            )
+            .add_systems(
+                FixedPostUpdate,
+                (shared::netlib::flush_outgoing_events::<EventToClient, EventToServer>).run_if(
                     in_state(NetworkGameState::ClientSendRequestPacket)
                         .or(in_state(NetworkGameState::ClientConnected)),
                 ),
-        )
-        .add_systems(
-            Update,
-            (send_connect_packet)
-                .run_if(on_timer(Duration::from_millis(1000)))
-                .run_if(in_state(NetworkGameState::ClientSendRequestPacket)),
-        )
-        // Once we are connected, advance normally
-        .add_systems(
-            Update,
-            (
-                // TODO receive new world data at any time?
-                our_client_wants_to_spawn_circle,
-                our_client_wants_to_spawn_man,
-                apply_pending_camera_id,
             )
-                .run_if(in_state(NetworkGameState::ClientConnected)),
-        )
-        .add_systems(
-            FixedUpdate,
-            (
-                shared::increment_ticks,
-                on_general_spawn_network_unit,
-                on_begin_controlling_unit,
+            //.add_systems(
+            //Update,
+            //cast_skill_1
+            //.run_if(shared::GameAction::Fire1.just_pressed())
+            ////.run_if(in_state(ChatState::NotChatting))
+            ////.run_if(any_with_component::<Player>),
+            //)
+            .add_systems(
+                FixedUpdate,
+                (send_movement_camera)
+                    .run_if(in_state(NetworkGameState::ClientConnected))
+                    //.run_if(in_state(InputControlState::Freecam))
+                    .run_if(in_state(GameState::Playing)),
             )
-                .chain()
-                .run_if(in_state(NetworkGameState::ClientConnected)),
-        )
-        .add_systems(
-            FixedPostUpdate,
-            (shared::netlib::flush_outgoing_events::<EventToClient, EventToServer>).run_if(
-                in_state(NetworkGameState::ClientSendRequestPacket)
-                    .or(in_state(NetworkGameState::ClientConnected)),
-            ),
-        )
-        //.add_systems(
-        //Update,
-        //cast_skill_1
-        //.run_if(shared::GameAction::Fire1.just_pressed())
-        ////.run_if(in_state(ChatState::NotChatting))
-        ////.run_if(any_with_component::<Player>),
-        //)
-        .add_systems(
-            FixedUpdate,
-            (send_movement_camera)
-                .run_if(in_state(NetworkGameState::ClientConnected))
-                //.run_if(in_state(InputControlState::Freecam))
-                .run_if(in_state(GameState::Playing)),
-        )
-        .add_systems(
-            Update,
-            (
-                // TODO receive new world data at any time?
-                spawn_networked_unit_forward_local,
-                on_special_unit_spawn_remote_camera,
-                on_special_unit_spawn_ball,
-                on_special_unit_spawn_man,
+            .add_systems(
+                Update,
+                (
+                    // TODO receive new world data at any time?
+                    spawn_networked_unit_forward_local,
+                    on_special_unit_spawn_remote_camera,
+                    on_special_unit_spawn_ball,
+                    on_special_unit_spawn_man,
+                )
+                    .run_if(in_state(NetworkGameState::ClientConnected)),
             )
-                .run_if(in_state(NetworkGameState::ClientConnected)),
-        )
-        .add_systems(
-            Update,
-            send_heartbeat
-                .run_if(on_timer(Duration::from_millis(200)))
-                .run_if(in_state(NetworkGameState::ClientConnected)),
-        )
-        .add_message::<SpawnUnit2>()
-        .add_message::<SpawnCircle>()
-        .add_message::<SpawnMan>();
+            .add_systems(
+                Update,
+                send_heartbeat
+                    .run_if(on_timer(Duration::from_millis(200)))
+                    .run_if(in_state(NetworkGameState::ClientConnected)),
+            )
+            .add_message::<SpawnUnit2>()
+            .add_message::<SpawnCircle>()
+            .add_message::<SpawnMan>();
     }
 }
 
@@ -225,7 +233,8 @@ fn on_special_unit_spawn_man(
                     ..default()
                 })),
                 Mesh3d(meshes.add(Mesh::from(Sphere { radius: man.0 }))),
-                CharacterControllerBundle::new(Collider::cylinder(0.3, 6.0), Vec3::NEG_Y * 9.81).with_movement(10.0, 1.0, 10.0, 35.0),
+                CharacterControllerBundle::new(Collider::cylinder(0.3, 6.0), Vec3::NEG_Y * 9.81)
+                    .with_movement(10.0, 1.0, 10.0, 35.0),
             ))
             .remove::<NeedsClientConstruction>();
     }

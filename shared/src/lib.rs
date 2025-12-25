@@ -6,14 +6,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::netlib::Tick;
 
+pub mod character_controller;
+pub mod decimal;
 pub mod event;
+pub mod items;
 pub mod net_components;
 pub mod netlib;
 pub mod physics;
-pub mod character_controller;
-pub mod items;
 pub mod stats;
-pub mod decimal;
 
 pub const BASE_TICKS_PER_SECOND: u16 = 15;
 

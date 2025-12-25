@@ -1,5 +1,6 @@
 //!This is for events that are sent FROM the server TO the client.
 use crate::event::PlayerId;
+use crate::items::{Inventory, Item, ItemId, ItemInInventory, ItemPlacement};
 use crate::netlib::NetworkingResources;
 use crate::physics::terrain::TerrainParams;
 use crate::{event::EventFromEndpoint, net_components::NetComponent};
@@ -49,6 +50,24 @@ pub struct Chat {
 pub struct BeginThirdpersonControllingUnit {
     pub player_id: PlayerId,
     pub unit: Option<NetEntId>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct NewInventory {
+    pub inventory: Inventory<Item>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct UpdateInventory {
+    pub inventory: Inventory<ItemId>,
+    pub new_items: Vec<ItemInInventory<Item>>,
+    pub removed_items: Vec<ItemId>,
+    pub moved_items: Vec<(ItemId, ItemPlacement, ItemPlacement)>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct UpdateItems {
+    pub items: Vec<Item>,
 }
 
 include!(concat!(env!("OUT_DIR"), "/client_event.rs"));

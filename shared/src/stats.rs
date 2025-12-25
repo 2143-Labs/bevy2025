@@ -1,5 +1,5 @@
+use crate::decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use crate::{decimal::Decimal, items::Item};
 
 pub struct PlayerFinalStats {
     pub max_health: Decimal,
@@ -39,8 +39,7 @@ pub enum ResistanceModifier {
     MagicResistance(Decimal),
 }
 
-pub enum Buff {
-}
+pub enum Buff {}
 
 pub trait HasMods {
     fn get_mods(&self) -> Vec<Mod>;

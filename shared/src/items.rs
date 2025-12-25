@@ -1,5 +1,6 @@
 use std::sync::{Arc, RwLock};
 
+use bevy_ecs::resource::Resource;
 use serde::{Deserialize, Serialize};
 
 use crate::stats::{HasMods, Mod, PlayerFinalStats};
@@ -9,7 +10,6 @@ pub mod footwear;
 pub mod page {
     pub mod ranger_page;
 }
-
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Inventory<ItemRepr> {
@@ -26,7 +26,7 @@ pub struct ItemInInventory<ItemRepr> {
 
 impl ItemInInventory<ItemId> {
     pub fn as_full_item(&self, cache: &InventoryItemCache) -> ItemInInventory<Item> {
-        let cache_read = cache.cache.read().unwrap();
+        let cache_read = cache.item_cache.read().unwrap();
         ItemInInventory {
             stacksize: self.stacksize,
             item_placement: self.item_placement.clone(),
@@ -63,16 +63,20 @@ impl Inventory<Item> {
         let mut delta_magic_resistance = crate::decimal::Decimal::new(0.0);
 
         for inv_item in &self.items {
-            let Some(_equip_slot) = inv_item.item.data.item_misc.iter().find_map(|misc| {
-                match misc {
-                    crate::items::ItemMiscModifiers::Equipped(i) => Some(i),
-                    _ => None,
-                }
-            }) else {
+            let Some(_equip_slot) =
+                inv_item
+                    .item
+                    .data
+                    .item_misc
+                    .iter()
+                    .find_map(|misc| match misc {
+                        crate::items::ItemMiscModifiers::Equipped(i) => Some(i),
+                        _ => None,
+                    })
+            else {
                 // not equipped, skip this item
                 continue;
             };
-
 
             let mods = inv_item.item.get_mods();
             for modifier in mods {
@@ -129,32 +133,26 @@ impl Inventory<Item> {
                     delta_damage_reduction,
                 ));
         }
-        if delta_health_regen != crate::decimal::Decimal::new(0.0)
-        {
+        if delta_health_regen != crate::decimal::Decimal::new(0.0) {
             final_stats
                 .defense_mods
                 .push(crate::stats::DefenseModifier::HealthRegen(
                     delta_health_regen,
                 ));
         }
-        if delta_damage_reflection != crate::decimal::Decimal::new(0.0)
-        {
+        if delta_damage_reflection != crate::decimal::Decimal::new(0.0) {
             final_stats
                 .defense_mods
                 .push(crate::stats::DefenseModifier::DamageReflection(
                     delta_damage_reflection,
                 ));
         }
-        if delta_projectile_resistance != crate::decimal::Decimal::new(0.0
-        ) {
-            final_stats
-                .resistance_mods
-                .push(crate::stats::ResistanceModifier::ProjectileResistance(
-                    delta_projectile_resistance,
-                ));
+        if delta_projectile_resistance != crate::decimal::Decimal::new(0.0) {
+            final_stats.resistance_mods.push(
+                crate::stats::ResistanceModifier::ProjectileResistance(delta_projectile_resistance),
+            );
         }
-        if delta_magic_resistance != crate::decimal::Decimal::new(0.0)
-        {
+        if delta_magic_resistance != crate::decimal::Decimal::new(0.0) {
             final_stats
                 .resistance_mods
                 .push(crate::stats::ResistanceModifier::MagicResistance(
@@ -175,14 +173,27 @@ impl InventoryItemCache {
     }
 
     pub fn insert_item(&self, item: Item) {
-        let mut cache_write = self.cache.write().unwrap();
+        let mut cache_write = self.item_cache.write().unwrap();
         cache_write.insert(item.item_id, Arc::new(item));
+    }
+
+    pub fn insert_inventory(&self, inventory: Inventory<Item>) {
+        let mut cache_write = self.inventory_cache.write().unwrap();
+        cache_write.insert(inventory.id, Arc::new(inventory));
+    }
+
+    pub fn clear(&self) {
+        let mut cache_write = self.item_cache.write().unwrap();
+        cache_write.clear();
+        let mut inv_cache_write = self.inventory_cache.write().unwrap();
+        inv_cache_write.clear();
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Resource)]
 pub struct InventoryItemCache {
-    cache: Arc<RwLock<std::collections::HashMap<ItemId, Arc<Item>>>>,
+    item_cache: Arc<RwLock<std::collections::HashMap<ItemId, Arc<Item>>>>,
+    inventory_cache: Arc<RwLock<std::collections::HashMap<InventoryId, Arc<Inventory<Item>>>>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -191,7 +202,11 @@ pub enum ItemLayout {
     Rectangular { width: u8, height: u8 },
     /// A rectangular item with a custom shape defined by a mask: true = occupied, false = empty,
     /// row-major order (left to right, top to bottom)
-    RectWithMask { width: u8, height: u8, mask: Vec<bool> },
+    RectWithMask {
+        width: u8,
+        height: u8,
+        mask: Vec<bool>,
+    },
     /// Sparse item with individual occupied slots defined by coordinates
     Sparse { occupied_slots: Vec<(u8, u8)> },
 }
@@ -250,20 +265,17 @@ impl Default for InventoryId {
         };
 
         let rng = rand::random_range(0u64..(u64::MAX << 16));
-        let inventory_id = ((current_unix_time as u128) << 64)
-            | ((get_server_id() as u128) << 48)
-            | (rng as u128);
+        let inventory_id =
+            ((current_unix_time as u128) << 64) | ((get_server_id() as u128) << 48) | (rng as u128);
 
         InventoryId(inventory_id)
     }
 }
 
-
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct ItemId(pub u128);
 
-
-impl Default for  ItemId {
+impl Default for ItemId {
     fn default() -> Self {
         Self(InventoryId::default().0)
     }
@@ -392,9 +404,7 @@ mod test {
             data: ItemData {
                 item_base: BaseItem::Footwear(footwear::Footwear::Sandals),
                 mods: vec![],
-                item_misc: vec![
-                    ItemMiscModifiers::Damaged(DamageLevels::Tattered),
-                ],
+                item_misc: vec![ItemMiscModifiers::Damaged(DamageLevels::Tattered)],
             },
         };
         item_cache.insert_item(boots.clone());
@@ -437,4 +447,3 @@ mod test {
         assert!(as_payload.len() < 100); // ensure it's not too large
     }
 }
-

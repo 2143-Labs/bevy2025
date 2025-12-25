@@ -6,6 +6,13 @@ use crate::stats::HasMods;
 pub enum DiaryBook {
     /// The first diary you recieve, has 2 page slots
     Basic,
+    /// 2 Combat focused pages, one utility
+    BasicMartial,
+    /// Spellbook, 5x spellcasting pages
+    Spellbook1,
+
+    /// 2x mininon slot, 1x any
+    SummonerSpellbook,
 }
 
 impl HasMods for DiaryBook {
@@ -19,6 +26,7 @@ pub enum DiaryPage {
     Ranger,
     Melee,
     Spellcasting,
+
     Scavenger,
     MartialTraining,
     Healing,

@@ -105,10 +105,8 @@ impl std::ops::DivAssign for Decimal {
     }
 }
 
-
 impl From<f64> for Decimal {
     fn from(f: f64) -> Self {
         Decimal::new(f)
     }
 }
-

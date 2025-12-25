@@ -5,7 +5,10 @@ pub mod paused_menu;
 pub mod styles;
 pub mod text_input;
 
-use crate::{camera::FreeCam, game_state::{MenuState, OverlayMenuState}};
+use crate::{
+    camera::FreeCam,
+    game_state::{MenuState, OverlayMenuState},
+};
 use bevy::prelude::*;
 
 use shared::character_controller::MovementAction;
@@ -75,10 +78,7 @@ impl Plugin for UIPlugin {
                 paused_menu::despawn_paused_menu,
             )
             .add_systems(Update, paused_menu::handle_paused_menu_buttons)
-            .add_systems(
-                Update,
-                keyboard_input_tps,
-            )
+            .add_systems(Update, keyboard_input_tps)
             // Global button feedback
             .add_systems(Update, styles::button_visual_feedback);
     }
@@ -97,7 +97,6 @@ fn setup_ui_camera(mut commands: Commands) {
     ));
 }
 
-
 /// TODO move this
 /// Sends [`MovementAction`] events based on keyboard input.
 fn keyboard_input_tps(
@@ -105,7 +104,7 @@ fn keyboard_input_tps(
     freecam: Query<&FreeCam>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
 ) {
-    use avian3d::{math::*};
+    use avian3d::math::*;
     let left = keyboard_input.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]);
     let right = keyboard_input.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]);
     let forward = keyboard_input.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]);
@@ -116,7 +115,9 @@ fn keyboard_input_tps(
     let direction = Vector2::new(horizontal as Scalar, vertical as Scalar).normalize_or_zero();
 
     if direction != Vector2::ZERO {
-        let Ok(fc) = freecam.single() else {return;};
+        let Ok(fc) = freecam.single() else {
+            return;
+        };
         let direction_new = Vector2::new(
             direction.x * fc.yaw.cos() - direction.y * fc.yaw.sin(),
             direction.x * fc.yaw.sin() + direction.y * fc.yaw.cos(),
@@ -128,4 +129,3 @@ fn keyboard_input_tps(
         movement_writer.write(MovementAction::Jump);
     }
 }
-
