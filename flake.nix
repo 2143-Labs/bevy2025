@@ -10,43 +10,29 @@
       let
         pkgs = import nixpkgs { inherit system; };
         naersk-lib = pkgs.callPackage naersk { };
-      in
-      {
-        defaultPackage = naersk-lib.buildPackage {
+        buildInputs = with pkgs; [
+          wayland
+          libxkbcommon
+          vulkan-loader
+          alsa-lib
+          udev
+        ];
+      in {
+        defaultPackage = naersk-lib.buildPackage rec {
           src = ./.;
           nativeBuildInputs = with pkgs; [ pkg-config ];
-          buildInputs = with pkgs; [
-            wayland
-            libxkbcommon
-            vulkan-loader
-            alsa-lib
-            udev
-          ];
+          buildInputs = buildInputs;
         };
         devShell = with pkgs; mkShell {
-          buildInputs = [ 
+          buildInputs = [
             rust-analyzer
             cargo 
-            rustc 
-            rustfmt 
             pre-commit 
-            rustPackages.clippy
             pkg-config
-            wayland
-            libxkbcommon
-            vulkan-loader
-            alsa-lib
-            udev
             bacon
-          ];
+          ] ++ buildInputs;
           RUST_SRC_PATH = rustPlatform.rustLibSrc;
-          LD_LIBRARY_PATH = lib.makeLibraryPath [
-            wayland
-            libxkbcommon
-            vulkan-loader
-            alsa-lib
-            udev
-          ];
+          LD_LIBRARY_PATH = lib.makeLibraryPath buildInputs;
         };
       }
     );
