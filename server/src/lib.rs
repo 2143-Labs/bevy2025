@@ -143,6 +143,7 @@ fn do_app(f: impl FnOnce(&mut App)) {
                 on_player_connect,
                 on_player_heartbeat,
                 on_receive_ping_challenge,
+                on_player_scoreboard_request,
                 on_unit_despawn,
                 on_disconnect_packet,
                 shared::event::server::drain_incoming_events,
@@ -575,6 +576,33 @@ fn on_player_heartbeat(
                 send_outgoing_event_now(&sr.handler, hb.endpoint, &event);
             }
         }
+    }
+}
+
+fn on_player_scoreboard_request(
+    mut pd: UDPacketEvent<shared::event::server::RequestScoreboard>,
+    plys: Query<(&PlayerId, &PlayerName), With<ConnectedPlayer>>,
+    heartbeat_mapping: Res<HeartbeatList>,
+    sr: Res<ServerNetworkingResources>,
+) {
+
+    let mut scoreboard_data = shared::event::client::RequestScoreboardResponse {
+        player_names: HashMap::new(),
+        player_pings: HashMap::new(),
+    };
+    for (ply_id, ply_name) in &plys {
+        if let Some(ping) = heartbeat_mapping.pings.get(ply_id) {
+            let ping = ping.to_integer();
+            scoreboard_data.player_names.insert(*ply_id, ply_name.name.clone());
+            scoreboard_data
+                .player_pings
+                .insert(*ply_id, ping);
+
+        }
+    }
+    for req in pd.read() {
+        let event = EventToClient::RequestScoreboardResponse(scoreboard_data.clone());
+        send_outgoing_event_now(&sr.handler, req.endpoint, &event);
     }
 }
 
