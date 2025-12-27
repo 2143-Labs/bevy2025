@@ -298,7 +298,7 @@ impl Plugin for TickPlugin {
 #[derive(Resource, Debug)]
 pub struct CurrentTick(pub Tick);
 
-#[derive(Resource, Debug)]
+#[derive(Resource, Debug, Clone, Serialize, Deserialize, Message)]
 pub struct ServerTPS {
     last_tick_seconds_since_start: f64,
     latest_tick_times: VecDeque<f64>,
@@ -324,7 +324,7 @@ pub fn increment_ticks(
         .latest_tick_times
         .push_back(delta);
 
-    if last_completed_increment.latest_tick_times.len() > 100 {
+    if last_completed_increment.latest_tick_times.len() > 1000 {
         last_completed_increment.latest_tick_times.pop_front();
     }
 

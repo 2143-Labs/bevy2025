@@ -18,7 +18,9 @@ pub struct SendChat {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
-pub struct Heartbeat {}
+pub struct Heartbeat {
+    pub client_started_time: f64,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct SpawnCircle {
@@ -41,5 +43,8 @@ pub struct ChangeMovement {
     pub net_ent_id: NetEntId,
     pub transform: Transform,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct RequestScoreboard {}
 
 include!(concat!(env!("OUT_DIR"), "/server_event.rs"));

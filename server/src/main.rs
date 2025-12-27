@@ -9,24 +9,13 @@ use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
-    event::{
-        client::{DespawnUnit2, PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2},
-        server::{ChangeMovement, Heartbeat},
-        NetEntId, PlayerId, UDPacketEvent,
-    },
-    net_components::{
-        ents::{PlayerCamera, SendNetworkTranformUpdates},
-        foreign::ComponentColor,
-        make_ball, make_man,
-        ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName},
-        ToNetComponent,
-    },
-    netlib::{
-        send_outgoing_event_next_tick, send_outgoing_event_next_tick_batch, EventToClient,
-        EventToServer, NetworkConnectionTarget, ServerNetworkingResources, Tick,
-    },
-    physics::terrain::TerrainParams,
-    Config, ConfigPlugin, CurrentTick,
+    Config, ConfigPlugin, CurrentTick, event::{
+        NetEntId, PlayerId, UDPacketEvent, client::{DespawnUnit2, HeartbeatResponse, PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2}, server::{ChangeMovement, Heartbeat}
+    }, net_components::{
+        ToNetComponent, ents::{PlayerCamera, SendNetworkTranformUpdates}, foreign::ComponentColor, make_ball, make_man, ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName}
+    }, netlib::{
+        EventToClient, EventToServer, NetworkConnectionTarget, ServerNetworkingResources, Tick, send_outgoing_event_next_tick, send_outgoing_event_next_tick_batch, send_outgoing_event_now
+    }, physics::terrain::TerrainParams
 };
 
 /// How often to run the system
@@ -396,10 +385,9 @@ fn on_player_disconnect(
     for player in pd.read() {
         heartbeat_mapping.heartbeats.remove(&player.id);
 
-        let mut events = vec![];
-        events.push(EventToClient::PlayerDisconnected(PlayerDisconnected {
+        let mut events = vec![EventToClient::PlayerDisconnected(PlayerDisconnected {
             id: player.id,
-        }));
+        })];
 
         for (owned_ent_id, despawn_tag) in &clients_owned_items {
             if despawn_tag.player_id == player.id {
@@ -459,14 +447,23 @@ fn on_unit_despawn(
 
 fn on_player_heartbeat(
     mut pd: UDPacketEvent<Heartbeat>,
+    tick: Res<CurrentTick>,
+    time: Res<Time>,
     heartbeat_mapping: Res<HeartbeatList>,
     endpoint_mapping: Res<EndpointToPlayerId>,
+    sr: Res<ServerNetworkingResources>,
 ) {
     for hb in pd.read() {
         // TODO tryblocks?
         if let Some(id) = endpoint_mapping.map.get(&hb.endpoint) {
-            if let Some(hb) = heartbeat_mapping.heartbeats.get(id) {
-                hb.fetch_min(0, std::sync::atomic::Ordering::Release);
+            if let Some(heartbeat_pointer) = heartbeat_mapping.heartbeats.get(id) {
+                heartbeat_pointer.fetch_min(0, std::sync::atomic::Ordering::Release);
+                let event = EventToClient::HeartbeatResponse(HeartbeatResponse {
+                    client_started_time: hb.event.client_started_time,
+                    server_time: time.elapsed_secs_f64(),
+                    server_tick: tick.0,
+                });
+                send_outgoing_event_now(&sr.handler, hb.endpoint, &event);
             }
         }
     }

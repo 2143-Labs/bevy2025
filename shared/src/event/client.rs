@@ -1,7 +1,9 @@
 //!This is for events that are sent FROM the server TO the client.
+use crate::ServerTPS;
 use crate::event::PlayerId;
 use crate::items::{Inventory, Item, ItemId, ItemInInventory, ItemPlacement};
-use crate::netlib::NetworkingResources;
+use crate::net_components::PlayerConnectionInfo;
+use crate::netlib::{NetworkingResources, Tick};
 use crate::physics::terrain::TerrainParams;
 use crate::{event::EventFromEndpoint, net_components::NetComponent};
 use bevy::prelude::*;
@@ -71,5 +73,21 @@ pub struct UpdateInventory {
 pub struct UpdateItems {
     pub items: Vec<Item>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct ServerSoreboardInfo {
+    pub tps: ServerTPS,
+    pub disconnected_players: Vec<PlayerId>,
+    pub connected_players: Vec<PlayerId>,
+    pub players_connection_info: Vec<(PlayerId, PlayerConnectionInfo)>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct HeartbeatResponse {
+    pub client_started_time: f64,
+    pub server_time: f64,
+    pub server_tick: Tick,
+}
+
 
 include!(concat!(env!("OUT_DIR"), "/client_event.rs"));

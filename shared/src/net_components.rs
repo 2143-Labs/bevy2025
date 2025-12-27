@@ -12,8 +12,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    event::{client::SpawnUnit2, NetEntId, PlayerId},
-    net_components::ours::ControlledBy,
+    decimal::Decimal, event::{NetEntId, PlayerId, client::SpawnUnit2}, net_components::ours::ControlledBy
 };
 
 //include!(concat!(env!("OUT_DIR"), "/net_components.rs"));
@@ -115,4 +114,10 @@ pub fn make_man(net_ent_id: NetEntId, transform: Transform, owner: ControlledBy)
             //avian3d::prelude::Mass(70.0).to_net_component(),
         ],
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayerConnectionInfo {
+    pub ping: Decimal,
+    pub packet_loss: Decimal,
 }

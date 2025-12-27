@@ -4,12 +4,13 @@ use message_io::{
     node::{NodeEvent, NodeHandler},
 };
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
+use std::{collections::HashMap, sync::{Arc, Mutex}};
 
 #[derive(Resource, Clone)]
 pub struct NetworkingResources<TI, TO> {
     pub event_list_incoming: Arc<Mutex<Vec<(Endpoint, TI)>>>,
     pub event_list_outgoing: Arc<Mutex<Vec<(Endpoint, TO)>>>,
+    pub reliable_packet_ids_seen: Arc<Mutex<HashMap<PacketIdentifier, Tick>>>,
     pub handler: NodeHandler<()>,
 }
 
@@ -38,6 +39,7 @@ impl Tick {
     }
 }
 
+use crate::CurrentTick;
 pub use crate::event::client::EventToClient;
 pub use crate::event::server::EventToServer;
 
@@ -48,16 +50,21 @@ pub trait NetworkingEvent:
 impl NetworkingEvent for EventToServer {}
 impl NetworkingEvent for EventToClient {}
 
+type PacketIdentifier = u32;
+type DuplicationIdentifier = u8;
+
 #[derive(Deserialize)]
 pub enum EventGroupingOwned<T> {
     Single(T),
     Batch(Vec<T>),
+    Reliable(PacketIdentifier, DuplicationIdentifier, Tick, Vec<T>),
 }
 
 #[derive(Serialize)]
 pub enum EventGroupingRef<'a, T> {
     Single(&'a T),
     Batch(&'a [T]),
+    Reliable(PacketIdentifier, DuplicationIdentifier, Tick, &'a [T]),
 }
 
 pub fn send_outgoing_event_now<T: NetworkingEvent>(
@@ -79,11 +86,30 @@ pub fn send_outgoing_event_now_batch<T: NetworkingEvent>(
 ) {
     trace!(?event, "Sending batch event");
     let data = postcard::to_stdvec(&EventGroupingRef::Batch(event)).unwrap();
-    if data.len() > 4000 {
+    if data.len() > 6000 {
         warn!(data_len = data.len(), "Sending large batch event");
     }
     handler.network().send(endpoint, &data);
 }
+
+pub fn send_outgoing_event_reliable_internal<T: NetworkingEvent>(
+    handler: &NodeHandler<()>,
+    endpoint: Endpoint,
+    event: &[T],
+    tick: &Tick,
+) {
+    trace!(?event, "Sending doubled batch event");
+
+    let packet_id: PacketIdentifier = rand::random();
+    let dedup_id: DuplicationIdentifier = rand::random();
+    let data = postcard::to_stdvec(&EventGroupingRef::Reliable(packet_id, dedup_id, *tick, event)).unwrap();
+    handler.network().send(endpoint, &data);
+
+    let dedup_id: DuplicationIdentifier = rand::random();
+    let data = postcard::to_stdvec(&EventGroupingRef::Reliable(packet_id, dedup_id, *tick, event)).unwrap();
+    handler.network().send(endpoint, &data);
+}
+
 
 pub fn send_outgoing_event_next_tick<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
@@ -106,6 +132,7 @@ pub fn send_outgoing_event_next_tick_batch<TI, TO: NetworkingEvent>(
 }
 
 pub fn flush_outgoing_events<TI: NetworkingEvent, TO: NetworkingEvent>(
+    tick: Res<CurrentTick>,
     resources: Res<NetworkingResources<TI, TO>>,
 ) {
     let mut list = resources.event_list_outgoing.lock().unwrap();
@@ -117,18 +144,12 @@ pub fn flush_outgoing_events<TI: NetworkingEvent, TO: NetworkingEvent>(
     //info!(num_events = events_to_send.len(), "Flushing outgoing events");
     for (endpoint, event) in events_to_send {
         events_per_endpoint.entry(endpoint).or_default().push(event);
-
-        if events_per_endpoint.len() > 1000 || events_per_endpoint[&endpoint].len() > 100 {
-            send_outgoing_event_now_batch(
-                &resources.handler,
-                endpoint,
-                &events_per_endpoint.remove(&endpoint).unwrap(),
-            );
-        }
     }
 
     for (endpoint, events) in events_per_endpoint {
-        send_outgoing_event_now_batch(&resources.handler, endpoint, &events);
+        for chunk in events.chunks(50) {
+            send_outgoing_event_reliable_internal(&resources.handler, endpoint, chunk, &tick.0);
+        }
     }
 }
 
@@ -160,6 +181,7 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
         handler: handler.clone(),
         event_list_incoming: Default::default(),
         event_list_outgoing: Default::default(),
+        reliable_packet_ids_seen: Default::default(),
     };
 
     // insert the new endpoints and remove the connection data
@@ -221,6 +243,17 @@ pub fn on_node_event_incoming<TI: NetworkingEvent, TO>(
                 }
                 EventGroupingOwned::Batch(events) => {
                     list.extend(events.into_iter().map(|x| (endpoint, x)));
+                }
+                EventGroupingOwned::Reliable(packet_id, _dedup_id, tick, events) => {
+                    let mut seen_map = res.reliable_packet_ids_seen.lock().unwrap();
+
+                    // if we have seen this packet id ever, ignore it
+                    if let Some(_seen_time) = seen_map.get(&packet_id) {
+                        info!(?endpoint, packet_id, "Duplicate reliable packet ignored");
+                    } else {
+                        seen_map.insert(packet_id, tick); // TODO store tick properly
+                        list.extend(events.into_iter().map(|x| (endpoint, x)));
+                    }
                 }
             }
         }

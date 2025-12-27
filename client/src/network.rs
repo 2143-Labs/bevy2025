@@ -7,7 +7,7 @@ use shared::{
     character_controller::CharacterControllerBundle,
     event::{
         MyNetEntParentId, NetEntId, PlayerId, UDPacketEvent,
-        client::{BeginThirdpersonControllingUnit, SpawnUnit2, WorldData2},
+        client::{BeginThirdpersonControllingUnit, HeartbeatResponse, SpawnUnit2, WorldData2},
         server::{ChangeMovement, ConnectRequest, Heartbeat, SpawnCircle, SpawnMan},
     },
     net_components::{
@@ -131,6 +131,7 @@ impl Plugin for NetworkingPlugin {
                     on_special_unit_spawn_remote_camera,
                     on_special_unit_spawn_ball,
                     on_special_unit_spawn_man,
+                    receive_heartbeat,
                 )
                     .run_if(in_state(NetworkGameState::ClientConnected)),
             )
@@ -475,9 +476,23 @@ fn receive_world_data(
     }
 }
 
-fn send_heartbeat(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoint>) {
-    let event = EventToServer::Heartbeat(Heartbeat {});
+fn send_heartbeat(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoint>, time: Res<Time>) {
+    let event = EventToServer::Heartbeat(Heartbeat {
+        client_started_time: time.elapsed_secs_f64(),
+    });
     send_outgoing_event_now(&sr.handler, mse.0, &event);
+}
+
+fn receive_heartbeat(
+    mut heartbeat_events: UDPacketEvent<HeartbeatResponse>,
+    time: Res<Time>,
+) {
+    for event in heartbeat_events.read() {
+        info!("Received heartbeat response from server: {:?}", event.event);
+        let cur_client_time = time.elapsed_secs_f64();
+        let latency = 0.5 * (cur_client_time - event.event.client_started_time);
+        info!("Estimated client-server latency: {:.2} ms", latency * 1000.0);
+    }
 }
 
 //fn send_interp(
