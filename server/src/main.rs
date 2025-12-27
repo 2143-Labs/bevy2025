@@ -132,12 +132,13 @@ fn main() {
         )
         .add_systems(
             FixedUpdate,
-            (broadcast_movement_updates, shared::increment_ticks)
+            (broadcast_movement_updates)
                 .run_if(in_state(ServerState::Running)),
         )
         .add_systems(
             FixedPostUpdate,
-            (shared::netlib::flush_outgoing_events::<EventToServer, EventToClient>)
+            (shared::increment_ticks, shared::netlib::flush_outgoing_events::<EventToServer, EventToClient>)
+                .chain()
                 .run_if(in_state(ServerState::Running)),
         )
         .add_systems(

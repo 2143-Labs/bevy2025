@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env::current_dir, fs::OpenOptions};
+use std::{collections::{HashMap, VecDeque}, env::current_dir, fs::OpenOptions};
 
 use bevy::prelude::*;
 use once_cell::sync::Lazy;
@@ -286,17 +286,84 @@ pub struct TickPlugin;
 impl Plugin for TickPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Time::<Fixed>::from_hz(BASE_TICKS_PER_SECOND as _))
-            .insert_resource(CurrentTick(Tick(1)));
+            .insert_resource(CurrentTick(Tick(1)))
+            .insert_resource(ServerTPS {
+                last_tick_seconds_since_start: -1.0,
+                latest_tick_times: VecDeque::new(),
+            });
     }
 }
 
 #[derive(Resource, Debug)]
 pub struct CurrentTick(pub Tick);
 
-pub fn increment_ticks(mut current_tick: ResMut<CurrentTick>) {
+#[derive(Resource, Debug)]
+pub struct ServerTPS {
+    last_tick_seconds_since_start: f64,
+    latest_tick_times: VecDeque<f64>,
+}
+
+pub fn increment_ticks(
+    time: Res<Time<Fixed>>,
+    mut current_tick: ResMut<CurrentTick>,
+    mut last_completed_increment: ResMut<ServerTPS>,
+) {
     current_tick.0.increment();
+
+    let last_time = last_completed_increment.last_tick_seconds_since_start;
+    let cur_time = time.elapsed_secs_f64();
+    last_completed_increment.last_tick_seconds_since_start = cur_time;
+    if last_time < 0.0 {
+        // First tick, don't record delta
+        return;
+    }
+
+    let delta = cur_time - last_time;
+    last_completed_increment
+        .latest_tick_times
+        .push_back(delta);
+
+    if last_completed_increment.latest_tick_times.len() > 100 {
+        last_completed_increment.latest_tick_times.pop_front();
+    }
 
     if current_tick.0 .0.is_multiple_of(100) {
         debug!("Server Tick: {:?}", current_tick.0);
+        // TODO test this
+        debug!(
+            "Average Tick Time: {:.4} s",
+            last_completed_increment
+                .latest_tick_times
+                .iter()
+                .sum::<f64>()
+                / last_completed_increment.latest_tick_times.len() as f64
+        );
+        debug!(
+            "Average TPS: {:.2}",
+            1.0
+                / (last_completed_increment
+                    .latest_tick_times
+                    .iter()
+                    .sum::<f64>()
+                    / last_completed_increment.latest_tick_times.len() as f64)
+        );
+        debug!(
+            "tick 99%, 90%, 50%: {:.4}s, {:.4}s, {:.4}s",
+            {
+                let mut v = last_completed_increment.latest_tick_times.iter().cloned().collect::<Vec<f64>>();
+                v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                v[(v.len() as f64 * 0.99) as usize - 1]
+            },
+            {
+                let mut v = last_completed_increment.latest_tick_times.iter().cloned().collect::<Vec<f64>>();
+                v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                v[(v.len() as f64 * 0.90) as usize - 1]
+            },
+            {
+                let mut v = last_completed_increment.latest_tick_times.iter().cloned().collect::<Vec<f64>>();
+                v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                v[(v.len() as f64 * 0.50) as usize - 1]
+            },
+        );
     }
 }
