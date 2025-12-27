@@ -61,9 +61,7 @@ fn handle_update_unit(
         With<shared::net_components::ents::SendNetworkTranformUpdates>,
     >,
     // TODO should we add a tag here to restrict to only certain entities?
-    mut new_component_units: Query<
-        (Entity, &NetEntId),
-    >
+    mut new_component_units: Query<(Entity, &NetEntId)>,
 ) {
     for update in update_events.read() {
         // Find the entity with this NetEntId

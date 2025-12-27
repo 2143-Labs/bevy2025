@@ -1,10 +1,10 @@
 //!This is for events that are sent FROM the server TO the client.
-use crate::ServerTPS;
 use crate::event::PlayerId;
 use crate::items::{Inventory, Item, ItemId, ItemInInventory, ItemPlacement};
 use crate::net_components::PlayerConnectionInfo;
 use crate::netlib::{NetworkingResources, Tick};
 use crate::physics::terrain::TerrainParams;
+use crate::ServerTPS;
 use crate::{event::EventFromEndpoint, net_components::NetComponent};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -89,5 +89,10 @@ pub struct HeartbeatResponse {
     pub server_tick: Tick,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct HeartbeatChallenge {
+    pub server_time: f64,
+    //pub server_challenge: u64,
+}
 
 include!(concat!(env!("OUT_DIR"), "/client_event.rs"));

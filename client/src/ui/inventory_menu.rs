@@ -1,5 +1,8 @@
 use super::styles::*;
-use crate::{game_state::{GameState, OverlayMenuState}, network::CurrentThirdPersonControlledUnit};
+use crate::{
+    game_state::OverlayMenuState,
+    network::CurrentThirdPersonControlledUnit,
+};
 use bevy::prelude::*;
 use shared::{items::InventoryItemCache, net_components::ours::HasInventory};
 
@@ -10,12 +13,9 @@ pub struct InventoryMenu;
 /// Spawn the paused menu UI
 pub fn spawn_inventory_menu(
     mut commands: Commands,
-    our_inv: Query<
-        &HasInventory,
-        With<CurrentThirdPersonControlledUnit>,
-    >,
+    our_inv: Query<&HasInventory, With<CurrentThirdPersonControlledUnit>>,
     inventory_res: Res<InventoryItemCache>,
-    mut next_state: ResMut<NextState<OverlayMenuState>>
+    mut next_state: ResMut<NextState<OverlayMenuState>>,
 ) {
     let Ok(inventory) = our_inv.single() else {
         warn!("Could not get inventory for current controlled unit");
@@ -25,7 +25,10 @@ pub fn spawn_inventory_menu(
 
     let inv_id = inventory.inventory_id;
     let Some(inventory_full) = inventory_res.get_inventory(&inv_id) else {
-        warn!("Could not get full inventory data for inventory ID: {:?}", inv_id);
+        warn!(
+            "Could not get full inventory data for inventory ID: {:?}",
+            inv_id
+        );
         next_state.set(OverlayMenuState::Hidden);
         return;
     };
@@ -73,12 +76,7 @@ pub fn spawn_inventory_menu(
                 let (node, bg_color, border_color) = menu_button_bundle();
                 let (text, font, color) = menu_button_text(&item_text);
                 parent
-                    .spawn((
-                        node,
-                        bg_color,
-                        border_color,
-                        Interaction::default(),
-                    ))
+                    .spawn((node, bg_color, border_color, Interaction::default()))
                     .with_children(|button| {
                         button.spawn((text, font, color));
                     });
@@ -97,13 +95,12 @@ pub fn despawn_inventory_menu(
     }
 }
 
-pub fn handle_inventory_menu_buttons(
-    //keyboard: Res<ButtonInput<KeyCode>>,
+pub fn handle_inventory_menu_buttons(//keyboard: Res<ButtonInput<KeyCode>>,
     //mouse: Res<ButtonInput<MouseButton>>,
     //config: Res<crate::config::Config>,
     //mut next_state: ResMut<NextState<OverlayMenuState>>,
 ) {
     //if config.just_pressed(&keyboard, &mouse, crate::game_action::GameAction::Escape) {
-        //next_state.set(OverlayMenuState::Hidden);
+    //next_state.set(OverlayMenuState::Hidden);
     //}
 }

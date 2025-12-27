@@ -1,4 +1,8 @@
-use std::{collections::{HashMap, VecDeque}, env::current_dir, fs::OpenOptions};
+use std::{
+    collections::{HashMap, VecDeque},
+    env::current_dir,
+    fs::OpenOptions,
+};
 
 use bevy::prelude::*;
 use once_cell::sync::Lazy;
@@ -40,7 +44,6 @@ pub enum GameAction {
     ZoomCameraOut,
     OpenInventory,
 
-
     Chat,
 }
 
@@ -68,7 +71,10 @@ static DEFAULT_BINDS: Lazy<Keybinds> = Lazy::new(|| {
         (GameAction::Chat, vec![kk(KeyCode::Enter)]),
         (GameAction::ZoomCameraIn, vec![kk(KeyCode::Equal)]),
         (GameAction::ZoomCameraOut, vec![kk(KeyCode::Minus)]),
-        (GameAction::OpenInventory, vec![kk(KeyCode::KeyI), kk(KeyCode::Tab)]),
+        (
+            GameAction::OpenInventory,
+            vec![kk(KeyCode::KeyI), kk(KeyCode::Tab)],
+        ),
     ])
 });
 
@@ -320,9 +326,7 @@ pub fn increment_ticks(
     }
 
     let delta = cur_time - last_time;
-    last_completed_increment
-        .latest_tick_times
-        .push_back(delta);
+    last_completed_increment.latest_tick_times.push_back(delta);
 
     if last_completed_increment.latest_tick_times.len() > 1000 {
         last_completed_increment.latest_tick_times.pop_front();

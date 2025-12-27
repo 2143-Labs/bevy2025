@@ -4,7 +4,10 @@ use message_io::{
     node::{NodeEvent, NodeHandler},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::{Arc, Mutex}};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 #[derive(Resource, Clone)]
 pub struct NetworkingResources<TI, TO> {
@@ -39,9 +42,9 @@ impl Tick {
     }
 }
 
-use crate::CurrentTick;
 pub use crate::event::client::EventToClient;
 pub use crate::event::server::EventToServer;
+use crate::CurrentTick;
 
 pub trait NetworkingEvent:
     Clone + Serialize + for<'de> Deserialize<'de> + Send + 'static + core::fmt::Debug
@@ -102,14 +105,19 @@ pub fn send_outgoing_event_reliable_internal<T: NetworkingEvent>(
 
     let packet_id: PacketIdentifier = rand::random();
     let dedup_id: DuplicationIdentifier = rand::random();
-    let data = postcard::to_stdvec(&EventGroupingRef::Reliable(packet_id, dedup_id, *tick, event)).unwrap();
+    let data = postcard::to_stdvec(&EventGroupingRef::Reliable(
+        packet_id, dedup_id, *tick, event,
+    ))
+    .unwrap();
     handler.network().send(endpoint, &data);
 
     let dedup_id: DuplicationIdentifier = rand::random();
-    let data = postcard::to_stdvec(&EventGroupingRef::Reliable(packet_id, dedup_id, *tick, event)).unwrap();
+    let data = postcard::to_stdvec(&EventGroupingRef::Reliable(
+        packet_id, dedup_id, *tick, event,
+    ))
+    .unwrap();
     handler.network().send(endpoint, &data);
 }
-
 
 pub fn send_outgoing_event_next_tick<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
@@ -247,10 +255,8 @@ pub fn on_node_event_incoming<TI: NetworkingEvent, TO>(
                 EventGroupingOwned::Reliable(packet_id, _dedup_id, tick, events) => {
                     let mut seen_map = res.reliable_packet_ids_seen.lock().unwrap();
 
-                    // if we have seen this packet id ever, ignore it
-                    if let Some(_seen_time) = seen_map.get(&packet_id) {
-                        info!(?endpoint, packet_id, "Duplicate reliable packet ignored");
-                    } else {
+                    // we would ignore this pakcet if we have seen it before
+                    if seen_map.get(&packet_id).is_none() {
                         seen_map.insert(packet_id, tick); // TODO store tick properly
                         list.extend(events.into_iter().map(|x| (endpoint, x)));
                     }

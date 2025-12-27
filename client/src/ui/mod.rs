@@ -1,10 +1,10 @@
 pub mod connecting_menu;
 pub mod home_menu;
+pub mod inventory_menu;
 pub mod multiplayer_menu;
 pub mod paused_menu;
 pub mod styles;
 pub mod text_input;
-pub mod inventory_menu;
 
 use crate::{
     camera::FreeCam,

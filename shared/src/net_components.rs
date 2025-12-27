@@ -12,7 +12,9 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    decimal::Decimal, event::{NetEntId, PlayerId, client::SpawnUnit2}, net_components::ours::ControlledBy
+    decimal::Decimal,
+    event::{client::SpawnUnit2, NetEntId, PlayerId},
+    net_components::ours::ControlledBy,
 };
 
 //include!(concat!(env!("OUT_DIR"), "/net_components.rs"));

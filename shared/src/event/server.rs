@@ -47,4 +47,13 @@ pub struct ChangeMovement {
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct RequestScoreboard {}
 
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct HeartbeatChallengeResponse {
+    pub server_time: f64,
+    pub local_latency_ms: f64,
+    // TODO: make this only need the server challenge, not time. store time server side so client
+    // can't cheat
+    //pub server_challenge: u64,
+}
+
 include!(concat!(env!("OUT_DIR"), "/server_event.rs"));

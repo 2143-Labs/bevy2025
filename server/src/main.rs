@@ -10,7 +10,10 @@ use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
     Config, ConfigPlugin, CurrentTick, event::{
-        NetEntId, PlayerId, UDPacketEvent, client::{DespawnUnit2, HeartbeatResponse, PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2}, server::{ChangeMovement, Heartbeat}
+        NetEntId, PlayerId, UDPacketEvent, client::{
+            DespawnUnit2, HeartbeatChallenge, HeartbeatResponse, PlayerDisconnected, SpawnUnit2,
+            UpdateUnit2, WorldData2,
+        }, server::{ChangeMovement, Heartbeat, HeartbeatChallengeResponse}
     }, net_components::{
         ToNetComponent, ents::{PlayerCamera, SendNetworkTranformUpdates}, foreign::ComponentColor, make_ball, make_man, ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName}
     }, netlib::{
@@ -34,9 +37,16 @@ enum ServerState {
     Running,
 }
 
+#[derive(Debug)]
+struct PlayerPing {
+    pub server_challenged_ping_ms: AtomicI16,
+    pub client_reported_ping_ms: AtomicI16,
+}
+
 #[derive(Resource, Default)]
 struct HeartbeatList {
     heartbeats: HashMap<PlayerId, Arc<AtomicI16>>,
+    pings: HashMap<PlayerId, PlayerPing>,
 }
 
 #[derive(Resource, Default)]
@@ -113,22 +123,32 @@ fn main() {
                 on_player_disconnect,
                 on_player_connect,
                 on_player_heartbeat,
+                on_receive_ping_challenge,
                 on_unit_despawn,
                 shared::event::server::drain_incoming_events,
                 on_movement,
             )
                 .run_if(in_state(ServerState::Running)),
         )
+        // Stuff to be calculated and sent out at the end of each tick
         .add_systems(
             FixedUpdate,
-            (broadcast_movement_updates)
-                .run_if(in_state(ServerState::Running)),
+            (broadcast_movement_updates).run_if(in_state(ServerState::Running)),
         )
         .add_systems(
             FixedPostUpdate,
-            (shared::increment_ticks, shared::netlib::flush_outgoing_events::<EventToServer, EventToClient>)
+            (
+                shared::increment_ticks,
+                shared::netlib::flush_outgoing_events::<EventToServer, EventToClient>,
+            )
                 .chain()
                 .run_if(in_state(ServerState::Running)),
+        )
+        .add_systems(
+            Update,
+            send_ping_challenge.run_if(bevy::time::common_conditions::on_timer(
+                Duration::from_millis(500),
+            )),
         )
         .add_systems(
             Update,
@@ -323,6 +343,13 @@ fn on_player_connect(
             new_player_id,
             Arc::new(AtomicI16::new(-(hb_grace_period as i16))),
         );
+        heartbeat_mapping.pings.insert(
+            new_player_id,
+            PlayerPing {
+                server_challenged_ping_ms: AtomicI16::new(-1),
+                client_reported_ping_ms: AtomicI16::new(-1),
+            },
+        );
 
         endpoint_to_player_id
             .map
@@ -370,6 +397,48 @@ fn check_heartbeats(
     }
 }
 
+fn send_ping_challenge(
+    clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
+    time: Res<Time>,
+    sr: Res<ServerNetworkingResources>,
+) {
+    let event = EventToClient::HeartbeatChallenge(HeartbeatChallenge {
+        server_time: time.elapsed_secs_f64(),
+    });
+    for net_client in &clients {
+        send_outgoing_event_now(&sr.handler, net_client.0, &event);
+    }
+}
+
+fn on_receive_ping_challenge(
+    mut pd: UDPacketEvent<HeartbeatChallengeResponse>,
+    time: Res<Time>,
+    //tick: Res<CurrentTick>,
+    heartbeat_mapping: Res<HeartbeatList>,
+    endpoint_mapping: Res<EndpointToPlayerId>,
+) {
+    for hb in pd.read() {
+        if let Some(player_id) = endpoint_mapping.map.get(&hb.endpoint) {
+            let ping = time.elapsed_secs_f64() - hb.event.server_time;
+            let ping = ping / 2.0;
+            let ping = (ping * 1000.0) as i16; // in ms
+            if let Some(player_ping) = heartbeat_mapping.pings.get(player_id) {
+                player_ping
+                    .server_challenged_ping_ms
+                    .store(ping, std::sync::atomic::Ordering::Release);
+
+                player_ping
+                    .client_reported_ping_ms
+                    .store(hb.event.local_latency_ms as i16, std::sync::atomic::Ordering::Release);
+
+                info!(?player_id, ?player_ping, "ping updated");
+            } else {
+                error!(?player_id, "no ping entry found");
+            }
+        }
+    }
+}
+
 fn on_player_disconnect(
     mut pd: MessageReader<PlayerDisconnected>,
 
@@ -384,8 +453,9 @@ fn on_player_disconnect(
 ) {
     for player in pd.read() {
         heartbeat_mapping.heartbeats.remove(&player.id);
+        heartbeat_mapping.pings.remove(&player.id);
 
-        let mut events = vec![EventToClient::PlayerDisconnected(PlayerDisconnected {
+        let events = vec![EventToClient::PlayerDisconnected(PlayerDisconnected {
             id: player.id,
         })];
 

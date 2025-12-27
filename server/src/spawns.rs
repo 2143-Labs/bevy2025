@@ -1,12 +1,16 @@
 use bevy::prelude::*;
 use shared::{
     event::{
-        NetEntId, UDPacketEvent, client::BeginThirdpersonControllingUnit, server::{SpawnCircle, SpawnMan}
+        client::BeginThirdpersonControllingUnit,
+        server::{SpawnCircle, SpawnMan},
+        NetEntId, UDPacketEvent,
     },
     net_components::{
-        ToNetComponent, make_man, ours::{ControlledBy, DespawnOnPlayerDisconnect, HasInventory}
+        make_man,
+        ours::{ControlledBy, DespawnOnPlayerDisconnect, HasInventory},
+        ToNetComponent,
     },
-    netlib::{EventToClient, ServerNetworkingResources, send_outgoing_event_next_tick},
+    netlib::{send_outgoing_event_next_tick, EventToClient, ServerNetworkingResources},
 };
 
 use crate::{make_ball, ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint, ServerState};
@@ -105,9 +109,12 @@ fn on_man_spawn(
             transform,
             ControlledBy::single(*player_id_of_spawner),
         );
-        unit.components.push(HasInventory {
-            inventory_id: inventory.id,
-        }.to_net_component());
+        unit.components.push(
+            HasInventory {
+                inventory_id: inventory.id,
+            }
+            .to_net_component(),
+        );
 
         let unit_ent = unit.clone().spawn_entity(&mut commands);
         commands.entity(unit_ent).insert(DespawnOnPlayerDisconnect {
@@ -134,9 +141,7 @@ fn on_man_spawn(
         send_outgoing_event_next_tick(
             &sr,
             spawn_ev.endpoint,
-            &EventToClient::NewInventory(shared::event::client::NewInventory {
-                inventory,
-            }),
+            &EventToClient::NewInventory(shared::event::client::NewInventory { inventory }),
         );
     }
 }

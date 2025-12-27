@@ -27,6 +27,7 @@
           buildInputs = [
             rust-analyzer
             cargo 
+            rustPackages.rustfmt
             pre-commit 
             pkg-config
             bacon

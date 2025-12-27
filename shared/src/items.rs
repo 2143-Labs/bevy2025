@@ -382,7 +382,6 @@ pub fn goblin_drops() -> Inventory<Item> {
         },
     };
 
-
     let goblin_diary_page = Item {
         item_id: ItemId::default(),
         data: ItemData {
