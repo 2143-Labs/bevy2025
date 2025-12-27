@@ -267,6 +267,7 @@ impl Config {
 
                     let file_handler = OpenOptions::new()
                         .create(true)
+                        .truncate(true)
                         .write(true)
                         .open(&path)
                         .unwrap();
@@ -328,42 +329,32 @@ pub fn increment_ticks(
     }
 
     if current_tick.0 .0.is_multiple_of(100) {
+        let mut ticks_in_order = last_completed_increment
+            .latest_tick_times
+            .iter()
+            .cloned()
+            .collect::<Vec<f64>>();
+
+        ticks_in_order.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+        let average = last_completed_increment
+            .latest_tick_times
+            .iter()
+            .sum::<f64>()
+            / last_completed_increment.latest_tick_times.len() as f64;
+
         debug!("Server Tick: {:?}", current_tick.0);
-        // TODO test this
         debug!(
-            "Average Tick Time: {:.4} s",
-            last_completed_increment
-                .latest_tick_times
-                .iter()
-                .sum::<f64>()
-                / last_completed_increment.latest_tick_times.len() as f64
+            "Average Tick Time: {:.4} s ({:.2} TPS)",
+            average,
+            1.0 / average
         );
-        debug!(
-            "Average TPS: {:.2}",
-            1.0
-                / (last_completed_increment
-                    .latest_tick_times
-                    .iter()
-                    .sum::<f64>()
-                    / last_completed_increment.latest_tick_times.len() as f64)
-        );
+
         debug!(
             "tick 99%, 90%, 50%: {:.4}s, {:.4}s, {:.4}s",
-            {
-                let mut v = last_completed_increment.latest_tick_times.iter().cloned().collect::<Vec<f64>>();
-                v.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                v[(v.len() as f64 * 0.99) as usize - 1]
-            },
-            {
-                let mut v = last_completed_increment.latest_tick_times.iter().cloned().collect::<Vec<f64>>();
-                v.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                v[(v.len() as f64 * 0.90) as usize - 1]
-            },
-            {
-                let mut v = last_completed_increment.latest_tick_times.iter().cloned().collect::<Vec<f64>>();
-                v.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                v[(v.len() as f64 * 0.50) as usize - 1]
-            },
+            ticks_in_order[(ticks_in_order.len() as f64 * 0.99) as usize - 1],
+            ticks_in_order[(ticks_in_order.len() as f64 * 0.90) as usize - 1],
+            ticks_in_order[(ticks_in_order.len() as f64 * 0.50) as usize - 1],
         );
     }
 }
