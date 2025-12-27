@@ -56,4 +56,7 @@ pub struct HeartbeatChallengeResponse {
     //pub server_challenge: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct IWantToDisconnect {}
+
 include!(concat!(env!("OUT_DIR"), "/server_event.rs"));

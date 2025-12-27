@@ -4,6 +4,14 @@ version = "0.1.0"
 authors = []
 edition = "2021"
 
+[lib]
+name = "server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies.bevy]
 version = "0.17.2"

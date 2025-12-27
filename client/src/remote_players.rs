@@ -8,7 +8,10 @@ use shared::{
     net_components::{NetComponent, ours::ControlledBy},
 };
 
-use crate::{game_state::NetworkGameState, notification::Notification};
+use crate::{
+    game_state::NetworkGameState, network::CurrentThirdPersonControlledUnit,
+    notification::Notification,
+};
 
 /// Marker component for remote player camera entities (not our local camera)
 #[derive(Component)]
@@ -54,11 +57,17 @@ fn handle_update_unit(
     mut update_events: UDPacketEvent<UpdateUnit2>,
     mut remote_unit: Query<
         (&NetEntId, &mut Transform),
-        With<shared::net_components::ents::SendNetworkTranformUpdates>,
+        (
+            With<shared::net_components::ents::SendNetworkTranformUpdates>,
+            Without<CurrentThirdPersonControlledUnit>,
+        ),
     >,
     mut remote_unit2: Query<
         (&NetEntId, &mut LinearVelocity),
-        With<shared::net_components::ents::SendNetworkTranformUpdates>,
+        (
+            With<shared::net_components::ents::SendNetworkTranformUpdates>,
+            Without<CurrentThirdPersonControlledUnit>,
+        ),
     >,
     // TODO should we add a tag here to restrict to only certain entities?
     mut new_component_units: Query<(Entity, &NetEntId)>,

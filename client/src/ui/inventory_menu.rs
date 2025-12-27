@@ -1,8 +1,5 @@
 use super::styles::*;
-use crate::{
-    game_state::OverlayMenuState,
-    network::CurrentThirdPersonControlledUnit,
-};
+use crate::{game_state::OverlayMenuState, network::CurrentThirdPersonControlledUnit};
 use bevy::prelude::*;
 use shared::{items::InventoryItemCache, net_components::ours::HasInventory};
 

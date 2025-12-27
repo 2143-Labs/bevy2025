@@ -17,10 +17,10 @@ pub mod items;
 pub mod net_components;
 pub mod netlib;
 pub mod physics;
-pub mod stats;
 pub mod player_input;
+pub mod stats;
 
-pub const BASE_TICKS_PER_SECOND: u16 = 32;
+pub const BASE_TICKS_PER_SECOND: u16 = 10;
 
 #[derive(Reflect, Hash, Eq, PartialEq, Clone, Deserialize, Serialize, Debug)]
 pub enum GameAction {

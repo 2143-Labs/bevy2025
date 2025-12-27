@@ -129,11 +129,11 @@ fn keyboard_input_tps(
         let Ok(fc) = freecam.single() else {
             return;
         };
-        let direction_new = Vector2::new(
-            direction.x * fc.yaw.cos() - direction.y * fc.yaw.sin(),
-            direction.x * fc.yaw.sin() + direction.y * fc.yaw.cos(),
-        );
-        movement_writer.write(MovementAction::Move(direction_new));
+        movement_writer.write(MovementAction::Move {
+            input_dir: direction,
+            camera_yaw: fc.yaw,
+            speed_modifier: 1.0,
+        });
     }
 
     if keyboard_input.just_pressed(KeyCode::Space) {

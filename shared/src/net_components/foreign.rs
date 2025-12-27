@@ -1,4 +1,5 @@
 #![allow(unused)]
+use avian3d::prelude::TransformInterpolation;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +18,7 @@ pub enum NetComponentForeign {
     Collider(avian3d::prelude::Collider),
     Mass(avian3d::prelude::Mass),
     LinearVelocity(avian3d::prelude::LinearVelocity),
+    TransformInterpolation,
     Color(Color),
 }
 
@@ -40,6 +42,9 @@ impl NetComponentForeign {
             }
             NetComponentForeign::Color(c) => {
                 entity.insert(ComponentColor(c));
+            }
+            NetComponentForeign::TransformInterpolation => {
+                entity.insert(TransformInterpolation);
             }
         }
     }
@@ -78,5 +83,11 @@ impl ToNetComponent for avian3d::prelude::LinearVelocity {
 impl ToNetComponent for Color {
     fn to_net_component(self) -> super::NetComponent {
         super::NetComponent::Foreign(NetComponentForeign::Color(self))
+    }
+}
+
+impl ToNetComponent for TransformInterpolation {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Foreign(NetComponentForeign::TransformInterpolation)
     }
 }

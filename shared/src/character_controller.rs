@@ -32,7 +32,11 @@ impl Plugin for CharacterControllerPlugin {
 /// A [`Message`] written for a movement input action.
 #[derive(Message)]
 pub enum MovementAction {
-    Move(Vector2),
+    Move {
+        input_dir: Vector2,
+        camera_yaw: Scalar,
+        speed_modifier: Scalar,
+    },
     Jump,
 }
 
@@ -191,9 +195,25 @@ fn movement(
             &mut controllers
         {
             match event {
-                MovementAction::Move(direction) => {
-                    linear_velocity.x += direction.x * movement_acceleration.0 * delta_time;
-                    linear_velocity.z += direction.y * movement_acceleration.0 * delta_time;
+                MovementAction::Move {
+                    input_dir,
+                    camera_yaw,
+                    speed_modifier,
+                } => {
+                    // Convert input direction to 3D movement direction
+                    let input_dir_3d = Vector3::new(input_dir.x, 0.0, input_dir.y);
+
+                    // Rotate input direction based on camera yaw
+                    let rotation = Quat::from_rotation_y(*camera_yaw as Scalar);
+                    let movement_dir = rotation * input_dir_3d;
+
+                    // Apply acceleration to linear velocity
+                    let acceleration = movement_dir.normalize_or_zero()
+                        * movement_acceleration.0
+                        * speed_modifier
+                        * delta_time;
+
+                    linear_velocity.0 += acceleration;
                 }
                 MovementAction::Jump => {
                     if is_grounded {
@@ -316,7 +336,8 @@ fn kinematic_controller_collisions(
             // Determine if the slope is climbable or if it's too steep to walk on.
             let slope_angle = normal.angle_between(Vector::Y);
             let climbable = max_slope_angle.is_some_and(|angle| slope_angle.abs() <= angle.0);
-            info!("\
+            debug!(
+                "\
                 Slope angle: {:.2} degrees: climbable = {}, deepest penetration = {:.4}
             ",
                 slope_angle.to_degrees(),
@@ -365,7 +386,10 @@ fn kinematic_controller_collisions(
                     // Slide along the surface, rejecting the velocity along the contact normal.
                     let impulse = linear_velocity.reject_from_normalized(normal);
                     linear_velocity.0 = impulse;
-                    error!("Sliding along wall with new velocity: {:?}", linear_velocity);
+                    error!(
+                        "Sliding along wall with new velocity: {:?}",
+                        linear_velocity
+                    );
                 }
             } else {
                 // The character is not yet intersecting the other object,

@@ -42,6 +42,7 @@ pub struct DespawnUnit2 {
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct PlayerDisconnected {
     pub id: PlayerId,
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]

@@ -12,8 +12,8 @@ use shared::{
             WorldData2,
         },
         server::{
-            ChangeMovement, ConnectRequest, Heartbeat, HeartbeatChallengeResponse, SpawnCircle,
-            SpawnMan,
+            ChangeMovement, ConnectRequest, Heartbeat, HeartbeatChallengeResponse,
+            IWantToDisconnect, SpawnCircle, SpawnMan,
         },
     },
     net_components::{
@@ -64,6 +64,13 @@ impl Plugin for NetworkingPlugin {
                     },
                 ),
             )
+            .add_systems(
+                OnExit(GameState::Playing),
+                |mut state: ResMut<NextState<NetworkGameState>>| {
+                    state.set(NetworkGameState::Quit)
+                },
+            )
+            .add_systems(OnEnter(NetworkGameState::Quit), send_disconnect_packet)
             // .add_systems(
             //     Update,
             //     (check_connect_button).run_if(in_state(NetworkGameState::MainMenu)),
@@ -243,7 +250,10 @@ fn on_special_unit_spawn_man(
                     perceptual_roughness: 0.4,
                     ..default()
                 })),
-                Mesh3d(meshes.add(Mesh::from(Cylinder { radius: 1.0, half_height: 2.0 }))),
+                Mesh3d(meshes.add(Mesh::from(Cylinder {
+                    radius: 1.0,
+                    half_height: 2.0,
+                }))),
                 CharacterControllerBundle::new(Collider::cylinder(1.0, 4.0), Vec3::NEG_Y * 9.81)
                     .with_movement(45.0, 0.9, 4.0, PI * 0.20),
             ))
@@ -331,6 +341,12 @@ fn send_connect_packet(
     )));
     send_outgoing_event_now(&sr.handler, mse.0, &event);
     info!("Sent connection packet to {}", mse.0);
+}
+
+fn send_disconnect_packet(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoint>) {
+    let event = EventToServer::IWantToDisconnect(IWantToDisconnect {});
+    send_outgoing_event_now(&sr.handler, mse.0, &event);
+    info!("Sent disconnect packet to {}", mse.0);
 }
 
 fn on_begin_controlling_unit(
@@ -502,7 +518,11 @@ struct LocalLatencyMeasurement {
     pub latency: f64,
 }
 
-fn receive_heartbeat(mut heartbeat_events: UDPacketEvent<HeartbeatResponse>, time: Res<Time>, mut latency_res: ResMut<LocalLatencyMeasurement>) {
+fn receive_heartbeat(
+    mut heartbeat_events: UDPacketEvent<HeartbeatResponse>,
+    time: Res<Time>,
+    mut latency_res: ResMut<LocalLatencyMeasurement>,
+) {
     for event in heartbeat_events.read() {
         let cur_client_time = time.elapsed_secs_f64();
         let latency = 0.5 * (cur_client_time - event.event.client_started_time);
