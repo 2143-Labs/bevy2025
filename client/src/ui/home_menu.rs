@@ -1,7 +1,7 @@
 use super::styles::*;
 use crate::{
     assets::ImageAssets,
-    game_state::{GameState, MenuState},
+    game_state::MenuState,
 };
 use bevy::{math::Rot2, prelude::*, ui::UiTransform};
 use shared::netlib::NetworkConnectionTarget;
@@ -127,7 +127,7 @@ pub fn handle_home_buttons(
             Without<PlayButton>,
         ),
     >,
-    next_game_state: ResMut<NextState<GameState>>,
+    //next_game_state: ResMut<NextState<GameState>>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
     mut config: ResMut<crate::Config>,
 ) {
@@ -139,7 +139,7 @@ pub fn handle_home_buttons(
             config.port = port;
             config.ip = "127.0.0.1".to_string();
             config.host_ip = None;
-            let server_thread = std::thread::spawn(move || {
+            std::thread::spawn(move || {
                 // TODO exit
                 server::call_from_client_for_singleplayer(NetworkConnectionTarget {
                     ip: "127.0.0.1".to_string(),

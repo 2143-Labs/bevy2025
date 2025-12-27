@@ -7,15 +7,13 @@ pub mod scoreboard_menu;
 pub mod styles;
 pub mod text_input;
 
-use std::time::Duration;
-
 use crate::{
     camera::FreeCam,
     game_state::{MenuState, OverlayMenuState},
 };
-use bevy::{prelude::*, time::common_conditions::on_timer};
+use bevy::prelude::*;
 
-use shared::{character_controller::MovementAction, event::client::RequestScoreboardResponse};
+use shared::character_controller::MovementAction;
 pub use text_input::FocusedInput;
 
 pub struct UIPlugin;
@@ -85,50 +83,12 @@ impl Plugin for UIPlugin {
                 Update,
                 paused_menu::handle_paused_menu_buttons.run_if(in_state(OverlayMenuState::Paused)),
             )
-            // Inventory
-            .add_systems(
-                OnEnter(OverlayMenuState::Inventory),
-                inventory_menu::spawn_inventory_menu,
-            )
-            .add_systems(
-                OnExit(OverlayMenuState::Inventory),
-                inventory_menu::despawn_inventory_menu,
-            )
-            .add_systems(
-                Update,
-                inventory_menu::handle_inventory_menu_buttons
-                    .run_if(in_state(OverlayMenuState::Inventory)),
-            )
-            // Scoreboard
-            .add_systems(
-                OnEnter(OverlayMenuState::Scoreboard),
-                (
-                    scoreboard_menu::spawn_scoreboard_menu,
-                    scoreboard_menu::send_scoreboard_request_packet,
-                ),
-            )
-            .add_systems(
-                OnExit(OverlayMenuState::Scoreboard),
-                scoreboard_menu::despawn_scoreboard_menu,
-            )
-            .add_systems(
-                Update,
-                (
-                    scoreboard_menu::handle_scoreboard_menu_buttons,
-                    scoreboard_menu::handle_scoreboard_data_packet,
-                )
-                    .run_if(in_state(OverlayMenuState::Scoreboard)),
-            )
-            .add_systems(
-                Update,
-                scoreboard_menu::send_scoreboard_request_packet.run_if(
-                    in_state(OverlayMenuState::Scoreboard)
-                        .and(on_timer(Duration::from_millis(100))),
-                ),
-            )
-            .add_message::<RequestScoreboardResponse>()
             //
             .add_systems(Update, keyboard_input_tps)
+            .add_plugins((
+                scoreboard_menu::ScoreboardMenuPlugin,
+                inventory_menu::InventoryMenuPlugin,
+            ))
             // Global button feedback
             .add_systems(Update, styles::button_visual_feedback);
     }

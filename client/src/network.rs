@@ -237,7 +237,7 @@ fn on_special_unit_spawn_man(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    for (entity, _ent_id, man) in unit_query.iter_mut() {
+    for (entity, _ent_id, _man) in unit_query.iter_mut() {
         // TODO add ball-specific client setup here
         commands
             .entity(entity)

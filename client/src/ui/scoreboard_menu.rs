@@ -1,6 +1,9 @@
-
+use crate::game_state::OverlayMenuState;
 use super::styles::*;
-use bevy::prelude::*;
+
+use std::time::Duration;
+
+use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
     event::{UDPacketEvent, client::RequestScoreboardResponse},
     netlib::{ClientNetworkingResources, MainServerEndpoint, send_outgoing_event_now},
@@ -18,6 +21,42 @@ pub struct ScoreboardPlayerEntry;
 
 #[derive(Component)]
 pub struct ScoreboardMenuLoading;
+
+pub struct ScoreboardMenuPlugin;
+
+impl Plugin for ScoreboardMenuPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            .add_systems(
+                OnEnter(OverlayMenuState::Scoreboard),
+                (
+                    spawn_scoreboard_menu,
+                    send_scoreboard_request_packet,
+                ),
+            )
+            .add_systems(
+                OnExit(OverlayMenuState::Scoreboard),
+                despawn_scoreboard_menu,
+            )
+            .add_systems(
+                Update,
+                (
+                    handle_scoreboard_menu_buttons,
+                    handle_scoreboard_data_packet,
+                    update_scoreboard_menu,
+                )
+                    .run_if(in_state(OverlayMenuState::Scoreboard)),
+            )
+            .add_systems(
+                Update,
+                send_scoreboard_request_packet.run_if(
+                    in_state(OverlayMenuState::Scoreboard)
+                        .and(on_timer(Duration::from_millis(100))),
+                ),
+            )
+            .add_message::<RequestScoreboardResponse>();
+    }
+}
 
 // send a packet and spawn loading screen
 pub fn spawn_scoreboard_menu(mut commands: Commands) {
@@ -74,6 +113,7 @@ pub fn update_scoreboard_menu(
 
     //clear the existing entries,
     let Ok(container_entity) = scoreboard_player_container_query.single() else {
+        error!("Could not find scoreboard player container entity");
         return;
     };
 
@@ -87,7 +127,7 @@ pub fn update_scoreboard_menu(
             .unwrap();
         let is_local_player = false; // TODO: determine if this is the local player
 
-        let (bg_color, border_color) = if is_local_player {
+        let (_bg_color, _border_color) = if is_local_player {
             (
                 Color::srgba(0.2, 0.6, 0.2, 0.8),
                 Color::srgba(0.1, 0.5, 0.1, 1.0),
@@ -142,6 +182,11 @@ pub fn update_scoreboard_menu(
                         )
                     });
                 });
+
+            info!(
+                "Added scoreboard entry for player: {} with ping: {:?}",
+                player_name, ping
+            );
         });
     }
 }
@@ -215,7 +260,8 @@ fn spawn_scoreboard_menu_base(commands: &mut Commands) {
 
 pub fn despawn_scoreboard_menu(
     mut commands: Commands,
-    menu_query: Query<Entity, With<ScoreboardMenu>>,
+    menu_query: Query<Entity, 
+    Or<(With<ScoreboardMenu>, With<ScoreboardMenuLoading>)>>,
 ) {
     info!("Despawning scoreboard menu");
     if let Ok(menu_entity) = menu_query.single() {

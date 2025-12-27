@@ -7,6 +7,27 @@ use shared::{items::InventoryItemCache, net_components::ours::HasInventory};
 #[derive(Component)]
 pub struct InventoryMenu;
 
+pub struct InventoryMenuPlugin;
+
+impl Plugin for InventoryMenuPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            .add_systems(
+                OnEnter(OverlayMenuState::Inventory),
+                spawn_inventory_menu,
+            )
+            .add_systems(
+                OnExit(OverlayMenuState::Inventory),
+                despawn_inventory_menu,
+            )
+            .add_systems(
+                Update,
+                handle_inventory_menu_buttons
+                    .run_if(in_state(OverlayMenuState::Inventory)),
+            );
+    }
+}
+
 /// Spawn the paused menu UI
 pub fn spawn_inventory_menu(
     mut commands: Commands,
@@ -67,7 +88,7 @@ pub fn spawn_inventory_menu(
             // for now, just print item names into boxes
             for item in &inventory_full.items {
                 let item_stacksize = item.stacksize;
-                let item_placement = item.item_placement.clone();
+                let _item_placement = item.item_placement.clone();
                 let base_item = format!("{:?}", item.item.data.item_base);
                 let item_text = format!("{base_item} x{item_stacksize}");
                 let (node, bg_color, border_color) = menu_button_bundle();
