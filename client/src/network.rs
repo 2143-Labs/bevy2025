@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{f32::consts::PI, time::Duration};
 
 use avian3d::prelude::Collider;
 use bevy::{prelude::*, time::common_conditions::on_timer};
@@ -169,9 +169,11 @@ fn spawn_networked_unit_forward_local(
 }
 
 #[derive(Component)]
+#[component(storage = "SparseSet")]
 pub struct NeedsClientConstruction;
 
 #[derive(Component)]
+#[component(storage = "SparseSet")]
 pub struct CurrentThirdPersonControlledUnit;
 
 // Given some unit
@@ -241,9 +243,9 @@ fn on_special_unit_spawn_man(
                     perceptual_roughness: 0.4,
                     ..default()
                 })),
-                Mesh3d(meshes.add(Mesh::from(Sphere { radius: man.0 }))),
-                CharacterControllerBundle::new(Collider::cylinder(0.3, 6.0), Vec3::NEG_Y * 9.81)
-                    .with_movement(10.0, 1.0, 10.0, 35.0),
+                Mesh3d(meshes.add(Mesh::from(Cylinder { radius: 1.0, half_height: 2.0 }))),
+                CharacterControllerBundle::new(Collider::cylinder(1.0, 4.0), Vec3::NEG_Y * 9.81)
+                    .with_movement(45.0, 0.9, 4.0, PI * 0.20),
             ))
             .remove::<NeedsClientConstruction>();
     }

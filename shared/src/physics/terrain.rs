@@ -29,7 +29,7 @@ impl Default for TerrainParams {
             seed: fastrand::u32(..),
             plane_size: 200.0,
             subdivisions: 150,
-            max_height_delta: 5.0,
+            max_height_delta: 1.0,
         }
     }
 }

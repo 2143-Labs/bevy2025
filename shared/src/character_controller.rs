@@ -124,7 +124,7 @@ impl CharacterControllerBundle {
                 caster_shape,
                 Vector::ZERO,
                 Quat::from_rotation_y(0.0),
-                Dir3::NEG_Y,
+                Dir3::Y,
             )
             .with_max_distance(10.0),
             gravity: ControllerGravity(gravity),
@@ -231,6 +231,7 @@ fn apply_movement_damping(
     for (damping_factor, mut linear_velocity) in &mut query {
         // We could use `LinearDamping`, but we don't want to dampen movement along the Y axis
         linear_velocity.x *= 1.0 / (1.0 + damping_factor.0 * delta_time);
+        linear_velocity.z *= 1.0 / (1.0 + damping_factor.0 * delta_time);
     }
 }
 
@@ -302,7 +303,7 @@ fn kinematic_controller_collisions(
             // Solve each penetrating contact in the manifold.
             for contact in manifold.points.iter() {
                 if contact.penetration > 0.0 {
-                    position.0 += normal * contact.penetration;
+                    position.0 += normal * contact.penetration * 0.90;
                 }
                 deepest_penetration = deepest_penetration.max(contact.penetration);
             }
@@ -315,6 +316,13 @@ fn kinematic_controller_collisions(
             // Determine if the slope is climbable or if it's too steep to walk on.
             let slope_angle = normal.angle_between(Vector::Y);
             let climbable = max_slope_angle.is_some_and(|angle| slope_angle.abs() <= angle.0);
+            info!("\
+                Slope angle: {:.2} degrees: climbable = {}, deepest penetration = {:.4}
+            ",
+                slope_angle.to_degrees(),
+                climbable,
+                deepest_penetration,
+            );
 
             if deepest_penetration > 0.0 {
                 // If the slope is climbable, snap the velocity so that the character
@@ -322,11 +330,11 @@ fn kinematic_controller_collisions(
                 if climbable {
                     // Points either left or right depending on which side the normal is leaning on.
                     // (This could be simplified for 2D, but this approach is dimension-agnostic)
-                    let normal_direction_x =
+                    let normal_direction_xz =
                         normal.reject_from_normalized(Vector::Y).normalize_or_zero();
 
                     // The movement speed along the direction above.
-                    let linear_velocity_x = linear_velocity.dot(normal_direction_x);
+                    let linear_velocity_xz = linear_velocity.dot(normal_direction_xz);
 
                     // Snap the Y speed based on the speed at which the character is moving
                     // up or down the slope, and how steep the slope is.
@@ -342,7 +350,7 @@ fn kinematic_controller_collisions(
                     // │               *   |
                     // *───────────────────*
 
-                    let max_y_speed = -linear_velocity_x * slope_angle.tan();
+                    let max_y_speed = -linear_velocity_xz * slope_angle.tan();
                     linear_velocity.y = linear_velocity.y.max(max_y_speed);
                 } else {
                     // The character is intersecting an unclimbable object, like a wall.
@@ -357,6 +365,7 @@ fn kinematic_controller_collisions(
                     // Slide along the surface, rejecting the velocity along the contact normal.
                     let impulse = linear_velocity.reject_from_normalized(normal);
                     linear_velocity.0 = impulse;
+                    error!("Sliding along wall with new velocity: {:?}", linear_velocity);
                 }
             } else {
                 // The character is not yet intersecting the other object,
