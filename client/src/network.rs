@@ -1,6 +1,6 @@
 use std::{f32::consts::PI, time::Duration};
 
-use avian3d::prelude::Collider;
+use avian3d::prelude::{Collider, LinearVelocity};
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
     Config,
@@ -66,9 +66,7 @@ impl Plugin for NetworkingPlugin {
             )
             .add_systems(
                 OnExit(GameState::Playing),
-                |mut state: ResMut<NextState<NetworkGameState>>| {
-                    state.set(NetworkGameState::Quit)
-                },
+                |mut state: ResMut<NextState<NetworkGameState>>| state.set(NetworkGameState::Quit),
             )
             .add_systems(OnEnter(NetworkGameState::Quit), send_disconnect_packet)
             // .add_systems(
@@ -131,7 +129,7 @@ impl Plugin for NetworkingPlugin {
             //)
             .add_systems(
                 FixedUpdate,
-                (send_movement_camera)
+                (send_movement_camera, send_movement_unit)
                     .run_if(in_state(NetworkGameState::ClientConnected))
                     //.run_if(in_state(InputControlState::Freecam))
                     .run_if(in_state(GameState::Playing)),
@@ -587,6 +585,27 @@ fn send_movement_camera(
         let mut events = vec![];
         events.push(EventToServer::ChangeMovement(ChangeMovement {
             net_ent_id: *ent_id,
+            velocity: None,
+            transform: *transform,
+        }));
+
+        send_outgoing_event_now_batch(&sr.handler, mse.0, &events);
+    }
+}
+
+fn send_movement_unit(
+    sr: Res<ClientNetworkingResources>,
+    mse: Res<MainServerEndpoint>,
+    our_transform: Query<
+        (&Transform, &LinearVelocity, &NetEntId),
+        (With<CurrentThirdPersonControlledUnit>, Changed<Transform>),
+    >,
+) {
+    if let Ok((transform, velo, ent_id)) = our_transform.single() {
+        let mut events = vec![];
+        events.push(EventToServer::ChangeMovement(ChangeMovement {
+            net_ent_id: *ent_id,
+            velocity: Some(*velo),
             transform: *transform,
         }));
 

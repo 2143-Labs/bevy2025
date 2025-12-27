@@ -1,11 +1,13 @@
 //!This is for events that are sent FROM the server TO the client.
+use std::collections::HashMap;
+
 use crate::event::PlayerId;
 use crate::items::{Inventory, Item, ItemId, ItemInInventory, ItemPlacement};
 use crate::net_components::PlayerConnectionInfo;
 use crate::netlib::{NetworkingResources, Tick};
 use crate::physics::terrain::TerrainParams;
-use crate::ServerTPS;
 use crate::{event::EventFromEndpoint, net_components::NetComponent};
+use crate::{PlayerPing, ServerTPS};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -94,6 +96,12 @@ pub struct HeartbeatResponse {
 pub struct HeartbeatChallenge {
     pub server_time: f64,
     //pub server_challenge: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct RequestScoreboardResponse {
+    pub player_names: HashMap<PlayerId, String>,
+    pub player_pings: HashMap<PlayerId, PlayerPing<i16>>,
 }
 
 include!(concat!(env!("OUT_DIR"), "/client_event.rs"));

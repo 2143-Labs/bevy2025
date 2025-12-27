@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, VecDeque},
     env::current_dir,
     fs::OpenOptions,
+    sync::atomic::AtomicI16,
 };
 
 use bevy::prelude::*;
@@ -44,6 +45,7 @@ pub enum GameAction {
     ZoomCameraIn,
     ZoomCameraOut,
     OpenInventory,
+    Scoreboard,
 
     Chat,
 }
@@ -76,6 +78,7 @@ static DEFAULT_BINDS: Lazy<Keybinds> = Lazy::new(|| {
             GameAction::OpenInventory,
             vec![kk(KeyCode::KeyI), kk(KeyCode::Tab)],
         ),
+        (GameAction::Scoreboard, vec![kk(KeyCode::KeyP)]),
     ])
 });
 
@@ -361,5 +364,36 @@ pub fn increment_ticks(
             ticks_in_order[(ticks_in_order.len() as f64 * 0.90) as usize - 1],
             ticks_in_order[(ticks_in_order.len() as f64 * 0.50) as usize - 1],
         );
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Ping information about a player, in milliseconds, but generic over the type used to store the
+/// ping value. Usually used with either i16 or AtomicI16: use [`Self::to_integer`] to convert from
+/// one to the other.
+pub struct PlayerPing<V> {
+    pub server_challenged_ping_ms: V,
+    pub client_reported_ping_ms: V,
+}
+
+impl PlayerPing<AtomicI16> {
+    pub fn to_integer(&self) -> PlayerPing<i16> {
+        PlayerPing {
+            server_challenged_ping_ms: self
+                .server_challenged_ping_ms
+                .load(std::sync::atomic::Ordering::Relaxed),
+            client_reported_ping_ms: self
+                .client_reported_ping_ms
+                .load(std::sync::atomic::Ordering::Relaxed),
+        }
+    }
+}
+
+impl PlayerPing<i16> {
+    pub fn to_atomic(&self) -> PlayerPing<AtomicI16> {
+        PlayerPing {
+            server_challenged_ping_ms: AtomicI16::new(self.server_challenged_ping_ms),
+            client_reported_ping_ms: AtomicI16::new(self.client_reported_ping_ms),
+        }
     }
 }

@@ -88,6 +88,9 @@ fn handle_pause_and_inventory_input(
             OverlayMenuState::Inventory => {
                 next_state.set(OverlayMenuState::Hidden);
             }
+            OverlayMenuState::Scoreboard => {
+                next_state.set(OverlayMenuState::Hidden);
+            }
             _ => {}
         }
     }
@@ -98,6 +101,18 @@ fn handle_pause_and_inventory_input(
                 next_state.set(OverlayMenuState::Inventory);
             }
             OverlayMenuState::Inventory => {
+                next_state.set(OverlayMenuState::Hidden);
+            }
+            _ => {}
+        }
+    }
+
+    if config.just_pressed(&keyboard, &mouse, GameAction::Scoreboard) {
+        match current_state.get() {
+            OverlayMenuState::Hidden => {
+                next_state.set(OverlayMenuState::Scoreboard);
+            }
+            OverlayMenuState::Scoreboard => {
                 next_state.set(OverlayMenuState::Hidden);
             }
             _ => {}

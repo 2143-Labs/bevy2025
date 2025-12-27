@@ -2,6 +2,7 @@
 use crate::event::{EventFromEndpoint, NetEntId};
 //use crate::net_components::NetComponent;
 use crate::netlib::NetworkingResources;
+use avian3d::prelude::LinearVelocity;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -42,6 +43,7 @@ pub struct SpawnMan {
 pub struct ChangeMovement {
     pub net_ent_id: NetEntId,
     pub transform: Transform,
+    pub velocity: Option<LinearVelocity>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]

@@ -30,7 +30,7 @@ use shared::{
         ServerNetworkingResources, Tick,
     },
     physics::terrain::TerrainParams,
-    Config, ConfigPlugin, CurrentTick,
+    Config, ConfigPlugin, CurrentTick, PlayerPing,
 };
 
 /// How often to run the system
@@ -49,16 +49,10 @@ enum ServerState {
     Running,
 }
 
-#[derive(Debug)]
-struct PlayerPing {
-    pub server_challenged_ping_ms: AtomicI16,
-    pub client_reported_ping_ms: AtomicI16,
-}
-
 #[derive(Resource, Default)]
 struct HeartbeatList {
     heartbeats: HashMap<PlayerId, Arc<AtomicI16>>,
-    pings: HashMap<PlayerId, PlayerPing>,
+    pings: HashMap<PlayerId, PlayerPing<AtomicI16>>,
 }
 
 #[derive(Resource, Default)]
@@ -586,17 +580,27 @@ fn on_player_heartbeat(
 
 fn on_movement(
     mut pd: UDPacketEvent<ChangeMovement>,
-    mut ent_to_move: Query<(&NetEntId, &mut Transform), With<SendNetworkTranformUpdates>>,
+    mut ent_to_move: Query<
+        (&NetEntId, &mut Transform, Option<&mut LinearVelocity>),
+        With<SendNetworkTranformUpdates>,
+    >,
 ) {
     'event: for movement in pd.read() {
         // The camera NetEntId is directly in the movement event
         let camera_net_id = movement.event.net_ent_id;
 
         // Find and update the camera entity
-        for (cam_net_id, mut cam_transform) in &mut ent_to_move {
+        for (cam_net_id, mut cam_transform, maybe_lv) in &mut ent_to_move {
             if cam_net_id == &camera_net_id {
                 // Update the camera's transform on the server
                 *cam_transform = movement.event.transform;
+
+                // Update linear velocity if provided
+                if let Some(mut lv) = maybe_lv {
+                    if let Some(new_lv) = movement.event.velocity {
+                        *lv = new_lv;
+                    }
+                }
                 continue 'event;
             }
         }
