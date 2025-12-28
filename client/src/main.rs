@@ -11,6 +11,7 @@ pub mod notification;
 mod physics;
 mod picking;
 mod remote_players;
+mod steamworks;
 mod terrain;
 mod ui;
 mod water;
@@ -21,6 +22,7 @@ mod web;
 use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
 
 use assets::AssetsPlugin;
+use bevy_steamworks::{AppId, FriendFlags};
 use camera::CameraPlugin;
 use clap::Parser;
 use debug::DebugPlugin;
@@ -96,6 +98,23 @@ fn main() {
     #[cfg(feature = "web")]
     {
         app.add_plugins(web::WebPlugin);
+    }
+
+    #[cfg(feature = "steam")]
+    {
+        app.add_plugins((steamworks::SteamworksPlugin(AppId(480)),))
+            .add_systems(Startup, |client: Res<bevy_steamworks::Client>| {
+                let app_owner = client.apps().app_owner();
+                info!("App Owner Steam ID: {:?}", app_owner);
+                for friend in client.friends().get_friends(FriendFlags::IMMEDIATE) {
+                    info!(
+                        "Friend: {} = {:?} {:?}",
+                        friend.name(),
+                        friend.id(),
+                        friend.state()
+                    );
+                }
+            });
     }
 
     app.run();
