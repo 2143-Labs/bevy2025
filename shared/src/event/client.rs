@@ -6,6 +6,7 @@ use crate::items::{Inventory, Item, ItemId, ItemInInventory, ItemPlacement};
 use crate::net_components::PlayerConnectionInfo;
 use crate::netlib::{NetworkingResources, Tick};
 use crate::physics::terrain::TerrainParams;
+use crate::skills::ProjectileAI;
 use crate::{event::EventFromEndpoint, net_components::NetComponent};
 use crate::{PlayerPing, ServerTPS};
 use bevy::prelude::*;
@@ -102,6 +103,14 @@ pub struct HeartbeatChallenge {
 pub struct RequestScoreboardResponse {
     pub player_names: HashMap<PlayerId, String>,
     pub player_pings: HashMap<PlayerId, PlayerPing<i16>>,
+}
+
+// TODO impl
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct SpawnProjectile {
+    pub projectile_origin: Vec3,
+    pub projectile_owner: Option<NetEntId>,
+    pub projectile_type: ProjectileAI,
 }
 
 include!(concat!(env!("OUT_DIR"), "/client_event.rs"));
