@@ -84,7 +84,6 @@ impl Plugin for UIPlugin {
                 paused_menu::handle_paused_menu_buttons.run_if(in_state(OverlayMenuState::Paused)),
             )
             //
-            .add_systems(Update, keyboard_input_tps)
             .add_plugins((
                 scoreboard_menu::ScoreboardMenuPlugin,
                 inventory_menu::InventoryMenuPlugin,
@@ -105,37 +104,4 @@ fn setup_ui_camera(mut commands: Commands) {
             ..default()
         },
     ));
-}
-
-/// TODO move this
-/// Sends [`MovementAction`] events based on keyboard input.
-fn keyboard_input_tps(
-    mut movement_writer: MessageWriter<MovementAction>,
-    freecam: Query<&FreeCam>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-) {
-    use avian3d::math::*;
-    let left = keyboard_input.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]);
-    let right = keyboard_input.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]);
-    let forward = keyboard_input.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]);
-    let backward = keyboard_input.any_pressed([KeyCode::KeyS, KeyCode::ArrowDown]);
-
-    let horizontal = right as i8 - left as i8;
-    let vertical = forward as i8 - backward as i8;
-    let direction = Vector2::new(horizontal as Scalar, vertical as Scalar).normalize_or_zero();
-
-    if direction != Vector2::ZERO {
-        let Ok(fc) = freecam.single() else {
-            return;
-        };
-        movement_writer.write(MovementAction::Move {
-            input_dir: direction,
-            camera_yaw: fc.yaw,
-            speed_modifier: 1.0,
-        });
-    }
-
-    if keyboard_input.just_pressed(KeyCode::Space) {
-        movement_writer.write(MovementAction::Jump);
-    }
 }

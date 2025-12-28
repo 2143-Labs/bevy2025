@@ -29,7 +29,7 @@ impl Default for TerrainParams {
             seed: fastrand::u32(..),
             plane_size: 200.0,
             subdivisions: 150,
-            max_height_delta: 1.0,
+            max_height_delta: 0.0,
         }
     }
 }
@@ -98,6 +98,7 @@ pub fn generate_terrain_mesh(params: &TerrainParams) -> Mesh {
     let subdivisions = params.subdivisions;
     let size = params.plane_size;
     let height_scale = params.max_height_delta;
+    let height_offset = 1.0;
 
     // Calculate vertex count
     let vertices_per_side = subdivisions + 1;
@@ -119,7 +120,7 @@ pub fn generate_terrain_mesh(params: &TerrainParams) -> Mesh {
             // Generate height using Perlin noise
             let noise_x = x_pos * 0.05; // Scale factor for noise frequency
             let noise_z = z_pos * 0.05;
-            let height = noise.get([noise_x as f64, noise_z as f64]) as f32 * height_scale;
+            let height = noise.get([noise_x as f64, noise_z as f64]) as f32 * height_scale + height_offset;
 
             positions.push([x_pos, height, z_pos]);
             normals.push([0.0, 1.0, 0.0]); // Will recalculate proper normals

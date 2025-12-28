@@ -21,7 +21,7 @@ pub mod physics;
 pub mod player_input;
 pub mod stats;
 
-pub const BASE_TICKS_PER_SECOND: u16 = 10;
+pub const BASE_TICKS_PER_SECOND: u16 = 128;
 
 #[derive(Reflect, Hash, Eq, PartialEq, Clone, Deserialize, Serialize, Debug)]
 pub enum GameAction {

@@ -248,11 +248,11 @@ fn on_special_unit_spawn_man(
                     perceptual_roughness: 0.4,
                     ..default()
                 })),
-                Mesh3d(meshes.add(Mesh::from(Cylinder {
+                Mesh3d(meshes.add(Mesh::from(Capsule3d {
                     radius: 1.0,
-                    half_height: 2.0,
+                    half_length: 1.0,
                 }))),
-                CharacterControllerBundle::new(Collider::cylinder(1.0, 4.0), Vec3::NEG_Y * 9.81)
+                CharacterControllerBundle::new(Collider::capsule(1.0, 2.0), Vec3::NEG_Y * 9.81)
                     .with_movement(45.0, 0.9, 4.0, PI * 0.20),
             ))
             .remove::<NeedsClientConstruction>();

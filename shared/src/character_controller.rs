@@ -3,21 +3,30 @@
 use avian3d::{math::*, prelude::*};
 use bevy::{ecs::query::Has, prelude::*};
 
+use crate::event::NetEntId;
+
 pub struct CharacterControllerPlugin;
 
 impl Plugin for CharacterControllerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_message::<MovementAction>()
+        app
+            .add_message::<SpawnDebugBall>()
+            .add_message::<UnitChangedMovement>()
             .add_systems(
                 Update,
                 (
                     update_grounded,
                     apply_gravity,
+                    unit_change_movement,
                     movement,
                     apply_movement_damping,
                 )
                     .chain(),
             )
+            .add_systems(Update, (
+                debug_spawn_collision_ball,
+                remove_old_debug_balls,
+            ))
             .add_systems(
                 // Run collision handling after collision detection.
                 //
@@ -30,7 +39,7 @@ impl Plugin for CharacterControllerPlugin {
 }
 
 /// A [`Message`] written for a movement input action.
-#[derive(Message)]
+#[derive(Component, Clone, Debug)]
 pub enum MovementAction {
     Move {
         input_dir: Vector2,
@@ -38,6 +47,22 @@ pub enum MovementAction {
         speed_modifier: Scalar,
     },
     Jump,
+}
+
+impl Default for MovementAction {
+    fn default() -> Self {
+        MovementAction::Move {
+            input_dir: Vector2::ZERO,
+            camera_yaw: 0.0,
+            speed_modifier: 1.0,
+        }
+    }
+}
+
+#[derive(Message)]
+pub struct UnitChangedMovement {
+    pub net_ent_id: NetEntId,
+    pub movement_action: MovementAction,
 }
 
 /// A marker component indicating that an entity is using a character controller.
@@ -81,6 +106,7 @@ pub struct CharacterControllerBundle {
     ground_caster: ShapeCaster,
     gravity: ControllerGravity,
     movement: MovementBundle,
+    movement_action: MovementAction,
 }
 
 /// A bundle that contains components for character movement.
@@ -133,6 +159,7 @@ impl CharacterControllerBundle {
             .with_max_distance(10.0),
             gravity: ControllerGravity(gravity),
             movement: MovementBundle::default(),
+            movement_action: MovementAction::default(),
         }
     }
 
@@ -175,12 +202,26 @@ fn update_grounded(
     }
 }
 
+fn unit_change_movement(
+    mut reader: MessageReader<UnitChangedMovement>,
+    // TODO make this smaller?
+    mut query: Query<(&mut MovementAction, &NetEntId)>,
+) {
+    for event in reader.read() {
+        for (mut movement_action, net_ent_id) in &mut query {
+            if net_ent_id == &event.net_ent_id {
+                *movement_action = event.movement_action.clone();
+            }
+        }
+    }
+} 
+
 /// Responds to [`MovementAction`] events and moves character controllers accordingly.
 fn movement(
     time: Res<Time>,
-    mut movement_reader: MessageReader<MovementAction>,
     mut controllers: Query<(
         &MovementAcceleration,
+        &MovementAction,
         &JumpImpulse,
         &mut LinearVelocity,
         Has<Grounded>,
@@ -190,35 +231,33 @@ fn movement(
     // both the `f32` and `f64` features. Otherwise you don't need this.
     let delta_time = time.delta_secs_f64().adjust_precision();
 
-    for event in movement_reader.read() {
-        for (movement_acceleration, jump_impulse, mut linear_velocity, is_grounded) in
-            &mut controllers
-        {
-            match event {
-                MovementAction::Move {
-                    input_dir,
-                    camera_yaw,
-                    speed_modifier,
-                } => {
-                    // Convert input direction to 3D movement direction
-                    let input_dir_3d = Vector3::new(input_dir.x, 0.0, input_dir.y);
+    for (movement_acceleration, action, jump_impulse, mut linear_velocity, is_grounded) in
+        &mut controllers
+    {
+        match action  {
+            MovementAction::Move {
+                input_dir,
+                camera_yaw,
+                speed_modifier,
+            } => {
+                // Convert input direction to 3D movement direction
+                let input_dir_3d = Vector3::new(input_dir.x, 0.0, input_dir.y);
 
-                    // Rotate input direction based on camera yaw
-                    let rotation = Quat::from_rotation_y(*camera_yaw as Scalar);
-                    let movement_dir = rotation * input_dir_3d;
+                // Rotate input direction based on camera yaw
+                let rotation = Quat::from_rotation_y(*camera_yaw as Scalar);
+                let movement_dir = rotation * input_dir_3d;
 
-                    // Apply acceleration to linear velocity
-                    let acceleration = movement_dir.normalize_or_zero()
-                        * movement_acceleration.0
-                        * speed_modifier
-                        * delta_time;
+                // Apply acceleration to linear velocity
+                let acceleration = movement_dir.normalize_or_zero()
+                    * movement_acceleration.0
+                    * speed_modifier
+                    * delta_time;
 
-                    linear_velocity.0 += acceleration;
-                }
-                MovementAction::Jump => {
-                    if is_grounded {
-                        linear_velocity.y = jump_impulse.0;
-                    }
+                linear_velocity.0 += acceleration;
+            }
+            MovementAction::Jump => {
+                if is_grounded {
+                    linear_velocity.y = jump_impulse.0;
                 }
             }
         }
@@ -255,6 +294,57 @@ fn apply_movement_damping(
     }
 }
 
+#[derive(Component)]
+struct DebugCollisionBall {
+    time_spawned: f64,
+}
+
+#[derive(Message)]
+struct SpawnDebugBall {
+    position: Vector3,
+    color: Color,
+}
+
+fn debug_spawn_collision_ball(
+    mut message_reader: MessageReader<SpawnDebugBall>,
+    mut commands: Commands,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    time: Res<Time>,
+) {
+    for event in message_reader.read() {
+        commands
+            .spawn((
+                Transform::from_translation(event.position + Vector3::Y * 2.0),
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: event.color,
+                    unlit: true,
+                    ..Default::default()
+                })),
+                Mesh3d(meshes.add(Mesh::from(Sphere {
+                    radius: 0.1,
+                }))),
+                DebugCollisionBall {
+                    time_spawned: time.elapsed_secs_f64(),
+                },
+            ));
+    }
+}
+
+const OLD_DEBUG_BALL_CLEANUP_INTERVAL: f64 = 5.0;
+fn remove_old_debug_balls(
+    mut commands: Commands,
+    query: Query<(Entity, &DebugCollisionBall)>,
+    time: Res<Time>,
+) {
+    let current_time = time.elapsed_secs_f64();
+    for (entity, debug_ball) in &query {
+        if current_time - debug_ball.time_spawned > OLD_DEBUG_BALL_CLEANUP_INTERVAL {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
 /// Kinematic bodies do not get pushed by collisions by default,
 /// so it needs to be done manually.
 ///
@@ -272,6 +362,7 @@ fn kinematic_controller_collisions(
         (With<RigidBody>, With<CharacterController>),
     >,
     time: Res<Time>,
+    mut debug_ball_writer: MessageWriter<SpawnDebugBall>,
 ) {
     // Iterate through collisions and move the kinematic body to resolve penetration
     for contacts in collisions.iter() {
@@ -373,6 +464,16 @@ fn kinematic_controller_collisions(
 
                     let max_y_speed = -linear_velocity_xz * slope_angle.tan();
                     linear_velocity.y = linear_velocity.y.max(max_y_speed);
+                    debug_ball_writer.write(SpawnDebugBall {
+                        position: position.0,
+                        //green
+                        color: Color::hsv(120.0, 1.0, 1.0),
+                    });
+                    // spawn a second ball in the impulse direction
+                    debug_ball_writer.write(SpawnDebugBall {
+                        position: position.0 + Vector3::Y * 0.1,
+                        color: Color::hsv(125.0, 1.0, 1.0),
+                    });
                 } else {
                     // The character is intersecting an unclimbable object, like a wall.
                     // We want the character to slide along the surface, similarly to
@@ -386,10 +487,16 @@ fn kinematic_controller_collisions(
                     // Slide along the surface, rejecting the velocity along the contact normal.
                     let impulse = linear_velocity.reject_from_normalized(normal);
                     linear_velocity.0 = impulse;
-                    error!(
-                        "Sliding along wall with new velocity: {:?}",
-                        linear_velocity
-                    );
+                    debug_ball_writer.write(SpawnDebugBall {
+                        position: position.0,
+                        //red
+                        color: Color::hsv(0.0, 1.0, 1.0),
+                    });
+                    // spawn a second ball in the impulse direction
+                    debug_ball_writer.write(SpawnDebugBall {
+                        position: position.0 + impulse.normalize_or_zero() * 0.1,
+                        color: Color::hsv(5.0, 1.0, 1.0),
+                    });
                 }
             } else {
                 // The character is not yet intersecting the other object,
@@ -402,6 +509,11 @@ fn kinematic_controller_collisions(
 
                 // Don't apply an impulse if the character is moving away from the surface.
                 if normal_speed > 0.0 {
+                    debug_ball_writer.write(SpawnDebugBall {
+                        position: position.0,
+                        //pink
+                        color: Color::hsv(300.0, 1.0, 1.0),
+                    });
                     continue;
                 }
 
@@ -414,10 +526,30 @@ fn kinematic_controller_collisions(
                 if climbable {
                     // Avoid sliding down slopes.
                     linear_velocity.y -= impulse.y.min(0.0);
+                    debug_ball_writer.write(SpawnDebugBall {
+                        position: position.0,
+                        //blue
+                        color: Color::hsv(240.0, 1.0, 1.0),
+                    });
+                    // spawn a second ball in the impulse direction
+                    debug_ball_writer.write(SpawnDebugBall {
+                        position: position.0 + impulse.normalize_or_zero() * 0.1,
+                        color: Color::hsv(245.0, 1.0, 1.0),
+                    });
                 } else {
                     // Avoid climbing up walls.
                     impulse.y = impulse.y.max(0.0);
                     linear_velocity.0 -= impulse;
+                    debug_ball_writer.write(SpawnDebugBall {
+                        position: position.0,
+                        //yellow
+                        color: Color::hsv(60.0, 1.0, 1.0),
+                    });
+                    // spawn a second ball in the impulse direction
+                    debug_ball_writer.write(SpawnDebugBall {
+                        position: position.0 + impulse.normalize_or_zero() * 0.1,
+                        color: Color::hsv(65.0, 1.0, 1.0),
+                    });
                 }
             }
         }

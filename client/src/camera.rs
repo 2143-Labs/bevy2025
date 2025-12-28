@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use shared::{Config, GameAction};
+use shared::{Config, GameAction, character_controller::{MovementAction, UnitChangedMovement}, event::NetEntId};
 
 use crate::{
     game_state::{GameState, InputControlState, OverlayMenuState},
@@ -30,13 +30,14 @@ impl Plugin for CameraPlugin {
                 (
                     handle_pause_and_inventory_input,
                     freecam_controller.run_if(in_state(InputControlState::Freecam)),
-                    tps_camera_controller.run_if(in_state(InputControlState::ThirdPerson)),
-                    update_freecam_transform_from_settings_tps
+                    (tps_camera_controller, update_freecam_transform_from_settings_tps, keyboard_input_tps)
                         .run_if(in_state(InputControlState::ThirdPerson)),
                     //manage_physics_pause,
                 )
                     .run_if(in_state(GameState::Playing)),
             );
+
+        app.insert_resource(LastInputDirection::default());
     }
 }
 
@@ -251,4 +252,62 @@ fn update_freecam_transform_from_settings_tps(
         look_at_position + Vec3::new(-offset_x, offset_y + offset_height, -offset_z);
     freecam_transform.translation = camera_position;
     freecam_transform.look_at(look_at_position, Vec3::Y);
+}
+
+use avian3d::math::*;
+
+#[derive(Resource, Default)]
+struct LastInputDirection(Vector2);
+
+/// TODO move this
+/// Sends [`MovementAction`] events based on keyboard input.
+fn keyboard_input_tps(
+    mut movement_writer: MessageWriter<UnitChangedMovement>,
+    my_controlled_unit: Query<&NetEntId, With<CurrentThirdPersonControlledUnit>>,
+    mut last_input_direction: ResMut<LastInputDirection>,
+    freecam: Query<&FreeCam>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    config: Res<Config>,
+) {
+    let left = config.pressed(&keyboard, &mouse, GameAction::StrafeLeft);
+    let right = config.pressed(&keyboard, &mouse, GameAction::StrafeRight);
+    let forward = config.pressed(&keyboard, &mouse, GameAction::MoveForward);
+    let backward = config.pressed(&keyboard, &mouse, GameAction::MoveBackward);
+
+    let vertical = (forward as i8 - backward as i8) as f32;
+    let horizontal = (right as i8 - left as i8) as f32;
+    let direction = Vector2::new(horizontal, vertical).normalize_or_zero();
+    //info!("TPS input direction: {:?}", direction);
+    let unit_net_id = match my_controlled_unit.single() {
+        Ok(data) => data,
+        Err(_) => {
+            // No controlled unit
+            warn!("No controlled unit found for TPS keyboard input");
+            return;
+        }
+    };
+
+    if config.just_pressed(&keyboard, &mouse, GameAction::Jump) {
+        movement_writer.write(UnitChangedMovement {
+            net_ent_id: *unit_net_id,
+            movement_action: MovementAction::Jump,
+        });
+    }
+
+    if last_input_direction.0 != direction {
+        last_input_direction.0 = direction;
+    }
+
+    let Ok(fc) = freecam.single() else {
+        return;
+    };
+    movement_writer.write(UnitChangedMovement {
+        net_ent_id: *unit_net_id,
+        movement_action: MovementAction::Move {
+            input_dir: direction,
+            camera_yaw: fc.yaw,
+            speed_modifier: 1.0,
+        },
+    });
 }
