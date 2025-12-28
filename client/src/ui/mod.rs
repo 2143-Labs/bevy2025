@@ -6,6 +6,7 @@ pub mod paused_menu;
 pub mod scoreboard_menu;
 pub mod styles;
 pub mod text_input;
+pub mod skills_menu;
 
 use crate::game_state::{MenuState, OverlayMenuState};
 use bevy::prelude::*;
@@ -83,6 +84,7 @@ impl Plugin for UIPlugin {
             .add_plugins((
                 scoreboard_menu::ScoreboardMenuPlugin,
                 inventory_menu::InventoryMenuPlugin,
+                skills_menu::SkillsMenuPlugin,
             ))
             // Global button feedback
             .add_systems(Update, styles::button_visual_feedback);

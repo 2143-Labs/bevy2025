@@ -31,6 +31,7 @@ pub enum OverlayMenuState {
     Paused,
     Inventory,
     Scoreboard,
+    Skills,
     /// TO DO
     Settings,
 }
