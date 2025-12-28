@@ -43,8 +43,9 @@ impl Default for NetworkingStats {
 
 impl NetworkingStats {
     pub fn flush_and_reset(&self) {
-        let total_bytes_sent_this_second =
-            self.total_bytes_sent_this_second.swap(0, std::sync::atomic::Ordering::Relaxed);
+        let total_bytes_sent_this_second = self
+            .total_bytes_sent_this_second
+            .swap(0, std::sync::atomic::Ordering::Relaxed);
         let total_bytes_received_this_second = self
             .total_bytes_received_this_second
             .swap(0, std::sync::atomic::Ordering::Relaxed);
@@ -67,9 +68,9 @@ impl NetworkingStats {
             .unwrap()
             .push_back(total_bytes_received_ignored_this_second);
 
-        let packets_sent_this_second =
-            self.packets_sent_this_second
-                .swap(0, std::sync::atomic::Ordering::Relaxed);
+        let packets_sent_this_second = self
+            .packets_sent_this_second
+            .swap(0, std::sync::atomic::Ordering::Relaxed);
 
         let packets_received_this_second = self
             .packets_received_this_second
@@ -156,7 +157,7 @@ impl Tick {
 
 pub use crate::event::client::EventToClient;
 pub use crate::event::server::EventToServer;
-use crate::{BASE_TICKS_PER_SECOND, CurrentTick};
+use crate::{CurrentTick, BASE_TICKS_PER_SECOND};
 
 pub trait NetworkingEvent:
     Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static + core::fmt::Debug
@@ -358,22 +359,46 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     });
 
     let res2 = res.clone();
-    std::thread::spawn(move || {
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            res2.networking_stats.flush_and_reset();
-            info!("Net: Sent {}kb {}pack\nRecv {}kb {}pack ({}kb ignored)",
-                res2.networking_stats.recent_bytes_sent.read().unwrap().back().unwrap_or(&0) / 1024,
-                res2.networking_stats.recent_packets_sent.read().unwrap().back().unwrap_or(&0),
-                res2.networking_stats.recent_bytes_received.read().unwrap().back().unwrap_or(&0) / 1024,
-                res2.networking_stats.recent_packets_received.read().unwrap().back().unwrap_or(&0),
-                res2.networking_stats.recent_bytes_received_ignored.read().unwrap().back().unwrap_or(&0) / 1024,
-            );
-        }
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        res2.networking_stats.flush_and_reset();
+        info!(
+            "Net: Sent {}kb {}pack\nRecv {}kb {}pack ({}kb ignored)",
+            res2.networking_stats
+                .recent_bytes_sent
+                .read()
+                .unwrap()
+                .back()
+                .unwrap_or(&0)
+                / 1024,
+            res2.networking_stats
+                .recent_packets_sent
+                .read()
+                .unwrap()
+                .back()
+                .unwrap_or(&0),
+            res2.networking_stats
+                .recent_bytes_received
+                .read()
+                .unwrap()
+                .back()
+                .unwrap_or(&0)
+                / 1024,
+            res2.networking_stats
+                .recent_packets_received
+                .read()
+                .unwrap()
+                .back()
+                .unwrap_or(&0),
+            res2.networking_stats
+                .recent_bytes_received_ignored
+                .read()
+                .unwrap()
+                .back()
+                .unwrap_or(&0)
+                / 1024,
+        );
     });
-
-
-
 }
 
 pub fn on_node_event_incoming<TI: NetworkingEvent, TO>(
