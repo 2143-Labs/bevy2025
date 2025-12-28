@@ -15,9 +15,9 @@ impl Plugin for CharacterControllerPlugin {
             .add_systems(
                 Update,
                 (
-                    update_grounded,
                     apply_gravity,
                     unit_change_movement,
+                    update_grounded,
                     movement,
                     apply_movement_damping,
                 )
@@ -71,8 +71,7 @@ pub struct CharacterController;
 
 /// A marker component indicating that an entity is on the ground.
 #[derive(Component)]
-#[component(storage = "SparseSet")]
-pub struct Grounded;
+pub struct Groundedness(bool);
 
 /// The acceleration used for character movement.
 #[derive(Component)]
@@ -116,6 +115,7 @@ pub struct MovementBundle {
     damping: MovementDampingFactor,
     jump_impulse: JumpImpulse,
     max_slope_angle: MaxSlopeAngle,
+    groundedness: Groundedness,
 }
 
 impl MovementBundle {
@@ -130,6 +130,7 @@ impl MovementBundle {
             damping: MovementDampingFactor(damping),
             jump_impulse: JumpImpulse(jump_impulse),
             max_slope_angle: MaxSlopeAngle(max_slope_angle),
+            groundedness: Groundedness(false)
         }
     }
 }
@@ -144,7 +145,7 @@ impl CharacterControllerBundle {
     pub fn new(collider: Collider, gravity: Vector) -> Self {
         // Create shape caster as a slightly smaller version of collider
         let mut caster_shape = collider.clone();
-        caster_shape.set_scale(Vector::ONE * 0.99, 10);
+        caster_shape.set_scale(Vector::ONE * 1.02, 10);
 
         Self {
             character_controller: CharacterController,
@@ -156,7 +157,7 @@ impl CharacterControllerBundle {
                 Quat::from_rotation_y(0.0),
                 Dir3::Y,
             )
-            .with_max_distance(10.0),
+            .with_max_distance(4.0),
             gravity: ControllerGravity(gravity),
             movement: MovementBundle::default(),
             movement_action: MovementAction::default(),
@@ -177,13 +178,13 @@ impl CharacterControllerBundle {
 
 /// Updates the [`Grounded`] status for character controllers.
 fn update_grounded(
-    mut commands: Commands,
+    //mut commands: Commands,
     mut query: Query<
-        (Entity, &ShapeHits, &Rotation, Option<&MaxSlopeAngle>),
+        (&mut Groundedness, Entity, &ShapeHits, &Rotation, Option<&MaxSlopeAngle>),
         With<CharacterController>,
     >,
 ) {
-    for (entity, hits, rotation, max_slope_angle) in &mut query {
+    for (mut groundedness, _entity, hits, rotation, max_slope_angle) in &mut query {
         // The character is grounded if the shape caster has a hit with a normal
         // that isn't too steep.
         let is_grounded = hits.iter().any(|hit| {
@@ -194,11 +195,7 @@ fn update_grounded(
             }
         });
 
-        if is_grounded {
-            commands.entity(entity).insert(Grounded);
-        } else {
-            commands.entity(entity).remove::<Grounded>();
-        }
+        groundedness.0 = is_grounded;
     }
 }
 
@@ -224,14 +221,14 @@ fn movement(
         &MovementAction,
         &JumpImpulse,
         &mut LinearVelocity,
-        Has<Grounded>,
+        &Groundedness,
     )>,
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
     let delta_time = time.delta_secs_f64().adjust_precision();
 
-    for (movement_acceleration, action, jump_impulse, mut linear_velocity, is_grounded) in
+    for (movement_acceleration, action, jump_impulse, mut linear_velocity, Groundedness(is_grounded)) in
         &mut controllers
     {
         match action  {
@@ -241,7 +238,7 @@ fn movement(
                 speed_modifier,
             } => {
                 // Convert input direction to 3D movement direction
-                let input_dir_3d = Vector3::new(input_dir.x, 0.0, input_dir.y);
+                let input_dir_3d = Vector3::new(-input_dir.x, 0.0, input_dir.y);
 
                 // Rotate input direction based on camera yaw
                 let rotation = Quat::from_rotation_y(*camera_yaw as Scalar);
@@ -253,10 +250,14 @@ fn movement(
                     * speed_modifier
                     * delta_time;
 
-                linear_velocity.0 += acceleration;
+                if *is_grounded {
+                    linear_velocity.0 += acceleration;
+                } else {
+                    linear_velocity.0 += acceleration * 0.25;
+                }
             }
             MovementAction::Jump => {
-                if is_grounded {
+                if *is_grounded {
                     linear_velocity.y = jump_impulse.0;
                 }
             }
@@ -414,7 +415,7 @@ fn kinematic_controller_collisions(
             // Solve each penetrating contact in the manifold.
             for contact in manifold.points.iter() {
                 if contact.penetration > 0.0 {
-                    position.0 += normal * contact.penetration * 0.90;
+                    position.0 += normal * contact.penetration * 1.01;
                 }
                 deepest_penetration = deepest_penetration.max(contact.penetration);
             }
