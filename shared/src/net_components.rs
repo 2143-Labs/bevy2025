@@ -8,7 +8,8 @@ pub mod ents;
 pub mod foreign;
 pub mod ours;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, utils::TypeIdMap};
+use bevy_ecs::component::ComponentId;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -29,6 +30,8 @@ pub enum NetComponent {
     PlayerId(PlayerId),
 }
 
+
+use std::any::TypeId;
 impl NetComponent {
     /// Insert components into world
     pub fn insert_components(self, ent_commands: &mut EntityCommands) {
@@ -42,6 +45,23 @@ impl NetComponent {
             NetComponent::PlayerId(player_id) => {
                 ent_commands.insert(player_id);
             }
+        }
+    }
+
+    pub unsafe fn from_type_id_ptr(type_id: TypeId, ptr: bevy::ptr::Ptr<'_>) -> Option<NetComponent> {
+        if type_id == TypeId::of::<NetEntId>() {
+            Some(NetComponent::NetEntId(unsafe { ptr.deref::<NetEntId>() }.clone()))
+        } else if type_id == TypeId::of::<PlayerId>() {
+            Some(NetComponent::PlayerId(unsafe { ptr.deref::<PlayerId>() }.clone()))
+        } else if let Some(foreign) = foreign::NetComponentForeign::from_type_id_ptr(type_id, ptr)
+        {
+            Some(NetComponent::Foreign(foreign))
+        } else if let Some(ours) = ours::NetComponentOurs::from_type_id_ptr(type_id, ptr) {
+            Some(NetComponent::Ours(ours))
+        } else if let Some(ents) = ents::NetComponentEnts::from_type_id_ptr(type_id, ptr) {
+            Some(NetComponent::Ents(ents))
+        } else {
+            None
         }
     }
 }

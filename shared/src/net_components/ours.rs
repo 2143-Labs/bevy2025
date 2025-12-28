@@ -1,7 +1,15 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{event::PlayerId, items::InventoryId, net_components::ToNetComponent};
+use crate::{
+    character_controller::{
+        ControllerGravity, GroundNormal, Groundedness, JumpBuffer, JumpImpulse,
+        MaxSlopeAngle, MovementAcceleration, MovementAction, MovementDampingFactor,
+    },
+    event::PlayerId,
+    items::InventoryId,
+    net_components::ToNetComponent,
+};
 
 //include!(concat!(env!("OUT_DIR"), "/net_components_ours.rs"));
 #[derive(Serialize, Deserialize, Component, Debug, Eq, PartialEq, Clone)]
@@ -50,6 +58,15 @@ pub enum NetComponentOurs {
     DespawnOnPlayerDisconnect(DespawnOnPlayerDisconnect),
     PlayerColor(PlayerColor),
     HasInventory(HasInventory),
+    MovementAction(MovementAction),
+    ControllerGravity(ControllerGravity),
+    MovementAcceleration(MovementAcceleration),
+    MovementDampingFactor(MovementDampingFactor),
+    JumpImpulse(JumpImpulse),
+    MaxSlopeAngle(MaxSlopeAngle),
+    Groundedness(Groundedness),
+    GroundNormal(GroundNormal),
+    JumpBuffer(JumpBuffer),
 }
 
 impl NetComponentOurs {
@@ -73,6 +90,103 @@ impl NetComponentOurs {
             NetComponentOurs::HasInventory(c) => {
                 entity.insert(c);
             }
+            NetComponentOurs::MovementAction(c) => {
+                entity.insert(c);
+            }
+            NetComponentOurs::ControllerGravity(c) => {
+                entity.insert(c);
+            }
+            NetComponentOurs::MovementAcceleration(c) => {
+                entity.insert(c);
+            }
+            NetComponentOurs::MovementDampingFactor(c) => {
+                entity.insert(c);
+            }
+            NetComponentOurs::JumpImpulse(c) => {
+                entity.insert(c);
+            }
+            NetComponentOurs::MaxSlopeAngle(c) => {
+                entity.insert(c);
+            }
+            NetComponentOurs::Groundedness(c) => {
+                entity.insert(c);
+            }
+            NetComponentOurs::GroundNormal(c) => {
+                entity.insert(c);
+            }
+            NetComponentOurs::JumpBuffer(c) => {
+                entity.insert(c);
+            }
+        }
+    }
+
+
+    pub unsafe fn from_type_id_ptr(
+        type_id: std::any::TypeId,
+        ptr: bevy::ptr::Ptr<'_>,
+    ) -> Option<NetComponentOurs> {
+        if type_id == std::any::TypeId::of::<Health>() {
+            Some(NetComponentOurs::Health(
+                unsafe { ptr.deref::<Health>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<PlayerName>() {
+            Some(NetComponentOurs::PlayerName(
+                unsafe { ptr.deref::<PlayerName>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<PlayerColor>() {
+            Some(NetComponentOurs::PlayerColor(
+                unsafe { ptr.deref::<PlayerColor>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<ControlledBy>() {
+            Some(NetComponentOurs::ControlledBy(
+                unsafe { ptr.deref::<ControlledBy>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<DespawnOnPlayerDisconnect>() {
+            Some(NetComponentOurs::DespawnOnPlayerDisconnect(
+                unsafe { ptr.deref::<DespawnOnPlayerDisconnect>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<HasInventory>() {
+            Some(NetComponentOurs::HasInventory(
+                unsafe { ptr.deref::<HasInventory>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<MovementAction>() {
+            Some(NetComponentOurs::MovementAction(
+                unsafe { ptr.deref::<MovementAction>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<ControllerGravity>() {
+            Some(NetComponentOurs::ControllerGravity(
+                unsafe { ptr.deref::<ControllerGravity>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<MovementAcceleration>() {
+            Some(NetComponentOurs::MovementAcceleration(
+                unsafe { ptr.deref::<MovementAcceleration>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<MovementDampingFactor>() {
+            Some(NetComponentOurs::MovementDampingFactor(
+                unsafe { ptr.deref::<MovementDampingFactor>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<JumpImpulse>() {
+            Some(NetComponentOurs::JumpImpulse(
+                unsafe { ptr.deref::<JumpImpulse>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<MaxSlopeAngle>() {
+            Some(NetComponentOurs::MaxSlopeAngle(
+                unsafe { ptr.deref::<MaxSlopeAngle>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<Groundedness>() {
+            Some(NetComponentOurs::Groundedness(
+                unsafe { ptr.deref::<Groundedness>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<GroundNormal>() {
+            Some(NetComponentOurs::GroundNormal(
+                unsafe { ptr.deref::<GroundNormal>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<JumpBuffer>() {
+            Some(NetComponentOurs::JumpBuffer(
+                unsafe { ptr.deref::<JumpBuffer>() }.clone(),
+            ))
+        } else {
+            None
         }
     }
 }
@@ -113,6 +227,60 @@ impl ToNetComponent for HasInventory {
     }
 }
 
+impl ToNetComponent for MovementAction {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::MovementAction(self))
+    }
+}
+
+impl ToNetComponent for ControllerGravity {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::ControllerGravity(self))
+    }
+}
+
+impl ToNetComponent for MovementAcceleration {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::MovementAcceleration(self))
+    }
+}
+
+impl ToNetComponent for MovementDampingFactor {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::MovementDampingFactor(self))
+    }
+}
+
+impl ToNetComponent for JumpImpulse {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::JumpImpulse(self))
+    }
+}
+
+impl ToNetComponent for MaxSlopeAngle {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::MaxSlopeAngle(self))
+    }
+}
+
+impl ToNetComponent for Groundedness {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::Groundedness(self))
+    }
+}
+
+impl ToNetComponent for GroundNormal {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::GroundNormal(self))
+    }
+}
+
+impl ToNetComponent for JumpBuffer {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::JumpBuffer(self))
+    }
+}
+
 //commands.spawn((
 //Ball, // Marker component for counting
 //Mesh3d(meshes.add(Sphere::new(0.5))),
@@ -146,3 +314,4 @@ impl DespawnOnPlayerDisconnect {
         DespawnOnPlayerDisconnect { player_id }
     }
 }
+

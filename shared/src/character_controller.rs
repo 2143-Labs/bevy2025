@@ -2,6 +2,7 @@
 //! Copied from https://github.com/avianphysics/avian/blob/60ef5cf4/crates/avian2d/examples/kinematic_character_2d/plugin.rs#L39-L140
 use avian3d::{math::*, prelude::*};
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::event::NetEntId;
 
@@ -35,7 +36,7 @@ impl Plugin for CharacterControllerPlugin {
 }
 
 /// A [`Message`] written for a movement input action.
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, Serialize, Deserialize)]
 pub struct MovementAction {
     pub move_input_dir: Vector2,
     pub camera_yaw: Scalar,
@@ -65,43 +66,43 @@ pub struct UnitChangedMovement {
 pub struct CharacterController;
 
 /// A marker component indicating that an entity is on the ground.
-#[derive(Component)]
-pub struct Groundedness(bool);
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct Groundedness(pub bool);
 
 /// The normal vector of the ground surface the character is standing on.
 /// This is used to project movement onto slopes.
-#[derive(Component)]
-pub struct GroundNormal(Vector);
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct GroundNormal(pub Vector);
 
 /// Tracks when the player last attempted to jump, allowing for a small buffer
 /// window to make jumping more forgiving when grounded status flickers.
-#[derive(Component)]
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct JumpBuffer {
-    last_jump_attempt_time: f64,
-    buffer_duration: f64,
+    pub last_jump_attempt_time: f64,
+    pub buffer_duration: f64,
 }
 
 /// The acceleration used for character movement.
-#[derive(Component)]
-pub struct MovementAcceleration(Scalar);
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct MovementAcceleration(pub Scalar);
 
 /// The damping factor used for slowing down movement.
-#[derive(Component)]
-pub struct MovementDampingFactor(Scalar);
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct MovementDampingFactor(pub Scalar);
 
 /// The strength of a jump.
-#[derive(Component)]
-pub struct JumpImpulse(Scalar);
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct JumpImpulse(pub Scalar);
 
 /// The gravitational acceleration used for a character controller.
-#[derive(Component)]
-pub struct ControllerGravity(Vector);
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct ControllerGravity(pub Vector);
 
 /// The maximum angle a slope can have for a character controller
 /// to be able to climb and jump. If the slope is steeper than this angle,
 /// the character will slide down.
-#[derive(Component)]
-pub struct MaxSlopeAngle(Scalar);
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct MaxSlopeAngle(pub Scalar);
 
 /// A bundle that contains the components needed for a basic
 /// kinematic character controller.

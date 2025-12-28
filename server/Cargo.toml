@@ -40,6 +40,8 @@ clap = { version = "4.5.50", features = ["derive"] }
 noise = "0.9"
 fastrand = "2.0"
 avian3d = "0.4.0"
+dashmap = { version = "6.1.0", features = ["rayon"] }
+rayon = "1.11.0"
 
 [dev-dependencies]
 tungstenite = "0.28.0"

@@ -48,6 +48,40 @@ impl NetComponentForeign {
             }
         }
     }
+
+    pub unsafe fn from_type_id_ptr(
+        type_id: std::any::TypeId,
+        ptr: bevy::ptr::Ptr<'_>,
+    ) -> Option<NetComponentForeign> {
+        if type_id == std::any::TypeId::of::<Transform>() {
+            Some(NetComponentForeign::Transform(
+                unsafe { ptr.deref::<Transform>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<avian3d::prelude::RigidBody>() {
+            Some(NetComponentForeign::RigidBody(
+                unsafe { ptr.deref::<avian3d::prelude::RigidBody>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<avian3d::prelude::Collider>() {
+            Some(NetComponentForeign::Collider(
+                unsafe { ptr.deref::<avian3d::prelude::Collider>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<avian3d::prelude::Mass>() {
+            Some(NetComponentForeign::Mass(
+                unsafe { ptr.deref::<avian3d::prelude::Mass>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<avian3d::prelude::LinearVelocity>() {
+            Some(NetComponentForeign::LinearVelocity(
+                unsafe { ptr.deref::<avian3d::prelude::LinearVelocity>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<ComponentColor>() {
+            let color = unsafe { ptr.deref::<ComponentColor>() };
+            Some(NetComponentForeign::Color(color.0))
+        } else if type_id == std::any::TypeId::of::<TransformInterpolation>() {
+            Some(NetComponentForeign::TransformInterpolation)
+        } else {
+            None
+        }
+    }
 }
 
 impl ToNetComponent for Transform {

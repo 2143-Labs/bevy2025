@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::render_phase::NonMeshEntities};
 use serde::{Deserialize, Serialize};
 
 use crate::net_components::ToNetComponent;
@@ -53,6 +53,35 @@ impl NetComponentEnts {
             NetComponentEnts::Man(c) => {
                 entity.insert(c);
             }
+        }
+    }
+
+    pub unsafe fn from_type_id_ptr(
+        type_id: std::any::TypeId,
+        ptr: bevy::ptr::Ptr<'_>,
+    ) -> Option<NetComponentEnts> {
+        if type_id == std::any::TypeId::of::<Ball>() {
+            Some(NetComponentEnts::Ball(
+                unsafe { ptr.deref::<Ball>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<CanAssumeControl>() {
+            Some(NetComponentEnts::CanAssumeControl(
+                unsafe { ptr.deref::<CanAssumeControl>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<PlayerCamera>() {
+            Some(NetComponentEnts::PlayerCamera(
+                unsafe { ptr.deref::<PlayerCamera>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<Man>() {
+            Some(NetComponentEnts::Man(
+                unsafe { ptr.deref::<Man>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<SendNetworkTranformUpdates>() {
+            Some(NetComponentEnts::SendNetworkTranformUpdates(
+                unsafe { ptr.deref::<SendNetworkTranformUpdates>() }.clone(),
+            ))
+        } else {
+            None
         }
     }
 }

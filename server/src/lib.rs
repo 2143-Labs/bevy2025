@@ -5,7 +5,7 @@ use std::{
 };
 
 use avian3d::prelude::{Gravity, LinearVelocity};
-use bevy::{app::ScheduleRunnerPlugin, prelude::*};
+use bevy::{app::ScheduleRunnerPlugin, ecs::{component::ComponentInfo, world::DynamicComponentFetch}, platform::collections::HashSet, prelude::*};
 use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
@@ -49,15 +49,17 @@ enum ServerState {
     Running,
 }
 
+use dashmap::DashMap;
+
 #[derive(Resource, Default)]
 struct HeartbeatList {
-    heartbeats: HashMap<PlayerId, Arc<AtomicI16>>,
-    pings: HashMap<PlayerId, PlayerPing<AtomicI16>>,
+    heartbeats: DashMap<PlayerId, Arc<AtomicI16>>,
+    pings: DashMap<PlayerId, PlayerPing<AtomicI16>>,
 }
 
 #[derive(Resource, Default)]
 struct EndpointToPlayerId {
-    map: HashMap<Endpoint, PlayerId>,
+    map: DashMap<Endpoint, PlayerId>,
 }
 
 #[derive(Debug, Component)]
@@ -202,25 +204,16 @@ pub struct DisconnectedPlayer {
 #[allow(clippy::too_many_arguments)]
 fn on_player_connect(
     mut new_players: UDPacketEvent<shared::event::server::ConnectRequest>,
-    mut heartbeat_mapping: ResMut<HeartbeatList>,
-    mut endpoint_to_player_id: ResMut<EndpointToPlayerId>,
+    mut world: &World,
+    //mut heartbeat_mapping: ResMut<HeartbeatList>,
+    //mut endpoint_to_player_id: ResMut<EndpointToPlayerId>,
 
-    clients: Query<(&PlayerEndpoint, &PlayerId, &PlayerName, &PlayerColor), With<ConnectedPlayer>>,
-    cameras: Query<
-        (
-            &NetEntId,
-            &ControlledBy,
-            &Transform,
-            &PlayerName,
-            &PlayerColor,
-        ),
-        With<PlayerCamera>,
-    >,
-    balls: Query<
-        (&Transform, &ControlledBy, &NetEntId, &ComponentColor),
-        With<shared::net_components::ents::Ball>,
-    >,
-    men: Query<(&Transform, &ControlledBy, &NetEntId), With<shared::net_components::ents::Man>>,
+    //units_to_spawn: Query<
+        //(
+            //Entity,
+            //&NetEntId,
+        //),
+    //>,
 
     sr: Res<ServerNetworkingResources>,
     terrain: Res<TerrainParams>,
@@ -275,85 +268,84 @@ fn on_player_connect(
 
         let mut unit_list_to_new_client = vec![];
 
-        // Next, add all cameras, clients, balls, and men to the unit list
-        info!(
-            "Found {} existing cameras to send to new player",
-            cameras.iter().len()
-        );
-        for (c_net_ent, c_controlled_by, c_tfm, c_name, c_color) in &cameras {
-            info!(
-                "  - Camera {:?} at {:?} for player {:?}",
-                c_net_ent, c_tfm.translation, c_controlled_by
-            );
-            // SPAWN B
-            unit_list_to_new_client.push(SpawnUnit2 {
-                net_ent_id: *c_net_ent,
-                components: vec![
-                    PlayerCamera.to_net_component(),
-                    (*c_tfm).to_net_component(),
-                    c_name.clone().to_net_component(),
-                    c_color.clone().to_net_component(),
-                    c_controlled_by.clone().to_net_component(),
-                    SendNetworkTranformUpdates.to_net_component(),
-                ],
-            });
+        let mut client_query = world.try_query_filtered::<(&PlayerEndpoint, &PlayerId, &PlayerName, &PlayerColor), With<ConnectedPlayer>>();
+        if let Some(client_query_thing) = &mut client_query {
+            for (c_net_client, c_player_id, c_name, c_color) in client_query_thing.iter(world) {
+                // Send each existing player's info to the new client
+                // SPAWN A
+                unit_list_to_new_client.push(SpawnUnit2 {
+                    net_ent_id: NetEntId::none(),
+                    components: vec![
+                        c_name.clone().to_net_component(),
+                        c_color.clone().to_net_component(),
+                        c_player_id.to_net_component(),
+                        //ConnectedPlayer.to_net_component(),
+                    ],
+                });
+
+                // Tell all connected clients about your new player and camera
+                send_outgoing_event_next_tick_batch(
+                    &sr,
+                    c_net_client.0,
+                    &[
+                        // their camera
+                        // SPAWN B
+                        // TODO make the player actually move to their spawn location
+                        EventToClient::SpawnUnit2(spawn_camera_unit.clone()),
+                        // their player unit
+                        // SPAWN A
+                        EventToClient::SpawnUnit2(SpawnUnit2 {
+                            net_ent_id: NetEntId::none(),
+                            components: vec![
+                                PlayerName { name: name.clone() }.to_net_component(),
+                                player_color.clone().to_net_component(),
+                                new_player_id.to_net_component(),
+                                //ConnectedPlayer.to_net_component(),
+                            ],
+                        }),
+                    ],
+                );
+            }
         }
 
-        for (c_net_client, c_player_id, c_name, c_color) in &clients {
-            // Send each existing player's info to the new client
-            // SPAWN A
-            unit_list_to_new_client.push(SpawnUnit2 {
-                net_ent_id: NetEntId::none(),
-                components: vec![
-                    c_name.clone().to_net_component(),
-                    c_color.clone().to_net_component(),
-                    c_player_id.to_net_component(),
-                    //ConnectedPlayer.to_net_component(),
-                ],
-            });
+        let mut large_unit_list_to_send: Vec<SpawnUnit2> = vec![];
 
-            // Tell all connected clients about your new player and camera
-            send_outgoing_event_next_tick_batch(
-                &sr,
-                c_net_client.0,
-                &[
-                    // their camera
-                    // SPAWN B
-                    EventToClient::SpawnUnit2(spawn_camera_unit.clone()),
-                    // their player unit
-                    // SPAWN A
-                    EventToClient::SpawnUnit2(SpawnUnit2 {
-                        net_ent_id: NetEntId::none(),
-                        components: vec![
-                            PlayerName { name: name.clone() }.to_net_component(),
-                            player_color.clone().to_net_component(),
-                            new_player_id.to_net_component(),
-                            //ConnectedPlayer.to_net_component(),
-                        ],
-                    }),
-                ],
-            );
-        }
+        let mut units_to_spawn = world.try_query_filtered::<(Entity, &NetEntId), Without<ConnectedPlayer>>();
 
-        let mut unit_list_to_new_client_balls_and_men = vec![];
+        if let Some(mut units_spawns_thing) = units_to_spawn {
+            for (unit_ent, unit_net_ent_id) in units_spawns_thing.iter(world) {
+                let component_info = world.inspect_entity(unit_ent).unwrap();
+                info!("Preparing to send existing unit {:?} to new player", unit_net_ent_id);
+                let ciids = component_info.map(|ci| ci.id()).collect::<HashSet<_>>();
+                let Ok(ents_res) = world.entity(unit_ent).get_by_id(&ciids) else {
+                    error!("Failed to get components for entity {:?}", unit_ent);
+                    continue;
+                };
 
-        // gather the balls in the unit list
-        for (&transform, controlled_by, &ent_id, has_color) in &balls {
-            unit_list_to_new_client_balls_and_men.push(make_ball(
-                ent_id,
-                transform,
-                has_color.0,
-                controlled_by.clone(),
-            ));
-        }
+                let mut spawn_unit = SpawnUnit2 {
+                    net_ent_id: *unit_net_ent_id,
+                    components: vec![],
+                };
 
-        // gather the men in the unit list
-        for (&transform, controlled_by, &ent_id) in &men {
-            unit_list_to_new_client_balls_and_men.push(make_man(
-                ent_id,
-                transform,
-                controlled_by.clone(),
-            ));
+                for (component_id, component_ptr) in ents_res.iter() {
+                    let type_id = world.components()
+                        .get_info(*component_id)
+                        .unwrap()
+                        .type_id()
+                        .unwrap();
+
+                    // SAFETY: Trust that bevy gives us a valid type id and pointer from `get_by_id`
+                    if let Some(net_comp) =
+                        unsafe { shared::net_components::NetComponent::from_type_id_ptr(type_id, *component_ptr) }
+                    {
+                        info!("Component to send: {:?}", net_comp);
+                        spawn_unit.components.push(net_comp);
+
+                    }
+                }
+                large_unit_list_to_send.push(spawn_unit);
+                info!("{:?}", ents_res);
+            }
         }
 
         // Each time we miss a heartbeat, we increment the Atomic counter.
@@ -362,6 +354,7 @@ fn on_player_connect(
         let hb_grace_period =
             (HEARTBEAT_CONNECTION_GRACE_PERIOD - 1) * (HEARTBEAT_TIMEOUT / HEARTBEAT_MILLIS);
 
+        let heartbeat_mapping = world.resource::<HeartbeatList>();
         heartbeat_mapping.heartbeats.insert(
             new_player_id,
             Arc::new(AtomicI16::new(-(hb_grace_period as i16))),
@@ -374,7 +367,7 @@ fn on_player_connect(
             },
         );
 
-        endpoint_to_player_id
+        world.resource::<EndpointToPlayerId>()
             .map
             .insert(player.endpoint, new_player_id);
 
@@ -395,14 +388,12 @@ fn on_player_connect(
         send_outgoing_event_next_tick(&sr, player.endpoint, &event);
 
         // send remaining world data in batches
-        for ball_unit in unit_list_to_new_client_balls_and_men.chunks(100) {
-            let events = ball_unit
-                .iter()
-                .map(|u| EventToClient::SpawnUnit2(u.clone()))
-                .collect::<Vec<_>>();
+        let events = large_unit_list_to_send
+            .iter()
+            .map(|u| EventToClient::SpawnUnit2(u.clone()))
+            .collect::<Vec<_>>();
 
-            send_outgoing_event_next_tick_batch(&sr, player.endpoint, &events);
-        }
+        send_outgoing_event_next_tick_batch(&sr, player.endpoint, &events);
     }
 }
 
@@ -410,16 +401,25 @@ fn check_heartbeats(
     heartbeat_mapping: Res<HeartbeatList>,
     mut on_disconnect: MessageWriter<PlayerDisconnected>,
 ) {
-    for (player_id, beats_missed) in &heartbeat_mapping.heartbeats {
+    use rayon::prelude::*;
+    let dcs = heartbeat_mapping.heartbeats.par_iter().filter_map(|entry| {
+        let player_id = entry.key();
+        let beats_missed = entry.value();
+
         let beats = beats_missed.fetch_add(1, std::sync::atomic::Ordering::Acquire);
         trace!(?player_id, ?beats, "hb");
         if beats >= (HEARTBEAT_TIMEOUT / HEARTBEAT_MILLIS) as i16 {
             warn!("Missed {beats} beats, disconnecting {player_id:?}");
-            on_disconnect.write(PlayerDisconnected {
+            return Some(PlayerDisconnected {
                 id: *player_id,
                 reason: "Player timeout".to_string(),
             });
         }
+        None
+    });
+
+    for dc in dcs.collect::<Vec<_>>() {
+        on_disconnect.write(dc);
     }
 }
 
@@ -463,7 +463,7 @@ fn on_receive_ping_challenge(
             let ping = time.elapsed_secs_f64() - hb.event.server_time;
             let ping = ping / 2.0;
             let ping = (ping * 1000.0) as i16; // in ms
-            if let Some(player_ping) = heartbeat_mapping.pings.get(player_id) {
+            if let Some(player_ping) = heartbeat_mapping.pings.get(&*player_id) {
                 player_ping
                     .server_challenged_ping_ms
                     .store(ping, std::sync::atomic::Ordering::Release);
@@ -566,7 +566,7 @@ fn on_player_heartbeat(
     for hb in pd.read() {
         // TODO tryblocks?
         if let Some(id) = endpoint_mapping.map.get(&hb.endpoint) {
-            if let Some(heartbeat_pointer) = heartbeat_mapping.heartbeats.get(id) {
+            if let Some(heartbeat_pointer) = heartbeat_mapping.heartbeats.get(&*id) {
                 heartbeat_pointer.fetch_min(0, std::sync::atomic::Ordering::Release);
                 let event = EventToClient::HeartbeatResponse(HeartbeatResponse {
                     client_started_time: hb.event.client_started_time,
