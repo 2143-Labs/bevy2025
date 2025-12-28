@@ -4,7 +4,7 @@ use avian3d::{math::*, prelude::*};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::event::NetEntId;
+use crate::{event::NetEntId, net_components::{NetComponent, ToNetComponent}};
 
 pub struct CharacterControllerPlugin;
 
@@ -62,7 +62,7 @@ pub struct UnitChangedMovement {
 }
 
 /// A marker component indicating that an entity is using a character controller.
-#[derive(Component)]
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct CharacterController;
 
 /// A marker component indicating that an entity is on the ground.
@@ -106,7 +106,7 @@ pub struct MaxSlopeAngle(pub Scalar);
 
 /// A bundle that contains the components needed for a basic
 /// kinematic character controller.
-#[derive(Bundle)]
+#[derive(Bundle, Serialize, Deserialize, Clone, Debug)]
 pub struct CharacterControllerBundle {
     character_controller: CharacterController,
     body: RigidBody,
@@ -117,8 +117,14 @@ pub struct CharacterControllerBundle {
     movement_action: MovementAction,
 }
 
+impl ToNetComponent for CharacterControllerBundle {
+    fn to_net_component(self) -> NetComponent {
+        NetComponent::CharacterControllerBundle(Box::new(self))
+    }
+}
+
 /// A bundle that contains components for character movement.
-#[derive(Bundle)]
+#[derive(Bundle, Serialize, Deserialize, Clone, Debug)]
 pub struct MovementBundle {
     acceleration: MovementAcceleration,
     damping: MovementDampingFactor,
