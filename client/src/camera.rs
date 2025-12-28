@@ -288,13 +288,6 @@ fn keyboard_input_tps(
         }
     };
 
-    if config.just_pressed(&keyboard, &mouse, GameAction::Jump) {
-        movement_writer.write(UnitChangedMovement {
-            net_ent_id: *unit_net_id,
-            movement_action: MovementAction::Jump,
-        });
-    }
-
     if last_input_direction.0 != direction {
         last_input_direction.0 = direction;
     }
@@ -310,4 +303,11 @@ fn keyboard_input_tps(
             speed_modifier: 1.0,
         },
     });
+
+    if config.just_pressed(&keyboard, &mouse, GameAction::Jump) {
+        movement_writer.write(UnitChangedMovement {
+            net_ent_id: *unit_net_id,
+            movement_action: MovementAction::Jump,
+        });
+    }
 }
