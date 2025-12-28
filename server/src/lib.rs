@@ -115,6 +115,7 @@ fn do_app(f: impl FnOnce(&mut App)) {
             terrain::TerrainPlugin,
             shared::TickPlugin,
             shared::event::server::NetworkEventPlugin,
+            shared::character_controller::CharacterControllerPlugin,
             //StatusPlugin,
         ))
         .init_state::<ServerState>()
