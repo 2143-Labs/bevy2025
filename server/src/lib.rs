@@ -204,16 +204,8 @@ pub struct DisconnectedPlayer {
 #[allow(clippy::too_many_arguments)]
 fn on_player_connect(
     mut new_players: UDPacketEvent<shared::event::server::ConnectRequest>,
+    // We need the world here so we can do dynamic queries for all existing units with NetEntId
     mut world: &World,
-    //mut heartbeat_mapping: ResMut<HeartbeatList>,
-    //mut endpoint_to_player_id: ResMut<EndpointToPlayerId>,
-
-    //units_to_spawn: Query<
-        //(
-            //Entity,
-            //&NetEntId,
-        //),
-    //>,
 
     sr: Res<ServerNetworkingResources>,
     terrain: Res<TerrainParams>,
@@ -344,7 +336,6 @@ fn on_player_connect(
                     }
                 }
                 large_unit_list_to_send.push(spawn_unit);
-                info!("{:?}", ents_res);
             }
         }
 

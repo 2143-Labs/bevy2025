@@ -12,10 +12,12 @@ mod remote_players;
 mod terrain;
 mod ui;
 mod water;
+mod steamworks;
 
 use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
 
 use assets::AssetsPlugin;
+use bevy_steamworks::{AppId, FriendFlags};
 use camera::CameraPlugin;
 use clap::Parser;
 use debug::DebugPlugin;
@@ -80,7 +82,17 @@ fn main() {
             LogDiagnosticsPlugin::default(),
             shared::event::client::NetworkEventPlugin,
             shared::character_controller::CharacterControllerPlugin,
+            steamworks::SteamworksPlugin(AppId(480)),
         ))
+        .add_systems(Startup, |client: Res<bevy_steamworks::Client>| {
+            for friend in client.friends().get_friends(FriendFlags::IMMEDIATE) {
+                info!("Friend: {} = {:?} {:?}", friend.name(), friend.id(), friend.state());
+            }
+        })
+        .add_systems(Startup, |client: Res<bevy_steamworks::Client>| {
+            let friend = client.apps().app_owner();
+            info!("App Owner: {:?}", friend);
+        })
         .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue
         .insert_resource(args)
         .add_systems(Startup, check_all_clap_args)
