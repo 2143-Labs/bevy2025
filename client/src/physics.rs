@@ -1,4 +1,5 @@
 use avian3d::prelude::*;
+use bevy::ecs::schedule::ScheduleLabel;
 use bevy::prelude::*;
 use shared::Config;
 use shared::event::server::SpawnCircle;
@@ -19,9 +20,44 @@ struct BallCounterText;
 
 pub struct PhysicsPlugin;
 
+#[derive(ScheduleLabel, Clone, Hash, PartialEq, Eq, Debug)]
+pub struct PhysicsSchedule;
+
+#[derive(Default)]
+pub struct TimePhysics;
+
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(avian3d::PhysicsPlugins::default())
+
+        let mut phys_time = Time::new_with(TimePhysics);
+        phys_time.set_wrap_period(std::time::Duration::from_secs_f32(1.0 / 128.0)); // 128 Hz
+
+        app
+            .init_schedule(PhysicsSchedule)
+            .insert_resource(
+                // set the physics schedule to run at 128 Hz
+                phys_time,
+            )
+            // The Physics schedule should run 
+            .add_plugins(avian3d::PhysicsPlugins::new(PhysicsSchedule))
+            .add_systems(
+                PhysicsSchedule,
+                || {
+                    info!("Running physics step");
+                }
+
+                //manage_physics_pause.run_if(resource_changed::<State<GameState>>()),
+            )
+            // tick the physics schedule only when in Playing state
+            .add_systems(
+                Update,
+                |mut physics_time: ResMut<Time<Physics>>, time: Res<Time>| {
+                    let dt = time.delta_secs_f64();
+                    physics_time.tick(dt);
+
+                }
+            )
+
             .add_systems(OnEnter(GameState::Playing), setup_ball_counter_ui)
             .add_systems(OnEnter(GameState::MainMenu), despawn_ball_counter_ui)
             .add_systems(
