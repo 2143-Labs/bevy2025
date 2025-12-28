@@ -109,6 +109,7 @@ impl Plugin for NetworkingPlugin {
                     shared::increment_ticks,
                     on_general_spawn_network_unit,
                     on_begin_controlling_unit,
+                    try_control_unit_when_it_spawns,
                 )
                     .chain()
                     .run_if(in_state(NetworkGameState::ClientConnected)),
@@ -347,6 +348,32 @@ fn send_disconnect_packet(sr: Res<ClientNetworkingResources>, mse: Res<MainServe
     info!("Sent disconnect packet to {}", mse.0);
 }
 
+
+#[derive(Component)]
+struct DeferredControlAssumption(NetEntId);
+
+fn try_control_unit_when_it_spawns(
+    mut commands: Commands,
+    needs_spawn: Query<(Entity, &DeferredControlAssumption)>,
+    units: Query<(Entity, &NetEntId), With<CanAssumeControl>>,
+    mut next_control_state: ResMut<NextState<crate::game_state::InputControlState>>,
+) {
+    for (needs_spawn_ent, needs_spawn) in needs_spawn.iter() {
+        for (ent, ent_id) in units.iter() {
+            if *ent_id == needs_spawn.0 {
+                commands
+                    .entity(ent)
+                    .insert(CurrentThirdPersonControlledUnit);
+
+                commands.entity(needs_spawn_ent).despawn();
+
+                next_control_state.set(crate::game_state::InputControlState::ThirdPerson);
+                break;
+            }
+        }
+    }
+}
+
 fn on_begin_controlling_unit(
     mut commands: Commands,
     mut unit_event: UDPacketEvent<BeginThirdpersonControllingUnit>,
@@ -391,15 +418,13 @@ fn on_begin_controlling_unit(
         }
 
         if let Some(unit_ent_id) = maybe_unit {
+            commands.spawn(
+                DeferredControlAssumption(unit_ent_id),
+            );
             // Find the entity with this NetEntId
-            for (ent, ent_id) in units.iter() {
+            for (_ent, ent_id) in units.iter() {
                 if *ent_id == unit_ent_id {
-                    info!("Now controlling unit {:?}", unit_ent_id);
-                    commands
-                        .entity(ent)
-                        .insert(CurrentThirdPersonControlledUnit);
-                    next_control_state.set(crate::game_state::InputControlState::ThirdPerson);
-                    break;
+                    continue;
                 }
             }
         } else {
