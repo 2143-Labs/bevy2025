@@ -120,11 +120,14 @@ impl NetworkingStats {
     }
 }
 
+
+use dashmap::DashMap;
+
 #[derive(Resource, Clone)]
 pub struct NetworkingResources<TI, TO> {
     pub event_list_incoming: Arc<RwLock<Vec<(Endpoint, TI)>>>,
     // TODO make this hashmap instead
-    pub event_list_outgoing: Arc<RwLock<Vec<(Endpoint, TO)>>>,
+    pub event_list_outgoing: Arc<DashMap<Endpoint, Vec<TO>>>,
     pub reliable_packet_ids_seen: Arc<RwLock<HashMap<PacketIdentifier, Tick>>>,
     pub networking_stats: Arc<NetworkingStats>,
     pub handler: NodeHandler<()>,
@@ -225,7 +228,7 @@ pub fn send_outgoing_event_now_batch<TI, TO: NetworkingEvent>(
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
-pub fn send_outgoing_event_reliable_internal<TI, TO: NetworkingEvent>(
+fn send_outgoing_event_reliable_internal_chunk<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     event: &[TO],
@@ -258,6 +261,53 @@ pub fn send_outgoing_event_reliable_internal<TI, TO: NetworkingEvent>(
         .networking_stats
         .packets_sent_this_second
         .fetch_add(2, std::sync::atomic::Ordering::Relaxed);
+
+    if data_len > 3000 {
+        warn!(data_len = data_len, "Sending large reliable batch event");
+    }
+}
+
+pub fn send_outgoing_event_reliable_internal<TI, TO: NetworkingEvent>(
+    resources: &NetworkingResources<TI, TO>,
+    endpoint: Endpoint,
+    mut event: &[TO],
+    tick: &Tick,
+) {
+    const TARGET_PACKET_SIZE: usize = 1450;
+    while !event.is_empty() {
+        let mut chunk_size = 1;
+        let packet_id: PacketIdentifier = rand::random();
+        let dedup_id: DuplicationIdentifier = rand::random();
+        // We construct chunks until we reach the larest that fits in one chunk
+        // TODO improve this a lot
+        'send: loop {
+            if chunk_size >= event.len() {
+                break 'send;
+            }
+
+            chunk_size += 1;
+            let data = postcard::to_stdvec(&EventGroupingRef::Reliable(
+                packet_id, dedup_id, *tick, &event[..chunk_size],
+            ))
+            .unwrap();
+            let data_len = data.len();
+
+            if data_len > TARGET_PACKET_SIZE {
+                chunk_size -= 1;
+                break 'send;
+            }
+        }
+        send_outgoing_event_reliable_internal_chunk(
+            resources,
+            endpoint,
+            &event[..chunk_size],
+            tick,
+        );
+        if chunk_size >= event.len() {
+            break;
+        }
+        event = &event[chunk_size..];
+    }
 }
 
 pub fn send_outgoing_event_next_tick<TI, TO: NetworkingEvent>(
@@ -265,8 +315,9 @@ pub fn send_outgoing_event_next_tick<TI, TO: NetworkingEvent>(
     endpoint: Endpoint,
     event: &TO,
 ) {
-    let mut list = resources.event_list_outgoing.write().unwrap();
-    list.push((endpoint, event.clone()));
+    resources.event_list_outgoing.entry(endpoint)
+        .or_insert_with(Vec::new)
+        .push(event.clone());
 }
 
 pub fn send_outgoing_event_next_tick_batch<TI, TO: NetworkingEvent>(
@@ -274,32 +325,20 @@ pub fn send_outgoing_event_next_tick_batch<TI, TO: NetworkingEvent>(
     endpoint: Endpoint,
     events: &[TO],
 ) {
-    let mut list = resources.event_list_outgoing.write().unwrap();
-    for event in events {
-        list.push((endpoint, event.clone()));
-    }
+    resources.event_list_outgoing.entry(endpoint)
+        .or_insert_with(Vec::new)
+        .extend_from_slice(events);
 }
 
 pub fn flush_outgoing_events<TI: NetworkingEvent, TO: NetworkingEvent>(
     tick: Res<CurrentTick>,
     resources: Res<NetworkingResources<TI, TO>>,
 ) {
-    let mut list = resources.event_list_outgoing.write().unwrap();
-    // swap it out for a new empty list
-    let events_to_send = std::mem::take(&mut *list);
-    drop(list); // unlock RwLock
-    let mut events_per_endpoint: std::collections::HashMap<Endpoint, Vec<TO>> =
-        std::collections::HashMap::new();
-    //info!(num_events = events_to_send.len(), "Flushing outgoing events");
-    for (endpoint, event) in events_to_send {
-        events_per_endpoint.entry(endpoint).or_default().push(event);
-    }
-
-    for (endpoint, events) in events_per_endpoint {
-        for chunk in events.chunks(50) {
-            send_outgoing_event_reliable_internal(&resources, endpoint, chunk, &tick.0);
-        }
-    }
+    use rayon::prelude::*;
+    resources.event_list_outgoing.par_iter_mut().for_each(|mut entry| {
+        send_outgoing_event_reliable_internal(&resources, *entry.key(), entry.value(), &tick.0);
+        entry.value_mut().clear();
+    })
 }
 
 pub fn setup_incoming_server<TI: NetworkingEvent, TO: NetworkingEvent>(

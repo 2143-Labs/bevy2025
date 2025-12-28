@@ -1,3 +1,4 @@
+#![allow(clippy::type_complexity)]
 mod assets;
 mod camera;
 mod debug;
