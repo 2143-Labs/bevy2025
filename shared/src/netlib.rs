@@ -362,42 +362,6 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     std::thread::spawn(move || loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
         res2.networking_stats.flush_and_reset();
-        info!(
-            "Net: Sent {}kb {}pack\nRecv {}kb {}pack ({}kb ignored)",
-            res2.networking_stats
-                .recent_bytes_sent
-                .read()
-                .unwrap()
-                .back()
-                .unwrap_or(&0)
-                / 1024,
-            res2.networking_stats
-                .recent_packets_sent
-                .read()
-                .unwrap()
-                .back()
-                .unwrap_or(&0),
-            res2.networking_stats
-                .recent_bytes_received
-                .read()
-                .unwrap()
-                .back()
-                .unwrap_or(&0)
-                / 1024,
-            res2.networking_stats
-                .recent_packets_received
-                .read()
-                .unwrap()
-                .back()
-                .unwrap_or(&0),
-            res2.networking_stats
-                .recent_bytes_received_ignored
-                .read()
-                .unwrap()
-                .back()
-                .unwrap_or(&0)
-                / 1024,
-        );
     });
 }
 
