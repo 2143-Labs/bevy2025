@@ -28,6 +28,9 @@
             rust-analyzer
             cargo 
             rustPackages.rustfmt
+            rustPackages.clippy
+            #rustPackages.cargo-flamegraph
+            cargo-flamegraph
             pre-commit 
             pkg-config
             bacon
