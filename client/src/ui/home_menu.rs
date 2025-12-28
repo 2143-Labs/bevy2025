@@ -1,10 +1,6 @@
 use super::styles::*;
-use crate::{
-    assets::ImageAssets,
-    game_state::MenuState,
-};
+use crate::{assets::ImageAssets, game_state::MenuState};
 use bevy::{math::Rot2, prelude::*, ui::UiTransform};
-use shared::netlib::NetworkConnectionTarget;
 
 /// Marker for the home menu root entity
 #[derive(Component)]
@@ -129,24 +125,32 @@ pub fn handle_home_buttons(
     >,
     //next_game_state: ResMut<NextState<GameState>>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
-    mut config: ResMut<crate::Config>,
+    mut _config: ResMut<crate::Config>,
 ) {
     // Play button - skip networking, go directly to single-player
     for interaction in play_query.iter_mut() {
         if *interaction == Interaction::Pressed {
             info!("Play button pressed - starting single-player");
-            let port = rand::random_range(20000..60000);
-            config.port = port;
-            config.ip = "127.0.0.1".to_string();
-            config.host_ip = None;
-            std::thread::spawn(move || {
-                // TODO exit
-                server::call_from_client_for_singleplayer(NetworkConnectionTarget {
-                    ip: "127.0.0.1".to_string(),
-                    port,
+            #[cfg(feature = "singleplayer")]
+            {
+                use shared::netlib::NetworkConnectionTarget;
+                let port = rand::random_range(20000..60000);
+                _config.port = port;
+                _config.ip = "127.0.0.1".to_string();
+                _config.host_ip = None;
+                std::thread::spawn(move || {
+                    // TODO exit
+                    server::call_from_client_for_singleplayer(NetworkConnectionTarget {
+                        ip: "127.0.0.1".to_string(),
+                        port,
+                    });
                 });
-            });
-            next_menu_state.set(MenuState::Connecting);
+                next_menu_state.set(MenuState::Connecting);
+            }
+            #[cfg(not(feature = "singleplayer"))]
+            {
+                warn!("Single-player mode is not enabled in this build.");
+            }
         }
     }
 

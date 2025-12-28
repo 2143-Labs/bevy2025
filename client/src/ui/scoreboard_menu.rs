@@ -1,5 +1,5 @@
-use crate::game_state::OverlayMenuState;
 use super::styles::*;
+use crate::game_state::OverlayMenuState;
 
 use std::time::Duration;
 
@@ -26,35 +26,30 @@ pub struct ScoreboardMenuPlugin;
 
 impl Plugin for ScoreboardMenuPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .add_systems(
-                OnEnter(OverlayMenuState::Scoreboard),
-                (
-                    spawn_scoreboard_menu,
-                    send_scoreboard_request_packet,
-                ),
+        app.add_systems(
+            OnEnter(OverlayMenuState::Scoreboard),
+            (spawn_scoreboard_menu, send_scoreboard_request_packet),
+        )
+        .add_systems(
+            OnExit(OverlayMenuState::Scoreboard),
+            despawn_scoreboard_menu,
+        )
+        .add_systems(
+            Update,
+            (
+                handle_scoreboard_menu_buttons,
+                handle_scoreboard_data_packet,
+                update_scoreboard_menu,
             )
-            .add_systems(
-                OnExit(OverlayMenuState::Scoreboard),
-                despawn_scoreboard_menu,
-            )
-            .add_systems(
-                Update,
-                (
-                    handle_scoreboard_menu_buttons,
-                    handle_scoreboard_data_packet,
-                    update_scoreboard_menu,
-                )
-                    .run_if(in_state(OverlayMenuState::Scoreboard)),
-            )
-            .add_systems(
-                Update,
-                send_scoreboard_request_packet.run_if(
-                    in_state(OverlayMenuState::Scoreboard)
-                        .and(on_timer(Duration::from_millis(100))),
-                ),
-            )
-            .add_message::<RequestScoreboardResponse>();
+                .run_if(in_state(OverlayMenuState::Scoreboard)),
+        )
+        .add_systems(
+            Update,
+            send_scoreboard_request_packet.run_if(
+                in_state(OverlayMenuState::Scoreboard).and(on_timer(Duration::from_millis(100))),
+            ),
+        )
+        .add_message::<RequestScoreboardResponse>();
     }
 }
 
@@ -96,7 +91,7 @@ pub fn send_scoreboard_request_packet(
     // send packet
     let event = shared::event::server::RequestScoreboard {};
     send_outgoing_event_now(
-        &sr.handler,
+        &sr,
         mse.0,
         &shared::netlib::EventToServer::RequestScoreboard(event),
     );
@@ -260,8 +255,7 @@ fn spawn_scoreboard_menu_base(commands: &mut Commands) {
 
 pub fn despawn_scoreboard_menu(
     mut commands: Commands,
-    menu_query: Query<Entity, 
-    Or<(With<ScoreboardMenu>, With<ScoreboardMenuLoading>)>>,
+    menu_query: Query<Entity, Or<(With<ScoreboardMenu>, With<ScoreboardMenuLoading>)>>,
 ) {
     info!("Despawning scoreboard menu");
     if let Ok(menu_entity) = menu_query.single() {

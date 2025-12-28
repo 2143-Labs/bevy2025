@@ -337,13 +337,13 @@ fn send_connect_packet(
         "Connecting server={} name={name:?}",
         mse.0.addr(),
     )));
-    send_outgoing_event_now(&sr.handler, mse.0, &event);
+    send_outgoing_event_now(&sr, mse.0, &event);
     info!("Sent connection packet to {}", mse.0);
 }
 
 fn send_disconnect_packet(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoint>) {
     let event = EventToServer::IWantToDisconnect(IWantToDisconnect {});
-    send_outgoing_event_now(&sr.handler, mse.0, &event);
+    send_outgoing_event_now(&sr, mse.0, &event);
     info!("Sent disconnect packet to {}", mse.0);
 }
 
@@ -508,7 +508,7 @@ fn send_heartbeat(
     let event = EventToServer::Heartbeat(Heartbeat {
         client_started_time: time.elapsed_secs_f64(),
     });
-    send_outgoing_event_now(&sr.handler, mse.0, &event);
+    send_outgoing_event_now(&sr, mse.0, &event);
 }
 
 #[derive(Resource)]
@@ -539,7 +539,7 @@ fn receive_challenge(
             server_time: event.event.server_time,
             local_latency_ms: local.latency * 1000.0,
         });
-        send_outgoing_event_now(&sr.handler, mse.0, &event);
+        send_outgoing_event_now(&sr, mse.0, &event);
     }
 }
 
@@ -589,7 +589,7 @@ fn send_movement_camera(
             transform: *transform,
         }));
 
-        send_outgoing_event_now_batch(&sr.handler, mse.0, &events);
+        send_outgoing_event_now_batch(&sr, mse.0, &events);
     }
 }
 
@@ -609,7 +609,7 @@ fn send_movement_unit(
             transform: *transform,
         }));
 
-        send_outgoing_event_now_batch(&sr.handler, mse.0, &events);
+        send_outgoing_event_now_batch(&sr, mse.0, &events);
     }
 }
 

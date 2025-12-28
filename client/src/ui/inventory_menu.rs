@@ -11,19 +11,11 @@ pub struct InventoryMenuPlugin;
 
 impl Plugin for InventoryMenuPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .add_systems(
-                OnEnter(OverlayMenuState::Inventory),
-                spawn_inventory_menu,
-            )
-            .add_systems(
-                OnExit(OverlayMenuState::Inventory),
-                despawn_inventory_menu,
-            )
+        app.add_systems(OnEnter(OverlayMenuState::Inventory), spawn_inventory_menu)
+            .add_systems(OnExit(OverlayMenuState::Inventory), despawn_inventory_menu)
             .add_systems(
                 Update,
-                handle_inventory_menu_buttons
-                    .run_if(in_state(OverlayMenuState::Inventory)),
+                handle_inventory_menu_buttons.run_if(in_state(OverlayMenuState::Inventory)),
             );
     }
 }

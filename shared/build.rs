@@ -34,7 +34,7 @@ fn generate_code_for_event_queue(req: &GenerateRequest) -> String {
                 mut #all_types_lowercase: MessageWriter<EventFromEndpoint< #all_types >>
             ),*
         ) {
-            let mut new_events = sr.event_list_incoming.lock().unwrap();
+            let mut new_events = sr.event_list_incoming.write().unwrap();
             let new_events = std::mem::replace(new_events.as_mut(), vec![]);
             for (endpoint, event) in new_events {
                 trace!(?event, "Received event from endpoint {:?}", endpoint);

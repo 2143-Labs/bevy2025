@@ -447,7 +447,7 @@ fn send_ping_challenge(
         server_time: time.elapsed_secs_f64(),
     });
     for net_client in &clients {
-        send_outgoing_event_now(&sr.handler, net_client.0, &event);
+        send_outgoing_event_now(&sr, net_client.0, &event);
     }
 }
 
@@ -573,7 +573,7 @@ fn on_player_heartbeat(
                     server_time: time.elapsed_secs_f64(),
                     server_tick: tick.0,
                 });
-                send_outgoing_event_now(&sr.handler, hb.endpoint, &event);
+                send_outgoing_event_now(&sr, hb.endpoint, &event);
             }
         }
     }
@@ -585,7 +585,6 @@ fn on_player_scoreboard_request(
     heartbeat_mapping: Res<HeartbeatList>,
     sr: Res<ServerNetworkingResources>,
 ) {
-
     let mut scoreboard_data = shared::event::client::RequestScoreboardResponse {
         player_names: HashMap::new(),
         player_pings: HashMap::new(),
@@ -593,16 +592,15 @@ fn on_player_scoreboard_request(
     for (ply_id, ply_name) in &plys {
         if let Some(ping) = heartbeat_mapping.pings.get(ply_id) {
             let ping = ping.to_integer();
-            scoreboard_data.player_names.insert(*ply_id, ply_name.name.clone());
             scoreboard_data
-                .player_pings
-                .insert(*ply_id, ping);
-
+                .player_names
+                .insert(*ply_id, ply_name.name.clone());
+            scoreboard_data.player_pings.insert(*ply_id, ping);
         }
     }
     for req in pd.read() {
         let event = EventToClient::RequestScoreboardResponse(scoreboard_data.clone());
-        send_outgoing_event_now(&sr.handler, req.endpoint, &event);
+        send_outgoing_event_now(&sr, req.endpoint, &event);
     }
 }
 

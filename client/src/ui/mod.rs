@@ -7,13 +7,9 @@ pub mod scoreboard_menu;
 pub mod styles;
 pub mod text_input;
 
-use crate::{
-    camera::FreeCam,
-    game_state::{MenuState, OverlayMenuState},
-};
+use crate::game_state::{MenuState, OverlayMenuState};
 use bevy::prelude::*;
 
-use shared::character_controller::MovementAction;
 pub use text_input::FocusedInput;
 
 pub struct UIPlugin;

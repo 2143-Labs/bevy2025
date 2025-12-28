@@ -1,7 +1,7 @@
 //! A simple kinematic character controller implementation using Avian3D and Bevy.
 //! Copied from https://github.com/avianphysics/avian/blob/60ef5cf4/crates/avian2d/examples/kinematic_character_2d/plugin.rs#L39-L140
 use avian3d::{math::*, prelude::*};
-use bevy::{ecs::query::Has, prelude::*};
+use bevy::prelude::*;
 
 use crate::event::NetEntId;
 
@@ -9,8 +9,7 @@ pub struct CharacterControllerPlugin;
 
 impl Plugin for CharacterControllerPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .add_message::<SpawnDebugBall>()
+        app.add_message::<SpawnDebugBall>()
             .add_message::<UnitChangedMovement>()
             .add_systems(
                 Update,
@@ -23,10 +22,7 @@ impl Plugin for CharacterControllerPlugin {
                 )
                     .chain(),
             )
-            .add_systems(Update, (
-                debug_spawn_collision_ball,
-                remove_old_debug_balls,
-            ))
+            .add_systems(Update, (debug_spawn_collision_ball, remove_old_debug_balls))
             .add_systems(
                 // Run collision handling after collision detection.
                 //
@@ -130,7 +126,7 @@ impl MovementBundle {
             damping: MovementDampingFactor(damping),
             jump_impulse: JumpImpulse(jump_impulse),
             max_slope_angle: MaxSlopeAngle(max_slope_angle),
-            groundedness: Groundedness(false)
+            groundedness: Groundedness(false),
         }
     }
 }
@@ -180,7 +176,13 @@ impl CharacterControllerBundle {
 fn update_grounded(
     //mut commands: Commands,
     mut query: Query<
-        (&mut Groundedness, Entity, &ShapeHits, &Rotation, Option<&MaxSlopeAngle>),
+        (
+            &mut Groundedness,
+            Entity,
+            &ShapeHits,
+            &Rotation,
+            Option<&MaxSlopeAngle>,
+        ),
         With<CharacterController>,
     >,
 ) {
@@ -211,7 +213,7 @@ fn unit_change_movement(
             }
         }
     }
-} 
+}
 
 /// Responds to [`MovementAction`] events and moves character controllers accordingly.
 fn movement(
@@ -228,10 +230,15 @@ fn movement(
     // both the `f32` and `f64` features. Otherwise you don't need this.
     let delta_time = time.delta_secs_f64().adjust_precision();
 
-    for (movement_acceleration, action, jump_impulse, mut linear_velocity, Groundedness(is_grounded)) in
-        &mut controllers
+    for (
+        movement_acceleration,
+        action,
+        jump_impulse,
+        mut linear_velocity,
+        Groundedness(is_grounded),
+    ) in &mut controllers
     {
-        match action  {
+        match action {
             MovementAction::Move {
                 input_dir,
                 camera_yaw,
@@ -314,21 +321,18 @@ fn debug_spawn_collision_ball(
     time: Res<Time>,
 ) {
     for event in message_reader.read() {
-        commands
-            .spawn((
-                Transform::from_translation(event.position + Vector3::Y * 2.0),
-                MeshMaterial3d(materials.add(StandardMaterial {
-                    base_color: event.color,
-                    unlit: true,
-                    ..Default::default()
-                })),
-                Mesh3d(meshes.add(Mesh::from(Sphere {
-                    radius: 0.1,
-                }))),
-                DebugCollisionBall {
-                    time_spawned: time.elapsed_secs_f64(),
-                },
-            ));
+        commands.spawn((
+            Transform::from_translation(event.position + Vector3::Y * 2.0),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: event.color,
+                unlit: true,
+                ..Default::default()
+            })),
+            Mesh3d(meshes.add(Mesh::from(Sphere { radius: 0.1 }))),
+            DebugCollisionBall {
+                time_spawned: time.elapsed_secs_f64(),
+            },
+        ));
     }
 }
 

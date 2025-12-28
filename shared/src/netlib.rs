@@ -6,14 +6,126 @@ use message_io::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    collections::VecDeque,
+    sync::{atomic::AtomicUsize, Arc, RwLock},
 };
+
+pub struct NetworkingStats {
+    pub total_bytes_sent_this_second: AtomicUsize,
+    pub total_bytes_received_this_second: AtomicUsize,
+    pub total_bytes_received_ignored_this_second: AtomicUsize,
+    pub recent_bytes_sent: RwLock<VecDeque<usize>>,
+    pub recent_bytes_received: RwLock<VecDeque<usize>>,
+    pub recent_bytes_received_ignored: RwLock<VecDeque<usize>>,
+
+    pub packets_sent_this_second: AtomicUsize,
+    pub packets_received_this_second: AtomicUsize,
+    pub recent_packets_sent: RwLock<VecDeque<usize>>,
+    pub recent_packets_received: RwLock<VecDeque<usize>>,
+}
+
+impl Default for NetworkingStats {
+    fn default() -> Self {
+        Self {
+            total_bytes_sent_this_second: AtomicUsize::new(0),
+            total_bytes_received_this_second: AtomicUsize::new(0),
+            total_bytes_received_ignored_this_second: AtomicUsize::new(0),
+            recent_bytes_sent: RwLock::new(VecDeque::new()),
+            recent_bytes_received: RwLock::new(VecDeque::new()),
+            recent_bytes_received_ignored: RwLock::new(VecDeque::new()),
+            packets_sent_this_second: AtomicUsize::new(0),
+            packets_received_this_second: AtomicUsize::new(0),
+            recent_packets_sent: RwLock::new(VecDeque::new()),
+            recent_packets_received: RwLock::new(VecDeque::new()),
+        }
+    }
+}
+
+impl NetworkingStats {
+    pub fn flush_and_reset(&self) {
+        let total_bytes_sent_this_second =
+            self.total_bytes_sent_this_second.swap(0, std::sync::atomic::Ordering::Relaxed);
+        let total_bytes_received_this_second = self
+            .total_bytes_received_this_second
+            .swap(0, std::sync::atomic::Ordering::Relaxed);
+        let total_bytes_received_ignored_this_second = self
+            .total_bytes_received_ignored_this_second
+            .swap(0, std::sync::atomic::Ordering::Relaxed);
+
+        self.recent_bytes_sent
+            .write()
+            .unwrap()
+            .push_back(total_bytes_sent_this_second);
+
+        self.recent_bytes_received
+            .write()
+            .unwrap()
+            .push_back(total_bytes_received_this_second);
+
+        self.recent_bytes_received_ignored
+            .write()
+            .unwrap()
+            .push_back(total_bytes_received_ignored_this_second);
+
+        let packets_sent_this_second =
+            self.packets_sent_this_second
+                .swap(0, std::sync::atomic::Ordering::Relaxed);
+
+        let packets_received_this_second = self
+            .packets_received_this_second
+            .swap(0, std::sync::atomic::Ordering::Relaxed);
+        self.recent_packets_sent
+            .write()
+            .unwrap()
+            .push_back(packets_sent_this_second);
+        self.recent_packets_received
+            .write()
+            .unwrap()
+            .push_back(packets_received_this_second);
+
+        self.cap_queues(BASE_TICKS_PER_SECOND as usize * 60);
+    }
+
+    fn cap_queues(&self, max_len: usize) {
+        let mut recent_bytes_sent = self.recent_bytes_sent.write().unwrap();
+        while recent_bytes_sent.len() > max_len {
+            recent_bytes_sent.pop_front();
+        }
+        drop(recent_bytes_sent);
+
+        let mut recent_bytes_received = self.recent_bytes_received.write().unwrap();
+        while recent_bytes_received.len() > max_len {
+            recent_bytes_received.pop_front();
+        }
+        drop(recent_bytes_received);
+
+        let mut recent_bytes_received_ignored = self.recent_bytes_received_ignored.write().unwrap();
+        while recent_bytes_received_ignored.len() > max_len {
+            recent_bytes_received_ignored.pop_front();
+        }
+        drop(recent_bytes_received_ignored);
+
+        let mut recent_packets_sent = self.recent_packets_sent.write().unwrap();
+        while recent_packets_sent.len() > max_len {
+            recent_packets_sent.pop_front();
+        }
+        drop(recent_packets_sent);
+
+        let mut recent_packets_received = self.recent_packets_received.write().unwrap();
+        while recent_packets_received.len() > max_len {
+            recent_packets_received.pop_front();
+        }
+        drop(recent_packets_received);
+    }
+}
 
 #[derive(Resource, Clone)]
 pub struct NetworkingResources<TI, TO> {
-    pub event_list_incoming: Arc<Mutex<Vec<(Endpoint, TI)>>>,
-    pub event_list_outgoing: Arc<Mutex<Vec<(Endpoint, TO)>>>,
-    pub reliable_packet_ids_seen: Arc<Mutex<HashMap<PacketIdentifier, Tick>>>,
+    pub event_list_incoming: Arc<RwLock<Vec<(Endpoint, TI)>>>,
+    // TODO make this hashmap instead
+    pub event_list_outgoing: Arc<RwLock<Vec<(Endpoint, TO)>>>,
+    pub reliable_packet_ids_seen: Arc<RwLock<HashMap<PacketIdentifier, Tick>>>,
+    pub networking_stats: Arc<NetworkingStats>,
     pub handler: NodeHandler<()>,
 }
 
@@ -44,10 +156,10 @@ impl Tick {
 
 pub use crate::event::client::EventToClient;
 pub use crate::event::server::EventToServer;
-use crate::CurrentTick;
+use crate::{BASE_TICKS_PER_SECOND, CurrentTick};
 
 pub trait NetworkingEvent:
-    Clone + Serialize + for<'de> Deserialize<'de> + Send + 'static + core::fmt::Debug
+    Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static + core::fmt::Debug
 {
 }
 impl NetworkingEvent for EventToServer {}
@@ -70,35 +182,52 @@ pub enum EventGroupingRef<'a, T> {
     Reliable(PacketIdentifier, DuplicationIdentifier, Tick, &'a [T]),
 }
 
-pub fn send_outgoing_event_now<T: NetworkingEvent>(
-    handler: &NodeHandler<()>,
+pub fn send_outgoing_event_now<TI, TO: NetworkingEvent>(
+    resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
-    event: &T,
+    event: &TO,
 ) {
     trace!(?event, "Sending event");
-    handler.network().send(
-        endpoint,
-        &postcard::to_stdvec(&EventGroupingRef::Single(event)).unwrap(),
-    );
+    let event = postcard::to_stdvec(&EventGroupingRef::Single(event)).unwrap();
+    resources.handler.network().send(endpoint, &event);
+
+    resources
+        .networking_stats
+        .total_bytes_sent_this_second
+        .fetch_add(event.len(), std::sync::atomic::Ordering::Relaxed);
+    resources
+        .networking_stats
+        .packets_sent_this_second
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
-pub fn send_outgoing_event_now_batch<T: NetworkingEvent>(
-    handler: &NodeHandler<()>,
+pub fn send_outgoing_event_now_batch<TI, TO: NetworkingEvent>(
+    resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
-    event: &[T],
+    event: &[TO],
 ) {
     trace!(?event, "Sending batch event");
     let data = postcard::to_stdvec(&EventGroupingRef::Batch(event)).unwrap();
     if data.len() > 6000 {
         warn!(data_len = data.len(), "Sending large batch event");
     }
-    handler.network().send(endpoint, &data);
+    resources.handler.network().send(endpoint, &data);
+
+    resources
+        .networking_stats
+        .total_bytes_sent_this_second
+        .fetch_add(data.len(), std::sync::atomic::Ordering::Relaxed);
+
+    resources
+        .networking_stats
+        .packets_sent_this_second
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
-pub fn send_outgoing_event_reliable_internal<T: NetworkingEvent>(
-    handler: &NodeHandler<()>,
+pub fn send_outgoing_event_reliable_internal<TI, TO: NetworkingEvent>(
+    resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
-    event: &[T],
+    event: &[TO],
     tick: &Tick,
 ) {
     trace!(?event, "Sending doubled batch event");
@@ -109,14 +238,25 @@ pub fn send_outgoing_event_reliable_internal<T: NetworkingEvent>(
         packet_id, dedup_id, *tick, event,
     ))
     .unwrap();
-    handler.network().send(endpoint, &data);
+    let data_len = data.len() * 2;
+    resources.handler.network().send(endpoint, &data);
 
     let dedup_id: DuplicationIdentifier = rand::random();
     let data = postcard::to_stdvec(&EventGroupingRef::Reliable(
         packet_id, dedup_id, *tick, event,
     ))
     .unwrap();
-    handler.network().send(endpoint, &data);
+    resources.handler.network().send(endpoint, &data);
+
+    resources
+        .networking_stats
+        .total_bytes_sent_this_second
+        .fetch_add(data_len, std::sync::atomic::Ordering::Relaxed);
+
+    resources
+        .networking_stats
+        .packets_sent_this_second
+        .fetch_add(2, std::sync::atomic::Ordering::Relaxed);
 }
 
 pub fn send_outgoing_event_next_tick<TI, TO: NetworkingEvent>(
@@ -124,7 +264,7 @@ pub fn send_outgoing_event_next_tick<TI, TO: NetworkingEvent>(
     endpoint: Endpoint,
     event: &TO,
 ) {
-    let mut list = resources.event_list_outgoing.lock().unwrap();
+    let mut list = resources.event_list_outgoing.write().unwrap();
     list.push((endpoint, event.clone()));
 }
 
@@ -133,7 +273,7 @@ pub fn send_outgoing_event_next_tick_batch<TI, TO: NetworkingEvent>(
     endpoint: Endpoint,
     events: &[TO],
 ) {
-    let mut list = resources.event_list_outgoing.lock().unwrap();
+    let mut list = resources.event_list_outgoing.write().unwrap();
     for event in events {
         list.push((endpoint, event.clone()));
     }
@@ -143,10 +283,10 @@ pub fn flush_outgoing_events<TI: NetworkingEvent, TO: NetworkingEvent>(
     tick: Res<CurrentTick>,
     resources: Res<NetworkingResources<TI, TO>>,
 ) {
-    let mut list = resources.event_list_outgoing.lock().unwrap();
+    let mut list = resources.event_list_outgoing.write().unwrap();
     // swap it out for a new empty list
     let events_to_send = std::mem::take(&mut *list);
-    drop(list); // unlock mutex
+    drop(list); // unlock RwLock
     let mut events_per_endpoint: std::collections::HashMap<Endpoint, Vec<TO>> =
         std::collections::HashMap::new();
     //info!(num_events = events_to_send.len(), "Flushing outgoing events");
@@ -156,7 +296,7 @@ pub fn flush_outgoing_events<TI: NetworkingEvent, TO: NetworkingEvent>(
 
     for (endpoint, events) in events_per_endpoint {
         for chunk in events.chunks(50) {
-            send_outgoing_event_reliable_internal(&resources.handler, endpoint, chunk, &tick.0);
+            send_outgoing_event_reliable_internal(&resources, endpoint, chunk, &tick.0);
         }
     }
 }
@@ -190,6 +330,7 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
         event_list_incoming: Default::default(),
         event_list_outgoing: Default::default(),
         reliable_packet_ids_seen: Default::default(),
+        networking_stats: Arc::new(NetworkingStats::default()),
     };
 
     // insert the new endpoints and remove the connection data
@@ -211,9 +352,28 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
         info!(?addr, "Connected");
     }
 
+    let res2 = res.clone();
     std::thread::spawn(move || {
-        listener.for_each(|event| on_node_event_incoming(&res, event));
+        listener.for_each(|event| on_node_event_incoming(&res2, event));
     });
+
+    let res2 = res.clone();
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            res2.networking_stats.flush_and_reset();
+            info!("Net: Sent {}kb {}pack\nRecv {}kb {}pack ({}kb ignored)",
+                res2.networking_stats.recent_bytes_sent.read().unwrap().back().unwrap_or(&0) / 1024,
+                res2.networking_stats.recent_packets_sent.read().unwrap().back().unwrap_or(&0),
+                res2.networking_stats.recent_bytes_received.read().unwrap().back().unwrap_or(&0) / 1024,
+                res2.networking_stats.recent_packets_received.read().unwrap().back().unwrap_or(&0),
+                res2.networking_stats.recent_bytes_received_ignored.read().unwrap().back().unwrap_or(&0) / 1024,
+            );
+        }
+    });
+
+
+
 }
 
 pub fn on_node_event_incoming<TI: NetworkingEvent, TO>(
@@ -242,8 +402,15 @@ pub fn on_node_event_incoming<TI: NetworkingEvent, TO>(
                     return;
                 }
             };
+            let data_len = data.len();
+            res.networking_stats
+                .total_bytes_received_this_second
+                .fetch_add(data_len, std::sync::atomic::Ordering::Relaxed);
+            res.networking_stats
+                .packets_received_this_second
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-            let mut list = res.event_list_incoming.lock().unwrap();
+            let mut list = res.event_list_incoming.write().unwrap();
             match event {
                 EventGroupingOwned::Single(x) => {
                     let pair = (endpoint, x);
@@ -253,10 +420,13 @@ pub fn on_node_event_incoming<TI: NetworkingEvent, TO>(
                     list.extend(events.into_iter().map(|x| (endpoint, x)));
                 }
                 EventGroupingOwned::Reliable(packet_id, _dedup_id, tick, events) => {
-                    let mut seen_map = res.reliable_packet_ids_seen.lock().unwrap();
+                    let mut seen_map = res.reliable_packet_ids_seen.write().unwrap();
 
-                    // we would ignore this pakcet if we have seen it before
-                    if seen_map.get(&packet_id).is_none() {
+                    if seen_map.get(&packet_id).is_some() {
+                        res.networking_stats
+                            .total_bytes_received_ignored_this_second
+                            .fetch_add(data_len, std::sync::atomic::Ordering::Relaxed);
+                    } else {
                         seen_map.insert(packet_id, tick); // TODO store tick properly
                         list.extend(events.into_iter().map(|x| (endpoint, x)));
                     }

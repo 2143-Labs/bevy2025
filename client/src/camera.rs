@@ -1,5 +1,9 @@
 use bevy::prelude::*;
-use shared::{Config, GameAction, character_controller::{MovementAction, UnitChangedMovement}, event::NetEntId};
+use shared::{
+    Config, GameAction,
+    character_controller::{MovementAction, UnitChangedMovement},
+    event::NetEntId,
+};
 
 use crate::{
     game_state::{GameState, InputControlState, OverlayMenuState},
@@ -30,7 +34,11 @@ impl Plugin for CameraPlugin {
                 (
                     handle_pause_and_inventory_input,
                     freecam_controller.run_if(in_state(InputControlState::Freecam)),
-                    (tps_camera_controller, update_freecam_transform_from_settings_tps, keyboard_input_tps)
+                    (
+                        tps_camera_controller,
+                        update_freecam_transform_from_settings_tps,
+                        keyboard_input_tps,
+                    )
                         .run_if(in_state(InputControlState::ThirdPerson)),
                     //manage_physics_pause,
                 )
