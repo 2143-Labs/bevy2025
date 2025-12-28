@@ -36,21 +36,20 @@ impl Plugin for CharacterControllerPlugin {
 
 /// A [`Message`] written for a movement input action.
 #[derive(Component, Clone, Debug)]
-pub enum MovementAction {
-    Move {
-        input_dir: Vector2,
-        camera_yaw: Scalar,
-        speed_modifier: Scalar,
-    },
-    Jump,
+pub struct MovementAction {
+    pub move_input_dir: Vector2,
+    pub camera_yaw: Scalar,
+    pub move_speed_modifier: Scalar,
+    pub is_jumping: bool
 }
 
 impl Default for MovementAction {
     fn default() -> Self {
-        MovementAction::Move {
-            input_dir: Vector2::ZERO,
+        Self {
+            move_input_dir: Vector2::ZERO,
             camera_yaw: 0.0,
-            speed_modifier: 1.0,
+            move_speed_modifier: 1.0,
+            is_jumping: false,
         }
     }
 }
@@ -68,6 +67,19 @@ pub struct CharacterController;
 /// A marker component indicating that an entity is on the ground.
 #[derive(Component)]
 pub struct Groundedness(bool);
+
+/// The normal vector of the ground surface the character is standing on.
+/// This is used to project movement onto slopes.
+#[derive(Component)]
+pub struct GroundNormal(Vector);
+
+/// Tracks when the player last attempted to jump, allowing for a small buffer
+/// window to make jumping more forgiving when grounded status flickers.
+#[derive(Component)]
+pub struct JumpBuffer {
+    last_jump_attempt_time: f64,
+    buffer_duration: f64,
+}
 
 /// The acceleration used for character movement.
 #[derive(Component)]
@@ -112,6 +124,8 @@ pub struct MovementBundle {
     jump_impulse: JumpImpulse,
     max_slope_angle: MaxSlopeAngle,
     groundedness: Groundedness,
+    ground_normal: GroundNormal,
+    jump_buffer: JumpBuffer,
 }
 
 impl MovementBundle {
@@ -127,6 +141,11 @@ impl MovementBundle {
             jump_impulse: JumpImpulse(jump_impulse),
             max_slope_angle: MaxSlopeAngle(max_slope_angle),
             groundedness: Groundedness(false),
+            ground_normal: GroundNormal(Vector::Y),
+            jump_buffer: JumpBuffer {
+                last_jump_attempt_time: f64::NEG_INFINITY,
+                buffer_duration: 0.15, // 150ms buffer window
+            },
         }
     }
 }
@@ -141,7 +160,7 @@ impl CharacterControllerBundle {
     pub fn new(collider: Collider, gravity: Vector) -> Self {
         // Create shape caster as a slightly smaller version of collider
         let mut caster_shape = collider.clone();
-        caster_shape.set_scale(Vector::ONE * 1.02, 10);
+        caster_shape.set_scale(Vector::ONE * 1.05, 10);
 
         Self {
             character_controller: CharacterController,
@@ -151,7 +170,7 @@ impl CharacterControllerBundle {
                 caster_shape,
                 Vector::ZERO,
                 Quat::from_rotation_y(0.0),
-                Dir3::Y,
+                -Dir3::Y, // Cast downward to detect ground
             )
             .with_max_distance(4.0),
             gravity: ControllerGravity(gravity),
@@ -178,6 +197,7 @@ fn update_grounded(
     mut query: Query<
         (
             &mut Groundedness,
+            &mut GroundNormal,
             Entity,
             &ShapeHits,
             &Rotation,
@@ -186,18 +206,40 @@ fn update_grounded(
         With<CharacterController>,
     >,
 ) {
-    for (mut groundedness, _entity, hits, rotation, max_slope_angle) in &mut query {
+    for (mut groundedness, mut ground_normal, _entity, hits, rotation, max_slope_angle) in &mut query {
         // The character is grounded if the shape caster has a hit with a normal
-        // that isn't too steep.
-        let is_grounded = hits.iter().any(|hit| {
-            if let Some(angle) = max_slope_angle {
-                (rotation * -hit.normal2).angle_between(Vector::Y).abs() <= angle.0
+        // that isn't too steep and is within a reasonable distance.
+        let mut found_ground = false;
+        let mut best_normal = Vector::Y;
+        let mut closest_distance = Scalar::MAX;
+        
+        // Maximum distance to consider as "grounded" - should be slightly more than
+        // the character's radius to account for small gaps
+        const GROUND_DETECTION_THRESHOLD: Scalar = 0.15;
+        
+        for hit in hits.iter() {
+            // Check if the hit is close enough to count as ground
+            if hit.distance > GROUND_DETECTION_THRESHOLD {
+                continue;
+            }
+            
+            let world_normal = rotation * -hit.normal2;
+            let is_climbable = if let Some(angle) = max_slope_angle {
+                world_normal.angle_between(Vector::Y).abs() <= angle.0
             } else {
                 true
+            };
+            
+            // Find the closest valid ground hit
+            if is_climbable && hit.distance < closest_distance {
+                found_ground = true;
+                best_normal = world_normal;
+                closest_distance = hit.distance;
             }
-        });
+        }
 
-        groundedness.0 = is_grounded;
+        groundedness.0 = found_ground;
+        ground_normal.0 = best_normal;
     }
 }
 
@@ -224,11 +266,14 @@ fn movement(
         &JumpImpulse,
         &mut LinearVelocity,
         &Groundedness,
+        &GroundNormal,
+        &mut JumpBuffer,
     )>,
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
     let delta_time = time.delta_secs_f64().adjust_precision();
+    let current_time = time.elapsed_secs_f64();
 
     for (
         movement_acceleration,
@@ -236,37 +281,58 @@ fn movement(
         jump_impulse,
         mut linear_velocity,
         Groundedness(is_grounded),
+        GroundNormal(ground_normal),
+        mut jump_buffer,
     ) in &mut controllers
     {
-        match action {
-            MovementAction::Move {
-                input_dir,
-                camera_yaw,
-                speed_modifier,
-            } => {
-                // Convert input direction to 3D movement direction
-                let input_dir_3d = Vector3::new(-input_dir.x, 0.0, input_dir.y);
+        let input_dir = action.move_input_dir;
+        let camera_yaw = action.camera_yaw;
+        let speed_modifier = action.move_speed_modifier;
 
-                // Rotate input direction based on camera yaw
-                let rotation = Quat::from_rotation_y(*camera_yaw as Scalar);
-                let movement_dir = rotation * input_dir_3d;
+        // Convert input direction to 3D movement direction
+        let input_dir_3d = Vector3::new(-input_dir.x, 0.0, input_dir.y);
 
-                // Apply acceleration to linear velocity
-                let acceleration = movement_dir.normalize_or_zero()
-                    * movement_acceleration.0
-                    * speed_modifier
-                    * delta_time;
+        // Rotate input direction based on camera yaw
+        let rotation = Quat::from_rotation_y(camera_yaw as Scalar);
+        let movement_dir = rotation * input_dir_3d;
 
-                if *is_grounded {
-                    linear_velocity.0 += acceleration;
-                } else {
-                    linear_velocity.0 += acceleration * 0.25;
-                }
-            }
-            MovementAction::Jump => {
-                if *is_grounded {
-                    linear_velocity.y = jump_impulse.0;
-                }
+        // When grounded, project the movement direction onto the slope surface
+        // so that movement follows the slope naturally.
+        let final_movement_dir = if *is_grounded {
+            // Project the horizontal movement direction onto the slope plane.
+            // This allows smooth movement up and down slopes.
+            movement_dir.reject_from_normalized(*ground_normal).normalize_or_zero()
+        } else {
+            movement_dir.normalize_or_zero()
+        };
+
+        // Apply acceleration to linear velocity
+        let acceleration = final_movement_dir
+            * movement_acceleration.0
+            * speed_modifier
+            * delta_time;
+
+        if *is_grounded {
+            linear_velocity.0 += acceleration;
+        } else {
+            linear_velocity.0 += acceleration * 0.25;
+        }
+
+        // Check if we can execute a buffered jump
+        let time_since_jump_attempt = current_time - jump_buffer.last_jump_attempt_time;
+        if time_since_jump_attempt <= jump_buffer.buffer_duration && *is_grounded {
+            linear_velocity.y = jump_impulse.0;
+            jump_buffer.last_jump_attempt_time = f64::NEG_INFINITY; // Consume the buffered jump
+        }
+
+        if action.is_jumping {
+            // Record the jump attempt time for buffer window
+            jump_buffer.last_jump_attempt_time = current_time;
+
+            // Try to jump immediately if grounded, otherwise rely on buffer
+            if *is_grounded {
+                linear_velocity.y = jump_impulse.0;
+                jump_buffer.last_jump_attempt_time = f64::NEG_INFINITY; // Consume immediately
             }
         }
     }
@@ -442,33 +508,19 @@ fn kinematic_controller_collisions(
             );
 
             if deepest_penetration > 0.0 {
-                // If the slope is climbable, snap the velocity so that the character
-                // up and down the surface smoothly.
+                // If the slope is climbable, project the velocity onto the slope surface
+                // so the character can smoothly walk up and down slopes.
                 if climbable {
-                    // Points either left or right depending on which side the normal is leaning on.
-                    // (This could be simplified for 2D, but this approach is dimension-agnostic)
-                    let normal_direction_xz =
-                        normal.reject_from_normalized(Vector::Y).normalize_or_zero();
-
-                    // The movement speed along the direction above.
-                    let linear_velocity_xz = linear_velocity.dot(normal_direction_xz);
-
-                    // Snap the Y speed based on the speed at which the character is moving
-                    // up or down the slope, and how steep the slope is.
-                    //
-                    // A 2D visualization of the slope, the contact normal, and the velocity components:
-                    //
-                    //             ╱
-                    //     normal ╱
-                    // *         ╱
-                    // │   *    ╱   velocity_x
-                    // │       * - - - - - -
-                    // │           *       | velocity_y
-                    // │               *   |
-                    // *───────────────────*
-
-                    let max_y_speed = -linear_velocity_xz * slope_angle.tan();
-                    linear_velocity.y = linear_velocity.y.max(max_y_speed);
+                    // Project the velocity onto the slope plane (perpendicular to the normal).
+                    // This ensures the character moves along the slope surface rather than
+                    // trying to move through it or float above it.
+                    // The reject_from_normalized function removes the component along the normal,
+                    // leaving only the component along the slope surface.
+                    let velocity_on_slope = linear_velocity.reject_from_normalized(normal);
+                    
+                    // Replace the velocity with the projected velocity to follow the slope.
+                    // This automatically handles both walking up and down slopes correctly.
+                    linear_velocity.0 = velocity_on_slope;
                     debug_ball_writer.write(SpawnDebugBall {
                         position: position.0,
                         //green
@@ -529,8 +581,10 @@ fn kinematic_controller_collisions(
 
                 // Apply the impulse differently depending on the slope angle.
                 if climbable {
-                    // Avoid sliding down slopes.
-                    linear_velocity.y -= impulse.y.min(0.0);
+                    // Project the velocity onto the slope to prevent penetration
+                    // while allowing movement along the slope.
+                    let velocity_on_slope = linear_velocity.reject_from_normalized(normal);
+                    linear_velocity.0 = velocity_on_slope;
                     debug_ball_writer.write(SpawnDebugBall {
                         position: position.0,
                         //blue
@@ -538,7 +592,7 @@ fn kinematic_controller_collisions(
                     });
                     // spawn a second ball in the impulse direction
                     debug_ball_writer.write(SpawnDebugBall {
-                        position: position.0 + impulse.normalize_or_zero() * 0.1,
+                        position: position.0 + velocity_on_slope.normalize_or_zero() * 0.1,
                         color: Color::hsv(245.0, 1.0, 1.0),
                     });
                 } else {

@@ -303,19 +303,18 @@ fn keyboard_input_tps(
     let Ok(fc) = freecam.single() else {
         return;
     };
+
+    let jumping = config.pressed(&keyboard, &mouse, GameAction::Jump);
+
+    let movement_action = MovementAction {
+        move_input_dir: direction,
+        camera_yaw: fc.yaw,
+        move_speed_modifier: 1.0,
+        is_jumping: jumping,
+    };
+
     movement_writer.write(UnitChangedMovement {
         net_ent_id: *unit_net_id,
-        movement_action: MovementAction::Move {
-            input_dir: direction,
-            camera_yaw: fc.yaw,
-            speed_modifier: 1.0,
-        },
+        movement_action,
     });
-
-    if config.just_pressed(&keyboard, &mouse, GameAction::Jump) {
-        movement_writer.write(UnitChangedMovement {
-            net_ent_id: *unit_net_id,
-            movement_action: MovementAction::Jump,
-        });
-    }
 }
