@@ -18,6 +18,8 @@ impl Plugin for SpawnPlugin {
                 //.run_if(on_timer(Duration::from_millis(10)))
                 .run_if(in_state(ServerState::Running)),
         );
+
+        app.add_message::<UnitDie>();
         //.add_systems(
         //Update,
         //(send_networked_Spawn_move)
@@ -148,7 +150,7 @@ struct UnitDie {
 fn on_unit_die(
     mut unit_deaths: MessageReader<UnitDie>,
     mut commands: Commands,
-    mut units: Query<(&NetEntId, Entity)>,
+    units: Query<(&NetEntId, Entity)>,
     sr: Res<ServerNetworkingResources>,
     tick: Res<CurrentTick>,
     clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
@@ -165,7 +167,19 @@ fn on_unit_die(
             }
         }
 
-
+        // Notify all clients about the unit death
+        let event = EventToClient::UpdateUnit2(shared::event::client::UpdateUnit2 {
+            net_ent_id: death.unit_id,
+            changed_components: vec![],
+            removed_components: vec![],
+            new_component: vec![Dead {
+                reason: "Died".to_string(),
+                died_on_tick: tick.0,
+            }.to_net_component()],
+        });
+        for endpoint in &clients {
+            send_outgoing_event_next_tick(&sr, endpoint.0, &event);
+        }
     }
 }
 
