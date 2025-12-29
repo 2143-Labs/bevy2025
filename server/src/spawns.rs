@@ -1,16 +1,10 @@
 use bevy::prelude::*;
 use shared::{
-    event::{
-        client::BeginThirdpersonControllingUnit,
-        server::{SpawnCircle, SpawnMan},
-        NetEntId, UDPacketEvent,
-    },
-    net_components::{
-        make_man,
-        ours::{ControlledBy, DespawnOnPlayerDisconnect, HasInventory},
-        ToNetComponent,
-    },
-    netlib::{send_outgoing_event_next_tick, EventToClient, ServerNetworkingResources},
+    CurrentTick, event::{
+        NetEntId, UDPacketEvent, client::BeginThirdpersonControllingUnit, server::{SpawnCircle, SpawnMan}
+    }, net_components::{
+        ToNetComponent, make_man, ours::{ControlledBy, Dead, DespawnOnPlayerDisconnect, HasInventory}
+    }, netlib::{EventToClient, ServerNetworkingResources, send_outgoing_event_next_tick}
 };
 
 use crate::{make_ball, ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint, ServerState};
@@ -20,7 +14,7 @@ impl Plugin for SpawnPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (on_circle_spawn, on_man_spawn)
+            (on_circle_spawn, on_man_spawn, on_unit_die)
                 //.run_if(on_timer(Duration::from_millis(10)))
                 .run_if(in_state(ServerState::Running)),
         );
@@ -143,6 +137,35 @@ fn on_man_spawn(
             spawn_ev.endpoint,
             &EventToClient::NewInventory(shared::event::client::NewInventory { inventory }),
         );
+    }
+}
+
+#[derive(Message)]
+struct UnitDie {
+    unit_id: NetEntId,
+}
+
+fn on_unit_die(
+    mut unit_deaths: MessageReader<UnitDie>,
+    mut commands: Commands,
+    mut units: Query<(&NetEntId, Entity)>,
+    sr: Res<ServerNetworkingResources>,
+    tick: Res<CurrentTick>,
+    clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
+) {
+    for death in unit_deaths.read() {
+        info!("Unit died: {:?}", death.unit_id);
+        // Despawn the unit
+        for (net_id, ent) in &units {
+            if *net_id == death.unit_id {
+                commands.entity(ent).insert(Dead {
+                    reason: "Died".to_string(),
+                    died_on_tick: tick.0,
+                });
+            }
+        }
+
+
     }
 }
 

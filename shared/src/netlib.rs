@@ -149,7 +149,7 @@ pub struct NetworkConnectionTarget {
     pub port: u16,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Tick(pub u64);
 
 impl Tick {

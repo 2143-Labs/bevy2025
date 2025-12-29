@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{event::PlayerId, items::InventoryId, net_components::ToNetComponent};
+use crate::{event::PlayerId, items::InventoryId, net_components::ToNetComponent, netlib::Tick};
 
 //include!(concat!(env!("OUT_DIR"), "/net_components_ours.rs"));
 #[derive(Serialize, Deserialize, Component, Debug, Eq, PartialEq, Clone)]
@@ -35,6 +35,12 @@ pub struct HasInventory {
     pub inventory_id: InventoryId,
 }
 
+#[derive(Serialize, Deserialize, Component, Debug, PartialEq, Clone)]
+pub struct Dead {
+    pub reason: String,
+    pub died_on_tick: Tick,
+}
+
 ///// This struct represents all the possible things a unit might be trying to do this tick.
 //#[derive(Serialize, Deserialize, Component, Debug, PartialEq, Clone)]
 //pub enum ControlIntent {
@@ -50,6 +56,7 @@ pub enum NetComponentOurs {
     DespawnOnPlayerDisconnect(DespawnOnPlayerDisconnect),
     PlayerColor(PlayerColor),
     HasInventory(HasInventory),
+    Dead(Dead),
 }
 
 impl NetComponentOurs {
@@ -71,6 +78,9 @@ impl NetComponentOurs {
                 entity.insert(c);
             }
             NetComponentOurs::HasInventory(c) => {
+                entity.insert(c);
+            }
+            NetComponentOurs::Dead(c) => {
                 entity.insert(c);
             }
         }
@@ -110,6 +120,12 @@ impl ToNetComponent for DespawnOnPlayerDisconnect {
 impl ToNetComponent for HasInventory {
     fn to_net_component(self) -> super::NetComponent {
         super::NetComponent::Ours(NetComponentOurs::HasInventory(self))
+    }
+}
+
+impl ToNetComponent for Dead {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::Dead(self))
     }
 }
 
