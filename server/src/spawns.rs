@@ -1,16 +1,12 @@
 use bevy::prelude::*;
 use shared::{
     event::{
-        client::BeginThirdpersonControllingUnit,
-        server::{SpawnCircle, SpawnMan},
-        NetEntId, UDPacketEvent,
+        NetEntId, PlayerId, UDPacketEvent, client::{BeginThirdpersonControllingUnit, SpawnUnit2}, server::{SpawnCircle, SpawnMan}
     },
     net_components::{
-        make_man,
-        ours::{ControlledBy, DespawnOnPlayerDisconnect, HasInventory},
-        ToNetComponent,
+        ToNetComponent, ents::ItemDrop, make_man, make_small_loot, ours::{ControlledBy, DespawnOnPlayerDisconnect, HasInventory}
     },
-    netlib::{send_outgoing_event_next_tick, EventToClient, ServerNetworkingResources},
+    netlib::{EventToClient, ServerNetworkingResources, send_outgoing_event_next_tick},
 };
 
 use crate::{make_ball, ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint, ServerState};
@@ -33,12 +29,19 @@ impl Plugin for SpawnPlugin {
     }
 }
 
+#[derive(Default)]
+struct CircleSpawnCooldown {
+    player_to_last_spawn: std::collections::HashMap<PlayerId, f64>,
+}
+
 fn on_circle_spawn(
     mut spawns: UDPacketEvent<SpawnCircle>,
     mut commands: Commands,
     endpoint_to_player_id: Res<EndpointToPlayerId>,
     sr: Res<ServerNetworkingResources>,
     clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
+    time: Res<Time>,
+    mut circle_spawn_cooldown: Local<CircleSpawnCooldown>,
 ) {
     for spawn_ev in spawns.read() {
         info!(?spawn_ev.event, "Spawning circle from event");
@@ -52,16 +55,54 @@ fn on_circle_spawn(
             continue;
         };
 
+        let now = time.elapsed_secs_f64();
+        if let Some(last_spawn_time) = circle_spawn_cooldown
+            .player_to_last_spawn
+            .get(&player_id_of_spawner)
+        {
+            let time_since_last_spawn = now - *last_spawn_time;
+            if time_since_last_spawn < 1.0 {
+                info!(
+                    "Player {:?} tried to spawn circle too quickly ({}s since last spawn)",
+                    player_id_of_spawner, time_since_last_spawn
+                );
+                continue;
+            }
+        }
+        circle_spawn_cooldown
+            .player_to_last_spawn
+            .insert(*player_id_of_spawner, now);
+
         debug!("Spawning circle at position: {:?}", spawn.position);
         let transform = Transform::from_translation(spawn.position);
         let ent_id = NetEntId::random();
 
-        let unit = make_ball(
-            ent_id,
-            transform,
-            spawn.color,
-            ControlledBy::single(*player_id_of_spawner),
-        );
+        let mut unit;
+
+        if rand::random_bool(0.5) {
+            info!("Spawning a surprise goblin instead of a ball!");
+            unit = make_small_loot(ent_id, transform);
+            let inventory = shared::items::goblin_drops();
+            unit.components.push(
+                HasInventory {
+                    inventory_id: inventory.id,
+                }
+                .to_net_component()
+            );
+
+            send_outgoing_event_next_tick(
+                &sr,
+                spawn_ev.endpoint,
+                &EventToClient::NewInventory(shared::event::client::NewInventory { inventory }),
+            );
+        } else {
+            unit = make_ball(
+                ent_id,
+                transform,
+                spawn.color,
+                ControlledBy::single(*player_id_of_spawner),
+            );
+        }
         let unit_ent = unit.clone().spawn_entity(&mut commands);
         commands.entity(unit_ent).insert(DespawnOnPlayerDisconnect {
             player_id: *player_id_of_spawner,
@@ -145,6 +186,7 @@ fn on_man_spawn(
         );
     }
 }
+
 
 //fn send_networked_Spawn_move(
 //Spawns: Query<

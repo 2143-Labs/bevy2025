@@ -205,7 +205,7 @@ pub struct DisconnectedPlayer {
 #[allow(clippy::too_many_arguments)]
 fn on_player_connect(
     mut new_players: UDPacketEvent<shared::event::server::ConnectRequest>,
-    mut world: &World,
+    world: &World,
     //mut heartbeat_mapping: ResMut<HeartbeatList>,
     //mut endpoint_to_player_id: ResMut<EndpointToPlayerId>,
 
@@ -311,7 +311,7 @@ fn on_player_connect(
 
         let mut large_unit_list_to_send: Vec<SpawnUnit2> = vec![];
 
-        let mut units_to_spawn = world.try_query_filtered::<(Entity, &NetEntId), Without<ConnectedPlayer>>();
+        let units_to_spawn = world.try_query_filtered::<(Entity, &NetEntId), Without<ConnectedPlayer>>();
 
         if let Some(mut units_spawns_thing) = units_to_spawn {
             for (unit_ent, unit_net_ent_id) in units_spawns_thing.iter(world) {
@@ -490,7 +490,7 @@ fn on_player_disconnect(
 
     mut despawn_unit: MessageWriter<DespawnUnit2>,
     mut commands: Commands,
-    mut heartbeat_mapping: ResMut<HeartbeatList>,
+    heartbeat_mapping: Res<HeartbeatList>,
     tick: Res<CurrentTick>,
     sr: Res<ServerNetworkingResources>,
 ) {

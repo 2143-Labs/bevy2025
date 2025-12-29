@@ -1,7 +1,7 @@
 use bevy::{prelude::*, render::render_phase::NonMeshEntities};
 use serde::{Deserialize, Serialize};
 
-use crate::net_components::ToNetComponent;
+use crate::{event::NetEntId, items::InventoryId, net_components::ToNetComponent};
 
 /// Simple Network physics entity
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
@@ -24,6 +24,12 @@ pub struct CanAssumeControl;
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct SendNetworkTranformUpdates;
 
+/// Controllable player entity
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct ItemDrop {
+    pub source: Option<NetEntId>,
+}
+
 //include!(concat!(env!("OUT_DIR"), "/net_components_ents.rs"));
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -33,6 +39,7 @@ pub enum NetComponentEnts {
     SendNetworkTranformUpdates(SendNetworkTranformUpdates),
     PlayerCamera(PlayerCamera),
     Man(Man),
+    ItemDrop(ItemDrop),
 }
 
 impl NetComponentEnts {
@@ -51,6 +58,9 @@ impl NetComponentEnts {
                 entity.insert(c);
             }
             NetComponentEnts::Man(c) => {
+                entity.insert(c);
+            }
+            NetComponentEnts::ItemDrop(c) => {
                 entity.insert(c);
             }
         }
@@ -79,6 +89,10 @@ impl NetComponentEnts {
         } else if type_id == std::any::TypeId::of::<SendNetworkTranformUpdates>() {
             Some(NetComponentEnts::SendNetworkTranformUpdates(
                 unsafe { ptr.deref::<SendNetworkTranformUpdates>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<ItemDrop>() {
+            Some(NetComponentEnts::ItemDrop(
+                unsafe { ptr.deref::<ItemDrop>() }.clone(),
             ))
         } else {
             None
@@ -113,5 +127,11 @@ impl ToNetComponent for Man {
 impl ToNetComponent for SendNetworkTranformUpdates {
     fn to_net_component(self) -> super::NetComponent {
         super::NetComponent::Ents(NetComponentEnts::SendNetworkTranformUpdates(self))
+    }
+}
+
+impl ToNetComponent for ItemDrop {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ents(NetComponentEnts::ItemDrop(self))
     }
 }

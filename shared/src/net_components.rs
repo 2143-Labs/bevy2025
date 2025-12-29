@@ -147,6 +147,16 @@ pub fn make_ball(
     }
 }
 
+pub fn make_small_loot(net_ent_id: NetEntId, transform: Transform) -> SpawnUnit2 {
+    SpawnUnit2 {
+        net_ent_id,
+        components: vec![
+            ents::ItemDrop { source: None }.to_net_component(),
+            transform.to_net_component(),
+        ],
+    }
+}
+
 pub fn make_man(net_ent_id: NetEntId, transform: Transform, owner: ControlledBy) -> SpawnUnit2 {
     use crate::character_controller::CharacterControllerBundle;
     use avian3d::prelude::Collider;
@@ -167,6 +177,7 @@ pub fn make_man(net_ent_id: NetEntId, transform: Transform, owner: ControlledBy)
         ],
     }
 }
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerConnectionInfo {
