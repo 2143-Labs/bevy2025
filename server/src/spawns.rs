@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use shared::{
     event::{
-        client::BeginThirdpersonControllingUnit,
+        client::{BeginThirdpersonControllingUnit, SpawnUnit2},
         server::{SpawnCircle, SpawnMan},
         NetEntId, PlayerId, UDPacketEvent,
     },
@@ -129,6 +129,11 @@ fn on_man_spawn(
     mut spawns: UDPacketEvent<SpawnMan>,
     mut commands: Commands,
     endpoint_to_player_id: Res<EndpointToPlayerId>,
+    this_players_existing_units: Query<
+        (&NetEntId, &ControlledBy, Entity),
+        (With<shared::net_components::ents::Man>, Without<Dead>),
+    >,
+    mut unit_kill: MessageWriter<UnitDie>,
     sr: Res<ServerNetworkingResources>,
     clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
 ) {
@@ -191,6 +196,17 @@ fn on_man_spawn(
             spawn_ev.endpoint,
             &EventToClient::NewInventory(shared::event::client::NewInventory { inventory }),
         );
+
+        // kill the existing units that this player controls
+        for (net_id, controlled_by, _ent) in this_players_existing_units.iter() {
+            if controlled_by.players.contains(&*player_id_of_spawner) {
+                info!(
+                    "Killing existing unit {:?} controlled by player {:?}",
+                    net_id, player_id_of_spawner
+                );
+                unit_kill.write(UnitDie { unit_id: *net_id });
+            }
+        }
     }
 }
 
@@ -202,7 +218,7 @@ struct UnitDie {
 fn on_unit_die(
     mut unit_deaths: MessageReader<UnitDie>,
     mut commands: Commands,
-    units: Query<(&NetEntId, Entity)>,
+    units: Query<(&NetEntId, Option<&HasInventory>, &Transform, Entity)>,
     sr: Res<ServerNetworkingResources>,
     tick: Res<CurrentTick>,
     clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
@@ -210,12 +226,31 @@ fn on_unit_die(
     for death in unit_deaths.read() {
         info!("Unit died: {:?}", death.unit_id);
         // Despawn the unit
-        for (net_id, ent) in &units {
+        for (net_id, has_inv, loc, ent) in units.iter() {
             if *net_id == death.unit_id {
                 commands.entity(ent).insert(Dead {
                     reason: "Died".to_string(),
                     died_on_tick: tick.0,
                 });
+                if let Some(inv) = has_inv {
+                    let position = loc.translation;
+                    let loot = SpawnUnit2 {
+                        net_ent_id: NetEntId::random(),
+                        components: vec![
+                            shared::net_components::ents::ItemDrop { source: None }
+                                .to_net_component(),
+                            Transform::from_translation(position).to_net_component(),
+                            HasInventory {
+                                inventory_id: inv.inventory_id,
+                            }
+                            .to_net_component(),
+                        ],
+                    };
+                    let event = EventToClient::SpawnUnit2(loot);
+                    for endpoint in &clients {
+                        send_outgoing_event_next_tick(&sr, endpoint.0, &event);
+                    }
+                }
             }
         }
 
