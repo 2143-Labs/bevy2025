@@ -84,7 +84,12 @@ pub fn spawn_inventory_menu(
                 let base_item = format!("{:?}", item.item.data.item_base);
                 let item_text = format!("{base_item} x{item_stacksize}");
                 let (node, bg_color, border_color) = menu_button_bundle();
-                let (text, font, color) = menu_button_text(&item_text);
+                let (text, font, mut color) = menu_button_text(&item_text);
+                // check if the item is equipped-
+                if item.item.data.item_misc.iter().any(|misc| matches!(misc, shared::items::ItemMiscModifiers::Equipped(_))) {
+                    // gold
+                    color.0 = Color::linear_rgb(1.0, 0.84, 0.0);
+                }
                 parent
                     .spawn((node, bg_color, border_color, Interaction::default()))
                     .with_children(|button| {

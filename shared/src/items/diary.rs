@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::stats::HasMods;
+use crate::{skills::Skill, stats::HasMods};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum DiaryBook {
@@ -16,9 +16,6 @@ pub enum DiaryBook {
 }
 
 impl HasMods for DiaryBook {
-    fn get_mods(&self) -> Vec<crate::stats::Mod> {
-        return vec![];
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -33,8 +30,24 @@ pub enum DiaryPage {
 }
 
 impl HasMods for DiaryPage {
-    fn get_mods(&self) -> Vec<crate::stats::Mod> {
-        return vec![];
+    fn grants_skills(&self) -> Vec<Skill> {
+        match self {
+            DiaryPage::Ranger => vec![
+                Skill::BasicBowAttack,
+                Skill::RainOfArrows,
+                Skill::HomingArrows,
+            ],
+            DiaryPage::Melee => vec![],
+            DiaryPage::Spellcasting => vec![
+                Skill::Spark,
+            ],
+            DiaryPage::Scavenger => vec![],
+            DiaryPage::MartialTraining => vec![],
+            DiaryPage::Healing => vec![
+                Skill::Heal,
+                Skill::Revive,
+            ],
+        }
     }
 }
 
@@ -44,7 +57,4 @@ pub enum EnemyDiaryPage {
 }
 
 impl HasMods for EnemyDiaryPage {
-    fn get_mods(&self) -> Vec<crate::stats::Mod> {
-        return vec![];
-    }
 }

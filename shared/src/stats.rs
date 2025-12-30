@@ -1,4 +1,4 @@
-use crate::decimal::Decimal;
+use crate::{decimal::Decimal, skills::Skill};
 use serde::{Deserialize, Serialize};
 
 pub struct PlayerFinalStats {
@@ -42,7 +42,12 @@ pub enum ResistanceModifier {
 pub enum Buff {}
 
 pub trait HasMods {
-    fn get_mods(&self) -> Vec<Mod>;
+    fn get_mods(&self) -> Vec<Mod> {
+        vec![]
+    }
+    fn grants_skills(&self) -> Vec<Skill> {
+        vec![]
+    }
 }
 
 /// An item mod changes any target for which it is equipped

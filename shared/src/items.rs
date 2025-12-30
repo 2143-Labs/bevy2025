@@ -48,6 +48,43 @@ impl Inventory<ItemId> {
     }
 }
 
+impl Inventory<Item> {
+    pub fn get_equipped_skills(&self) -> Vec<crate::skills::Skill> {
+        let mut skills = vec![];
+
+        for inv_item in &self.items {
+            let Some(_equip_slot) =
+                inv_item
+                    .item
+                    .data
+                    .item_misc
+                    .iter()
+                    .find_map(|misc| match misc {
+                        ItemMiscModifiers::Equipped(i) => Some(i),
+                        _ => None,
+                    })
+            else {
+                // not equipped, skip this item
+                continue;
+            };
+
+            #[cfg(test)]
+            println!("Equipped item found: {:?}", inv_item);
+
+            let item_skills = inv_item.item.grants_skills();
+
+            #[cfg(test)]
+            println!("Item grants skills: {:?}", item_skills);
+
+            for skill in item_skills {
+                skills.push(skill);
+            }
+        }
+
+        skills
+    }
+}
+
 // TODO this is a very basic imlementation, needs to be expanded
 impl Inventory<Item> {
     pub fn get_player_stats(&self) -> PlayerFinalStats {
@@ -307,10 +344,22 @@ pub struct Item {
 
 impl HasMods for Item {
     fn get_mods(&self) -> Vec<Mod> {
-        let mut all_mods = self.data.mods.clone();
-        let base_mods = self.data.item_base.get_mods();
+        self.data.get_mods()
+    }
+    fn grants_skills(&self) -> Vec<crate::skills::Skill> {
+        self.data.grants_skills()
+    }
+}
+
+impl HasMods for ItemData {
+    fn get_mods(&self) -> Vec<Mod> {
+        let mut all_mods = self.mods.clone();
+        let base_mods = self.item_base.get_mods();
         all_mods.extend(base_mods);
         all_mods
+    }
+    fn grants_skills(&self) -> Vec<crate::skills::Skill> {
+        self.item_base.grants_skills()
     }
 }
 
@@ -335,6 +384,15 @@ impl HasMods for BaseItem {
             BaseItem::DiaryBook(book) => book.get_mods(),
             BaseItem::EnemyDiaryPage(page) => page.get_mods(),
             BaseItem::Footwear(footwear) => footwear.get_mods(),
+        }
+    }
+    fn grants_skills(&self) -> Vec<crate::skills::Skill> {
+        match self {
+            BaseItem::CurrencyPiece => vec![],
+            BaseItem::DiaryPage(page) => page.grants_skills(),
+            BaseItem::DiaryBook(book) => book.grants_skills(),
+            BaseItem::EnemyDiaryPage(page) => page.grants_skills(),
+            BaseItem::Footwear(footwear) => footwear.grants_skills(),
         }
     }
 }
@@ -389,7 +447,6 @@ pub fn goblin_drops() -> Inventory<Item> {
             mods: vec![],
             item_misc: vec![
                 ItemMiscModifiers::Damaged(DamageLevels::Worn),
-                ItemMiscModifiers::Equipped(EquipSlot::Footwear),
             ],
         },
     };
@@ -399,7 +456,21 @@ pub fn goblin_drops() -> Inventory<Item> {
         data: ItemData {
             item_base: BaseItem::Footwear(footwear::Footwear::Sandals),
             mods: vec![],
-            item_misc: vec![ItemMiscModifiers::Damaged(DamageLevels::Tattered)],
+            item_misc: vec![
+                ItemMiscModifiers::Damaged(DamageLevels::Tattered),
+                ItemMiscModifiers::Equipped(EquipSlot::Footwear),
+            ],
+        },
+    };
+
+    let ranger_page = Item {
+        item_id: ItemId::default(),
+        data: ItemData {
+            item_base: BaseItem::DiaryPage(diary::DiaryPage::Ranger),
+            mods: vec![],
+            item_misc: vec![
+                ItemMiscModifiers::Equipped(EquipSlot::Diary),
+            ],
         },
     };
 
@@ -433,6 +504,15 @@ pub fn goblin_drops() -> Inventory<Item> {
                     slot_index: 2,
                 },
             },
+            ItemInInventory {
+                item: ranger_page,
+                stacksize: 1,
+                item_placement: ItemPlacement {
+                    flipped: false,
+                    rotated: 0,
+                    slot_index: 3,
+                },
+            },
         ],
     }
 }
@@ -453,6 +533,13 @@ mod test {
 
         let as_payload = postcard::to_stdvec(&goblin_drops).unwrap();
         println!("{}", as_payload.len());
-        assert!(as_payload.len() < 100); // ensure it's not too large
+        assert!(as_payload.len() < 120); // ensure it's not too large
+    }
+
+    #[test]
+    fn test_get_equipped_skills() {
+        let goblin_drops = goblin_drops();
+        let skills = goblin_drops.get_equipped_skills();
+        assert!(skills.len() > 1);
     }
 }

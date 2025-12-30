@@ -85,6 +85,7 @@ impl Plugin for UIPlugin {
                 scoreboard_menu::ScoreboardMenuPlugin,
                 inventory_menu::InventoryMenuPlugin,
                 skills_menu::SkillsMenuPlugin,
+                skills_menu::binds::SkillBindsPlugin,
             ))
             // Global button feedback
             .add_systems(Update, styles::button_visual_feedback);

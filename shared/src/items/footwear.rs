@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    items::{HasItemLayout, ItemLayout},
-    stats::{HasMods, Mod},
+    items::{HasItemLayout, ItemLayout}, skills::Skill, stats::{HasMods, Mod}
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -37,6 +36,16 @@ impl HasMods for Footwear {
                     amount: 30.0.into(),
                 },
             ],
+        }
+    }
+
+    fn grants_skills(&self) -> Vec<Skill> {
+        match self {
+            Footwear::LeatherBoots => vec![],
+            Footwear::Sandals => vec![
+                Skill::RainOfArrows,
+            ],
+            Footwear::Wraps => vec![],
         }
     }
 }

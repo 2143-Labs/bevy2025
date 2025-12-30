@@ -1,37 +1,55 @@
 ip: 127.0.0.1
 host_ip: 0.0.0.0
 port: 25555
-name: John 
+name: John
+player_color_hue: 120.0
 sens: 0.003
 qe_sens: 3.0
 sound: false
 keybindings:
-  Jump:
-  - !KeyCode Space
-  Fire2:
+  Fire1:
+  - !MouseButton Left
+  Special1:
   - !KeyCode KeyQ
-  - !MouseButton Right
-  StrafeLeft:
-  - !KeyCode KeyA
-  Use:
+  Descend:
+  - !KeyCode ShiftLeft
+  Mod3:
+  - !KeyCode AltLeft
+  - !KeyCode AltRight
+  Escape:
+  - !KeyCode Escape
+  Special2:
   - !KeyCode KeyE
-  RotateLeft:
-  - !KeyCode KeyQ
-  RotateRight:
-  - !KeyCode KeyE
-  ChangeCamera:
-  - !KeyCode KeyC
-  UnlockCursor:
-  - !KeyCode KeyX
   MoveForward:
   - !KeyCode KeyW
-  Mod1:
-  - !KeyCode ShiftLeft
   MoveBackward:
   - !KeyCode KeyS
   StrafeRight:
   - !KeyCode KeyD
-  Fire1:
-  - !MouseButton Left
+  Special3:
+  - !KeyCode KeyF
+  OpenInventory:
+  - !KeyCode KeyI
+  - !KeyCode Tab
+  Mod2:
+  - !KeyCode ControlLeft
+  - !KeyCode ControlRight
+  Jump:
+  - !KeyCode Space
   Chat:
   - !KeyCode Enter
+  StrafeLeft:
+  - !KeyCode KeyA
+  Mod1:
+  - !KeyCode ShiftLeft
+  - !KeyCode ShiftRight
+  Ascend:
+  - !KeyCode Space
+  Fire2:
+  - !MouseButton Right
+  ZoomCameraOut:
+  - !KeyCode Minus
+  ZoomCameraIn:
+  - !KeyCode Equal
+  Scoreboard:
+  - !KeyCode KeyP

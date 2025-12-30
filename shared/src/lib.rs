@@ -24,29 +24,42 @@ pub mod stats;
 
 pub const BASE_TICKS_PER_SECOND: u16 = 128;
 
-#[derive(Reflect, Hash, Eq, PartialEq, Clone, Deserialize, Serialize, Debug)]
+#[derive(Reflect, Hash, Eq, PartialEq, Clone, Deserialize, Serialize, Debug, Ord, PartialOrd, Copy)]
 pub enum GameAction {
     MoveForward,
     MoveBackward,
     StrafeRight,
     StrafeLeft,
-    RotateRight,
-    RotateLeft,
-    Use,
-    Jump,
-    ChangeCamera,
-    UnlockCursor,
-    Fire1,
-    Fire2,
-    Mod1,
-    Special1,
+    /// Move vertically up
+    /// Space
     Ascend,
+    /// Space
+    Jump,
     Descend,
+
+    /// Left Click
+    Fire1,
+    /// Right click
+    Fire2,
+    /// Shift
+    Mod1,
+    /// Ctrl
+    Mod2,
+    /// Alt
+    Mod3,
+    /// Q
+    Special1,
+    /// E
+    Special2,
+    /// F
+    Special3,
+
     Escape,
     ZoomCameraIn,
     ZoomCameraOut,
     OpenInventory,
     Scoreboard,
+    Skills,
 
     Chat,
 }
@@ -59,18 +72,17 @@ static DEFAULT_BINDS: Lazy<Keybinds> = Lazy::new(|| {
         (GameAction::MoveBackward, vec![kk(KeyCode::KeyS)]),
         (GameAction::StrafeLeft, vec![kk(KeyCode::KeyA)]),
         (GameAction::StrafeRight, vec![kk(KeyCode::KeyD)]),
-        (GameAction::RotateLeft, vec![kk(KeyCode::KeyQ)]),
-        (GameAction::RotateRight, vec![kk(KeyCode::KeyE)]),
         (GameAction::Ascend, vec![kk(KeyCode::Space)]),
         (GameAction::Descend, vec![kk(KeyCode::ShiftLeft)]),
         (GameAction::Jump, vec![kk(KeyCode::Space)]),
-        (GameAction::Use, vec![kk(KeyCode::KeyE)]),
-        (GameAction::ChangeCamera, vec![kk(KeyCode::KeyC)]),
-        (GameAction::UnlockCursor, vec![kk(KeyCode::KeyX)]),
         (GameAction::Fire1, vec![mb(MouseButton::Left)]),
         (GameAction::Fire2, vec![mb(MouseButton::Right)]),
-        (GameAction::Mod1, vec![kk(KeyCode::ShiftLeft)]),
+        (GameAction::Mod1, vec![kk(KeyCode::ShiftLeft), kk(KeyCode::ShiftRight)]),
+        (GameAction::Mod2, vec![kk(KeyCode::ControlLeft), kk(KeyCode::ControlRight)]),
+        (GameAction::Mod3, vec![kk(KeyCode::AltLeft), kk(KeyCode::AltRight)]),
         (GameAction::Special1, vec![kk(KeyCode::KeyQ)]),
+        (GameAction::Special2, vec![kk(KeyCode::KeyE)]),
+        (GameAction::Special3, vec![kk(KeyCode::KeyF)]),
         (GameAction::Escape, vec![kk(KeyCode::Escape)]),
         (GameAction::Chat, vec![kk(KeyCode::Enter)]),
         (GameAction::ZoomCameraIn, vec![kk(KeyCode::Equal)]),
@@ -80,6 +92,7 @@ static DEFAULT_BINDS: Lazy<Keybinds> = Lazy::new(|| {
             vec![kk(KeyCode::KeyI), kk(KeyCode::Tab)],
         ),
         (GameAction::Scoreboard, vec![kk(KeyCode::KeyP)]),
+        (GameAction::Skills, vec![kk(KeyCode::KeyK)]),
     ])
 });
 

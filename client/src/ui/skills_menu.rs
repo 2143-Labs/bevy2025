@@ -1,6 +1,9 @@
-use crate::game_state::OverlayMenuState;
+use crate::{game_state::OverlayMenuState, network::CurrentThirdPersonControlledUnit};
 
 use bevy::prelude::*;
+use shared::{items::InventoryItemCache, net_components::ours::HasInventory};
+
+pub mod binds;
 
 /// Marker for the paused menu root entity
 #[derive(Component)]
@@ -21,7 +24,11 @@ impl Plugin for SkillsMenuPlugin {
 }
 
 // send a packet and spawn loading screen
-pub fn spawn_skills_menu(mut commands: Commands) {
+pub fn spawn_skills_menu(
+    mut commands: Commands,
+    current_char: Query<&HasInventory, With<CurrentThirdPersonControlledUnit>>,
+    inventory_map: Res<InventoryItemCache>,
+) {
     info!("Spawning skills menu");
     // spawn outer container
     commands.spawn((
@@ -36,6 +43,28 @@ pub fn spawn_skills_menu(mut commands: Commands) {
             ..default()
         },
     ));
+
+    let Ok(current_char_inv) = current_char.single() else {
+        error!("No current character found when spawning skills menu");
+        return;
+    };
+
+    let inv_id = current_char_inv.inventory_id;
+    let Some(inventory_full) = inventory_map.get_inventory(&inv_id) else {
+        error!(
+            "Could not get full inventory data for inventory ID: {:?}",
+            inv_id
+        );
+        return;
+    };
+
+    let skills = inventory_full.get_equipped_skills();
+    info!("Equipped skills: {:?}", skills);
+
+    //spawn a button for each skill
+    for skill in skills {
+        info!("Spawning skill button for skill: {:?}", skill);
+    }
 }
 
 pub fn update_skills_menu() {}
