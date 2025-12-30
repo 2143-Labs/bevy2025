@@ -1,12 +1,17 @@
 use bevy::prelude::*;
 use shared::{
     event::{
-        NetEntId, PlayerId, UDPacketEvent, client::{BeginThirdpersonControllingUnit, SpawnUnit2}, server::{SpawnCircle, SpawnMan}
+        client::BeginThirdpersonControllingUnit,
+        server::{SpawnCircle, SpawnMan},
+        NetEntId, PlayerId, UDPacketEvent,
     },
     net_components::{
-        ToNetComponent, ents::ItemDrop, make_man, make_small_loot, ours::{ControlledBy, DespawnOnPlayerDisconnect, HasInventory}
+        make_man, make_small_loot,
+        ours::{ControlledBy, Dead, DespawnOnPlayerDisconnect, HasInventory},
+        ToNetComponent,
     },
-    netlib::{EventToClient, ServerNetworkingResources, send_outgoing_event_next_tick},
+    netlib::{send_outgoing_event_next_tick, EventToClient, ServerNetworkingResources},
+    CurrentTick,
 };
 
 use crate::{make_ball, ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint, ServerState};
@@ -16,10 +21,12 @@ impl Plugin for SpawnPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (on_circle_spawn, on_man_spawn)
+            (on_circle_spawn, on_man_spawn, on_unit_die)
                 //.run_if(on_timer(Duration::from_millis(10)))
                 .run_if(in_state(ServerState::Running)),
         );
+
+        app.add_message::<UnitDie>();
         //.add_systems(
         //Update,
         //(send_networked_Spawn_move)
@@ -87,7 +94,7 @@ fn on_circle_spawn(
                 HasInventory {
                     inventory_id: inventory.id,
                 }
-                .to_net_component()
+                .to_net_component(),
             );
 
             send_outgoing_event_next_tick(
@@ -187,6 +194,47 @@ fn on_man_spawn(
     }
 }
 
+#[derive(Message)]
+struct UnitDie {
+    unit_id: NetEntId,
+}
+
+fn on_unit_die(
+    mut unit_deaths: MessageReader<UnitDie>,
+    mut commands: Commands,
+    units: Query<(&NetEntId, Entity)>,
+    sr: Res<ServerNetworkingResources>,
+    tick: Res<CurrentTick>,
+    clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
+) {
+    for death in unit_deaths.read() {
+        info!("Unit died: {:?}", death.unit_id);
+        // Despawn the unit
+        for (net_id, ent) in &units {
+            if *net_id == death.unit_id {
+                commands.entity(ent).insert(Dead {
+                    reason: "Died".to_string(),
+                    died_on_tick: tick.0,
+                });
+            }
+        }
+
+        // Notify all clients about the unit death
+        let event = EventToClient::UpdateUnit2(shared::event::client::UpdateUnit2 {
+            net_ent_id: death.unit_id,
+            changed_components: vec![],
+            removed_components: vec![],
+            new_component: vec![Dead {
+                reason: "Died".to_string(),
+                died_on_tick: tick.0,
+            }
+            .to_net_component()],
+        });
+        for endpoint in &clients {
+            send_outgoing_event_next_tick(&sr, endpoint.0, &event);
+        }
+    }
+}
 
 //fn send_networked_Spawn_move(
 //Spawns: Query<

@@ -1,10 +1,9 @@
-use std::{f32::consts::PI, time::Duration};
+use std::time::Duration;
 
-use avian3d::prelude::{Collider, LinearVelocity};
+use avian3d::prelude::LinearVelocity;
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
     Config,
-    character_controller::CharacterControllerBundle,
     event::{
         MyNetEntParentId, NetEntId, PlayerId, UDPacketEvent,
         client::{
@@ -373,7 +372,6 @@ fn send_disconnect_packet(sr: Res<ClientNetworkingResources>, mse: Res<MainServe
     info!("Sent disconnect packet to {}", mse.0);
 }
 
-
 #[derive(Component)]
 struct DeferredControlAssumption(NetEntId);
 
@@ -443,9 +441,7 @@ fn on_begin_controlling_unit(
         }
 
         if let Some(unit_ent_id) = maybe_unit {
-            commands.spawn(
-                DeferredControlAssumption(unit_ent_id),
-            );
+            commands.spawn(DeferredControlAssumption(unit_ent_id));
             // Find the entity with this NetEntId
             for (_ent, ent_id) in units.iter() {
                 if *ent_id == unit_ent_id {

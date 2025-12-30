@@ -1,7 +1,7 @@
-use bevy::{prelude::*, render::render_phase::NonMeshEntities};
+use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{event::NetEntId, items::InventoryId, net_components::ToNetComponent};
+use crate::{event::NetEntId, net_components::ToNetComponent};
 
 /// Simple Network physics entity
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
@@ -83,9 +83,7 @@ impl NetComponentEnts {
                 unsafe { ptr.deref::<PlayerCamera>() }.clone(),
             ))
         } else if type_id == std::any::TypeId::of::<Man>() {
-            Some(NetComponentEnts::Man(
-                unsafe { ptr.deref::<Man>() }.clone(),
-            ))
+            Some(NetComponentEnts::Man(unsafe { ptr.deref::<Man>() }.clone()))
         } else if type_id == std::any::TypeId::of::<SendNetworkTranformUpdates>() {
             Some(NetComponentEnts::SendNetworkTranformUpdates(
                 unsafe { ptr.deref::<SendNetworkTranformUpdates>() }.clone(),

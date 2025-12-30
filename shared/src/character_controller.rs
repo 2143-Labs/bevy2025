@@ -4,7 +4,10 @@ use avian3d::{math::*, prelude::*};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{event::NetEntId, net_components::{NetComponent, ToNetComponent}};
+use crate::{
+    event::NetEntId,
+    net_components::{NetComponent, ToNetComponent},
+};
 
 pub struct CharacterControllerPlugin;
 
@@ -41,7 +44,7 @@ pub struct MovementAction {
     pub move_input_dir: Vector2,
     pub camera_yaw: Scalar,
     pub move_speed_modifier: Scalar,
-    pub is_jumping: bool
+    pub is_jumping: bool,
 }
 
 impl Default for MovementAction {
@@ -213,30 +216,32 @@ fn update_grounded(
         With<CharacterController>,
     >,
 ) {
-    for (mut groundedness, mut ground_normal, _entity, hits, rotation, max_slope_angle) in &mut query {
+    for (mut groundedness, mut ground_normal, _entity, hits, rotation, max_slope_angle) in
+        &mut query
+    {
         // The character is grounded if the shape caster has a hit with a normal
         // that isn't too steep and is within a reasonable distance.
         let mut found_ground = false;
         let mut best_normal = Vector::Y;
         let mut closest_distance = Scalar::MAX;
-        
+
         // Maximum distance to consider as "grounded" - should be slightly more than
         // the character's radius to account for small gaps
         const GROUND_DETECTION_THRESHOLD: Scalar = 0.15;
-        
+
         for hit in hits.iter() {
             // Check if the hit is close enough to count as ground
             if hit.distance > GROUND_DETECTION_THRESHOLD {
                 continue;
             }
-            
+
             let world_normal = rotation * -hit.normal2;
             let is_climbable = if let Some(angle) = max_slope_angle {
                 world_normal.angle_between(Vector::Y).abs() <= angle.0
             } else {
                 true
             };
-            
+
             // Find the closest valid ground hit
             if is_climbable && hit.distance < closest_distance {
                 found_ground = true;
@@ -308,16 +313,16 @@ fn movement(
         let final_movement_dir = if *is_grounded {
             // Project the horizontal movement direction onto the slope plane.
             // This allows smooth movement up and down slopes.
-            movement_dir.reject_from_normalized(*ground_normal).normalize_or_zero()
+            movement_dir
+                .reject_from_normalized(*ground_normal)
+                .normalize_or_zero()
         } else {
             movement_dir.normalize_or_zero()
         };
 
         // Apply acceleration to linear velocity
-        let acceleration = final_movement_dir
-            * movement_acceleration.0
-            * speed_modifier
-            * delta_time;
+        let acceleration =
+            final_movement_dir * movement_acceleration.0 * speed_modifier * delta_time;
 
         if *is_grounded {
             linear_velocity.0 += acceleration;
@@ -524,7 +529,7 @@ fn kinematic_controller_collisions(
                     // The reject_from_normalized function removes the component along the normal,
                     // leaving only the component along the slope surface.
                     let velocity_on_slope = linear_velocity.reject_from_normalized(normal);
-                    
+
                     // Replace the velocity with the projected velocity to follow the slope.
                     // This automatically handles both walking up and down slopes correctly.
                     linear_velocity.0 = velocity_on_slope;

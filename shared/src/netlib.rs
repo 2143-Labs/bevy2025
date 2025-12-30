@@ -120,7 +120,6 @@ impl NetworkingStats {
     }
 }
 
-
 use dashmap::DashMap;
 
 #[derive(Resource, Clone)]
@@ -149,7 +148,7 @@ pub struct NetworkConnectionTarget {
     pub port: u16,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Tick(pub u64);
 
 impl Tick {
@@ -287,7 +286,10 @@ pub fn send_outgoing_event_reliable_internal<TI, TO: NetworkingEvent>(
 
             chunk_size += 1;
             let data = postcard::to_stdvec(&EventGroupingRef::Reliable(
-                packet_id, dedup_id, *tick, &event[..chunk_size],
+                packet_id,
+                dedup_id,
+                *tick,
+                &event[..chunk_size],
             ))
             .unwrap();
             let data_len = data.len();
@@ -315,7 +317,9 @@ pub fn send_outgoing_event_next_tick<TI, TO: NetworkingEvent>(
     endpoint: Endpoint,
     event: &TO,
 ) {
-    resources.event_list_outgoing.entry(endpoint)
+    resources
+        .event_list_outgoing
+        .entry(endpoint)
         .or_insert_with(Vec::new)
         .push(event.clone());
 }
@@ -325,7 +329,9 @@ pub fn send_outgoing_event_next_tick_batch<TI, TO: NetworkingEvent>(
     endpoint: Endpoint,
     events: &[TO],
 ) {
-    resources.event_list_outgoing.entry(endpoint)
+    resources
+        .event_list_outgoing
+        .entry(endpoint)
         .or_insert_with(Vec::new)
         .extend_from_slice(events);
 }
@@ -335,10 +341,13 @@ pub fn flush_outgoing_events<TI: NetworkingEvent, TO: NetworkingEvent>(
     resources: Res<NetworkingResources<TI, TO>>,
 ) {
     use rayon::prelude::*;
-    resources.event_list_outgoing.par_iter_mut().for_each(|mut entry| {
-        send_outgoing_event_reliable_internal(&resources, *entry.key(), entry.value(), &tick.0);
-        entry.value_mut().clear();
-    })
+    resources
+        .event_list_outgoing
+        .par_iter_mut()
+        .for_each(|mut entry| {
+            send_outgoing_event_reliable_internal(&resources, *entry.key(), entry.value(), &tick.0);
+            entry.value_mut().clear();
+        })
 }
 
 pub fn setup_incoming_server<TI: NetworkingEvent, TO: NetworkingEvent>(

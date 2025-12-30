@@ -5,7 +5,7 @@ use std::{
 };
 
 use avian3d::prelude::{Gravity, LinearVelocity};
-use bevy::{app::ScheduleRunnerPlugin, ecs::{component::ComponentInfo, world::DynamicComponentFetch}, platform::collections::HashSet, prelude::*};
+use bevy::{app::ScheduleRunnerPlugin, platform::collections::HashSet, prelude::*};
 use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
@@ -19,8 +19,7 @@ use shared::{
     },
     net_components::{
         ents::{PlayerCamera, SendNetworkTranformUpdates},
-        foreign::ComponentColor,
-        make_ball, make_man,
+        make_ball,
         ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName},
         ToNetComponent,
     },
@@ -210,12 +209,11 @@ fn on_player_connect(
     //mut endpoint_to_player_id: ResMut<EndpointToPlayerId>,
 
     //units_to_spawn: Query<
-        //(
-            //Entity,
-            //&NetEntId,
-        //),
+    //(
+    //Entity,
+    //&NetEntId,
+    //),
     //>,
-
     sr: Res<ServerNetworkingResources>,
     terrain: Res<TerrainParams>,
     _config: Res<Config>,
@@ -311,12 +309,16 @@ fn on_player_connect(
 
         let mut large_unit_list_to_send: Vec<SpawnUnit2> = vec![];
 
-        let units_to_spawn = world.try_query_filtered::<(Entity, &NetEntId), Without<ConnectedPlayer>>();
+        let units_to_spawn =
+            world.try_query_filtered::<(Entity, &NetEntId), Without<ConnectedPlayer>>();
 
         if let Some(mut units_spawns_thing) = units_to_spawn {
             for (unit_ent, unit_net_ent_id) in units_spawns_thing.iter(world) {
                 let component_info = world.inspect_entity(unit_ent).unwrap();
-                info!("Preparing to send existing unit {:?} to new player", unit_net_ent_id);
+                info!(
+                    "Preparing to send existing unit {:?} to new player",
+                    unit_net_ent_id
+                );
                 let ciids = component_info.map(|ci| ci.id()).collect::<HashSet<_>>();
                 let Ok(ents_res) = world.entity(unit_ent).get_by_id(&ciids) else {
                     error!("Failed to get components for entity {:?}", unit_ent);
@@ -329,19 +331,22 @@ fn on_player_connect(
                 };
 
                 for (component_id, component_ptr) in ents_res.iter() {
-                    let type_id = world.components()
+                    let type_id = world
+                        .components()
                         .get_info(*component_id)
                         .unwrap()
                         .type_id()
                         .unwrap();
 
                     // SAFETY: Trust that bevy gives us a valid type id and pointer from `get_by_id`
-                    if let Some(net_comp) =
-                        unsafe { shared::net_components::NetComponent::from_type_id_ptr(type_id, *component_ptr) }
-                    {
+                    if let Some(net_comp) = unsafe {
+                        shared::net_components::NetComponent::from_type_id_ptr(
+                            type_id,
+                            *component_ptr,
+                        )
+                    } {
                         info!("Component to send: {:?}", net_comp);
                         spawn_unit.components.push(net_comp);
-
                     }
                 }
                 large_unit_list_to_send.push(spawn_unit);
@@ -368,7 +373,8 @@ fn on_player_connect(
             },
         );
 
-        world.resource::<EndpointToPlayerId>()
+        world
+            .resource::<EndpointToPlayerId>()
             .map
             .insert(player.endpoint, new_player_id);
 

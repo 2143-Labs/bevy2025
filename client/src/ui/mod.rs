@@ -4,9 +4,9 @@ pub mod inventory_menu;
 pub mod multiplayer_menu;
 pub mod paused_menu;
 pub mod scoreboard_menu;
+pub mod skills_menu;
 pub mod styles;
 pub mod text_input;
-pub mod skills_menu;
 
 use crate::game_state::{MenuState, OverlayMenuState};
 use bevy::prelude::*;

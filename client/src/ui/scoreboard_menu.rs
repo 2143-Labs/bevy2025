@@ -6,7 +6,9 @@ use std::time::Duration;
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
     event::{UDPacketEvent, client::RequestScoreboardResponse},
-    netlib::{ClientNetworkingResources, MainServerEndpoint, NetworkingStats, send_outgoing_event_now},
+    netlib::{
+        ClientNetworkingResources, MainServerEndpoint, NetworkingStats, send_outgoing_event_now,
+    },
 };
 
 /// Marker for the paused menu root entity
@@ -92,31 +94,33 @@ pub fn spawn_scoreboard_menu(mut commands: Commands) {
             });
         });
 
-    commands.spawn((
-        Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            flex_direction: FlexDirection::Column,
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
-            ..Default::default()
-        },
-        DebugNetworkMenu,
-    )).with_children(|parent| {
-        parent.spawn({
-            let (text, font, color) = heading_text("Network Debug Info", 30.0);
-            (
-                Node {
-                    margin: UiRect::bottom(Val::Px(20.0)),
-                    ..Default::default()
-                },
-                text,
-                font,
-                color,
-                DebugNetworkMenu,
-            )
+    commands
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                flex_direction: FlexDirection::Column,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..Default::default()
+            },
+            DebugNetworkMenu,
+        ))
+        .with_children(|parent| {
+            parent.spawn({
+                let (text, font, color) = heading_text("Network Debug Info", 30.0);
+                (
+                    Node {
+                        margin: UiRect::bottom(Val::Px(20.0)),
+                        ..Default::default()
+                    },
+                    text,
+                    font,
+                    color,
+                    DebugNetworkMenu,
+                )
+            });
         });
-    });
 }
 
 pub fn send_scoreboard_request_packet(
@@ -144,23 +148,30 @@ pub fn update_debug_network_menu(
     let recent_bytes_received = stats.recent_bytes_received.read().unwrap().clone();
     let recent_bytes_received_ignored = stats.recent_bytes_received_ignored.read().unwrap().clone();
 
-    let zipped = recent_packets_sent.iter()
+    let zipped = recent_packets_sent
+        .iter()
         .zip(recent_packets_received.iter())
         .zip(recent_bytes_sent.iter())
         .zip(recent_bytes_received.iter())
         .zip(recent_bytes_received_ignored.iter())
-        .map(|((((sent_pkts, recv_pkts), sent_bytes), recv_bytes), ignored_bytes)| {
-            (sent_pkts, recv_pkts, sent_bytes, recv_bytes, ignored_bytes)
-        });
+        .map(
+            |((((sent_pkts, recv_pkts), sent_bytes), recv_bytes), ignored_bytes)| {
+                (sent_pkts, recv_pkts, sent_bytes, recv_bytes, ignored_bytes)
+            },
+        );
 
     for mut text in text_part.iter_mut() {
         let mut parts = Vec::new();
-        for 
-            (sent_pkts, recv_pkts, sent_bytes, recv_bytes, ignored_bytes)
-         in zipped.clone().rev().take(10) {
+        for (sent_pkts, recv_pkts, sent_bytes, recv_bytes, ignored_bytes) in
+            zipped.clone().rev().take(10)
+        {
             let part = format!(
                 "S:{:4}KB ({:5} pkts) | R:{:3}MB/sec (in {:5} pkts) E={}MB",
-                sent_bytes / 1024, sent_pkts, recv_bytes / 1024 / 1024, recv_pkts, ignored_bytes / 1024 / 1024
+                sent_bytes / 1024,
+                sent_pkts,
+                recv_bytes / 1024 / 1024,
+                recv_pkts,
+                ignored_bytes / 1024 / 1024
             );
 
             parts.push(part);
@@ -168,8 +179,6 @@ pub fn update_debug_network_menu(
         // join on \n and set text
         text.0 = parts.join("\n");
     }
-
-
 }
 
 pub fn update_scoreboard_menu(
@@ -330,7 +339,14 @@ fn spawn_scoreboard_menu_base(commands: &mut Commands) {
 
 pub fn despawn_scoreboard_menu(
     mut commands: Commands,
-    menu_query: Query<Entity, Or<(With<ScoreboardMenu>, With<ScoreboardMenuLoading>, With<DebugNetworkMenu>)>>,
+    menu_query: Query<
+        Entity,
+        Or<(
+            With<ScoreboardMenu>,
+            With<ScoreboardMenuLoading>,
+            With<DebugNetworkMenu>,
+        )>,
+    >,
 ) {
     info!("Despawning scoreboard menu");
     for menu_entity in menu_query.iter() {

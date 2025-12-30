@@ -19,8 +19,8 @@ pub mod net_components;
 pub mod netlib;
 pub mod physics;
 pub mod player_input;
-pub mod stats;
 pub mod skills;
+pub mod stats;
 
 pub const BASE_TICKS_PER_SECOND: u16 = 128;
 

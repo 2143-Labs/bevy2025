@@ -1,4 +1,3 @@
-
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -12,6 +11,5 @@ pub enum ProjectileAI {
     Homing {
         target_entity: NetEntId,
         turn_rate_deg_per_sec: f32,
-    }
+    },
 }
-
