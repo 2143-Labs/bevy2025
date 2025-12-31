@@ -50,7 +50,6 @@ pub struct Dead {
     pub died_on_tick: Tick,
 }
 
-
 ///// This struct represents all the possible things a unit might be trying to do this tick.
 //#[derive(Serialize, Deserialize, Component, Debug, PartialEq, Clone)]
 //pub enum ControlIntent {

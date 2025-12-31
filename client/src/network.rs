@@ -3,7 +3,7 @@ use std::time::Duration;
 use avian3d::prelude::LinearVelocity;
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
-    Config, CurrentTick,
+    Config,
     event::{
         MyNetEntParentId, NetEntId, PlayerId, UDPacketEvent,
         client::{
@@ -12,17 +12,16 @@ use shared::{
         },
         server::{
             ChangeMovement, ConnectRequest, Heartbeat, HeartbeatChallengeResponse,
-            IWantToDisconnect, SpawnCircle, SpawnMan,
+            IWantToDisconnect, SpawnMan,
         },
     },
-    items::SkillFromSkillSource,
     net_components::{
-        ents::{Ball, CanAssumeControl, ItemDrop, Man, PlayerCamera, SendNetworkTranformUpdates},
+        ents::{Ball, CanAssumeControl, ItemDrop, Man, PlayerCamera},
         foreign::ComponentColor,
         ours::{PlayerColor, PlayerName},
     },
     netlib::{
-        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, Tick,
+        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint,
         send_outgoing_event_next_tick, send_outgoing_event_now, send_outgoing_event_now_batch,
         setup_incoming_client,
     },
@@ -36,7 +35,6 @@ use crate::{
     notification::Notification,
     remote_players::{ApplyNoFrustumCulling, NameLabel, RemotePlayerCamera, RemotePlayerModel},
     terrain::SetupTerrain,
-    ui::skills_menu::binds::BeginSkillUse,
 };
 
 pub mod inventory;

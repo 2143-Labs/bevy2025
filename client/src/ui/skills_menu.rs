@@ -6,11 +6,10 @@ use crate::{
         styles::{menu_button_bundle, menu_button_text},
     },
 };
-use std::sync::Arc;
 
 use bevy::prelude::*;
 use shared::{
-    items::{Inventory, InventoryItemCache, Item, SkillFromSkillSource},
+    items::{InventoryItemCache, SkillFromSkillSource},
     net_components::ours::HasInventory,
     skills::SkillSource,
 };

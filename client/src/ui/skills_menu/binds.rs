@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use dashmap::DashMap;
-use shared::{Config, GameAction, event::NetEntId, items::SkillFromSkillSource, skills::Skill};
+use shared::{Config, GameAction, event::NetEntId, items::SkillFromSkillSource};
 
 use crate::{
     camera::ChompInputs, game_state::GameState, network::CurrentThirdPersonControlledUnit,
