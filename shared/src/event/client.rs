@@ -113,4 +113,17 @@ pub struct SpawnProjectile {
     pub projectile_type: ProjectileAI,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct CastSkillUpdateToClient {
+    pub net_ent_id: NetEntId,
+    pub begin_casting: bool,
+    pub skill: SkillFromSkillSource,
+    pub begin_casting_tick: Tick,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct TickHappened {
+    pub tick: Tick,
+}
+
 include!(concat!(env!("OUT_DIR"), "/client_event.rs"));

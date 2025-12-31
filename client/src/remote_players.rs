@@ -1,4 +1,4 @@
-use avian3d::prelude::LinearVelocity;
+use avian3d::prelude::{LinearVelocity, Rotation};
 use bevy::{camera::visibility::NoFrustumCulling, prelude::*};
 use shared::{
     event::{
@@ -69,6 +69,14 @@ fn handle_update_unit(
             Without<CurrentThirdPersonControlledUnit>,
         ),
     >,
+
+    mut remote_unit3: Query<
+        (&NetEntId, &mut Rotation),
+        (
+            With<shared::net_components::ents::SendNetworkTranformUpdates>,
+            Without<CurrentThirdPersonControlledUnit>,
+        ),
+    >,
     // TODO should we add a tag here to restrict to only certain entities?
     mut new_component_units: Query<(Entity, &NetEntId)>,
 ) {
@@ -105,14 +113,30 @@ fn handle_update_unit(
             }
         }
 
-        'a3: for (ent, net_id) in &mut new_component_units {
+        'a3: for (net_id, mut rotation) in &mut remote_unit3 {
+            if net_id == &update.event.net_ent_id {
+                // Update the rotation from components
+                for component in &update.event.changed_components {
+                    if let NetComponent::Foreign(foreign) = component {
+                        if let shared::net_components::foreign::NetComponentForeign::Rotation(rot) =
+                            foreign
+                        {
+                            *rotation = *rot;
+                        }
+                    }
+                }
+                break 'a3;
+            }
+        }
+
+        'anu: for (ent, net_id) in &mut new_component_units {
             if net_id == &update.event.net_ent_id {
                 // Add any new components
                 for component in &update.event.new_component {
                     let mut ec = commands.entity(ent);
                     component.clone().insert_components(&mut ec);
                 }
-                break 'a3;
+                break 'anu;
             }
         }
     }

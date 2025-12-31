@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use avian3d::prelude::{Gravity, LinearVelocity};
+use avian3d::prelude::{Gravity, LinearVelocity, Rotation};
 use bevy::{app::ScheduleRunnerPlugin, platform::collections::HashSet, prelude::*};
 use message_io::network::Endpoint;
 use rand::Rng;
@@ -165,6 +165,7 @@ fn do_app(f: impl FnOnce(&mut App)) {
             (
                 shared::increment_ticks,
                 shared::netlib::flush_outgoing_events::<EventToServer, EventToClient>,
+                add_tick_just_happened_packet,
             )
                 .chain()
                 .run_if(in_state(ServerState::Running)),
@@ -185,6 +186,19 @@ fn do_app(f: impl FnOnce(&mut App)) {
     f(&mut app);
 
     app.run();
+}
+
+fn add_tick_just_happened_packet(
+    current_tick: Res<CurrentTick>,
+    sr: Res<ServerNetworkingResources>,
+    clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
+) {
+    for net_client in &clients {
+        let event = EventToClient::TickHappened(shared::event::client::TickHappened {
+            tick: current_tick.0,
+        });
+        send_outgoing_event_next_tick(&sr, net_client.0, &event);
+    }
 }
 
 fn add_network_connection_info_from_config(config: Res<Config>, mut commands: Commands) {
@@ -616,7 +630,12 @@ fn on_player_scoreboard_request(
 fn on_movement(
     mut pd: UDPacketEvent<ChangeMovement>,
     mut ent_to_move: Query<
-        (&NetEntId, &mut Transform, Option<&mut LinearVelocity>),
+        (
+            &NetEntId,
+            &mut Transform,
+            Option<&mut LinearVelocity>,
+            Option<&mut Rotation>,
+        ),
         With<SendNetworkTranformUpdates>,
     >,
 ) {
@@ -625,7 +644,7 @@ fn on_movement(
         let camera_net_id = movement.event.net_ent_id;
 
         // Find and update the camera entity
-        for (cam_net_id, mut cam_transform, maybe_lv) in &mut ent_to_move {
+        for (cam_net_id, mut cam_transform, maybe_lv, maybe_rot) in &mut ent_to_move {
             if cam_net_id == &camera_net_id {
                 // Update the camera's transform on the server
                 *cam_transform = movement.event.transform;
@@ -634,6 +653,13 @@ fn on_movement(
                 if let Some(mut lv) = maybe_lv {
                     if let Some(new_lv) = movement.event.velocity {
                         *lv = new_lv;
+                    }
+                }
+
+                // Update rotation if provided
+                if let Some(mut rot) = maybe_rot {
+                    if let Some(new_rot) = movement.event.rotation {
+                        *rot = new_rot;
                     }
                 }
                 continue 'event;
@@ -653,16 +679,24 @@ fn broadcast_movement_updates(
     clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
     sr: Res<ServerNetworkingResources>,
     changed_transforms: Query<
-        (&NetEntId, &Transform, Option<&LinearVelocity>),
+        (
+            &NetEntId,
+            &Transform,
+            Option<&LinearVelocity>,
+            Option<&Rotation>,
+        ),
         (With<SendNetworkTranformUpdates>, Changed<Transform>),
     >,
     //current_tick: Res<CurrentTick>,
 ) {
     let mut events_to_send = vec![];
-    for (cam_net_id, cam_transform, cam_lv) in &changed_transforms {
+    for (cam_net_id, cam_transform, cam_lv, cam_rot) in &changed_transforms {
         let mut components = vec![cam_transform.to_net_component()];
         if let Some(lv) = cam_lv {
             components.push(lv.to_net_component());
+        }
+        if let Some(rot) = cam_rot {
+            components.push(rot.to_net_component());
         }
 
         let event = EventToClient::UpdateUnit2(UpdateUnit2 {

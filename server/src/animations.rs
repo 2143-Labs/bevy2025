@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use shared::{
     event::{server::CastSkillUpdate, NetEntId, PlayerId, UDPacketEvent},
     net_components::{ents::SendNetworkTranformUpdates, ours::ControlledBy},
-    netlib::ServerNetworkingResources,
+    netlib::{send_outgoing_event_next_tick, ServerNetworkingResources},
     skills::animations::{SharedAnimationPlugin, UsingSkillSince},
     CurrentTick,
 };
@@ -109,10 +109,20 @@ fn on_unit_begin_skill_use(
             //send_outgoing_event_next_tick(&sr, packet.endpoint, &our_event);
         }
 
-        for (client_endpoint, client_player_id) in clients {
+        let event_to_send = shared::netlib::EventToClient::CastSkillUpdateToClient(
+            shared::event::client::CastSkillUpdateToClient {
+                net_ent_id: packet.event.net_ent_id,
+                begin_casting: packet.event.begin_casting && !cancelled,
+                skill: packet.event.skill.clone(),
+                begin_casting_tick: current_tick.0,
+            },
+        );
+        for (client_endpoint, _client_player_id) in clients {
             if client_endpoint.0 == packet.endpoint {
+                // Don't send back to the original sender
                 continue;
             }
+            send_outgoing_event_next_tick(&sr, client_endpoint.0, &event_to_send);
         }
     }
 }

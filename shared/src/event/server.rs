@@ -3,7 +3,7 @@ use crate::event::{EventFromEndpoint, NetEntId};
 use crate::items::SkillFromSkillSource;
 //use crate::net_components::NetComponent;
 use crate::netlib::NetworkingResources;
-use avian3d::prelude::LinearVelocity;
+use avian3d::prelude::{LinearVelocity, Rotation};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -45,6 +45,7 @@ pub struct ChangeMovement {
     pub net_ent_id: NetEntId,
     pub transform: Transform,
     pub velocity: Option<LinearVelocity>,
+    pub rotation: Option<Rotation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]

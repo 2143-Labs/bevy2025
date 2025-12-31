@@ -21,6 +21,7 @@ impl Plugin for CharacterControllerPlugin {
                     apply_gravity,
                     unit_change_movement,
                     update_grounded,
+                    rotation,
                     movement,
                     apply_movement_damping,
                 )
@@ -266,6 +267,13 @@ fn unit_change_movement(
                 *movement_action = event.movement_action.clone();
             }
         }
+    }
+}
+
+fn rotation(mut controllers: Query<(&mut Rotation, &MovementAction)>) {
+    for (mut transform, movement_action) in &mut controllers {
+        //rotate us around the Y axis based on camera yaw
+        *transform = Rotation(Quat::from_rotation_y(movement_action.camera_yaw as Scalar));
     }
 }
 

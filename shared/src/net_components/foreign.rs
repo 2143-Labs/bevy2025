@@ -18,6 +18,7 @@ pub enum NetComponentForeign {
     Collider(avian3d::prelude::Collider),
     Mass(avian3d::prelude::Mass),
     LinearVelocity(avian3d::prelude::LinearVelocity),
+    Rotation(avian3d::prelude::Rotation),
     TransformInterpolation,
     Color(Color),
 }
@@ -38,6 +39,9 @@ impl NetComponentForeign {
                 entity.insert(c);
             }
             NetComponentForeign::LinearVelocity(c) => {
+                entity.insert(c);
+            }
+            NetComponentForeign::Rotation(c) => {
                 entity.insert(c);
             }
             NetComponentForeign::Color(c) => {
@@ -72,6 +76,10 @@ impl NetComponentForeign {
         } else if type_id == std::any::TypeId::of::<avian3d::prelude::LinearVelocity>() {
             Some(NetComponentForeign::LinearVelocity(
                 unsafe { ptr.deref::<avian3d::prelude::LinearVelocity>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<avian3d::prelude::Rotation>() {
+            Some(NetComponentForeign::Rotation(
+                unsafe { ptr.deref::<avian3d::prelude::Rotation>() }.clone(),
             ))
         } else if type_id == std::any::TypeId::of::<ComponentColor>() {
             let color = unsafe { ptr.deref::<ComponentColor>() };
@@ -111,6 +119,12 @@ impl ToNetComponent for avian3d::prelude::Mass {
 impl ToNetComponent for avian3d::prelude::LinearVelocity {
     fn to_net_component(self) -> super::NetComponent {
         super::NetComponent::Foreign(NetComponentForeign::LinearVelocity(self))
+    }
+}
+
+impl ToNetComponent for avian3d::prelude::Rotation {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Foreign(NetComponentForeign::Rotation(self))
     }
 }
 

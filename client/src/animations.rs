@@ -1,14 +1,16 @@
 use bevy::prelude::*;
 use shared::{
-    CurrentTick,
-    event::NetEntId,
+    BASE_TICKS_PER_SECOND, CurrentTick,
+    event::{NetEntId, UDPacketEvent, client::CastSkillUpdateToClient},
     net_components::ents::SendNetworkTranformUpdates,
-    netlib::{ClientNetworkingResources, MainServerEndpoint, send_outgoing_event_next_tick},
+    netlib::{ClientNetworkingResources, MainServerEndpoint, Tick, send_outgoing_event_next_tick},
     skills::animations::{SharedAnimationPlugin, UsingSkillSince},
 };
 
 use crate::{
-    game_state::NetworkGameState, network::ManHands, ui::skills_menu::binds::BeginSkillUse,
+    game_state::NetworkGameState,
+    network::{ManHands, ServerTick},
+    ui::skills_menu::binds::BeginSkillUse,
 };
 
 pub struct CharacterAnimationPlugin;
@@ -22,6 +24,7 @@ impl Plugin for CharacterAnimationPlugin {
                 our_client_begin_skill_use,
                 update_animations,
                 on_remove_using_skill_since,
+                another_client_begin_skill_use,
             )
                 .run_if(in_state(NetworkGameState::ClientConnected)),
         );
@@ -144,6 +147,57 @@ fn on_remove_using_skill_since(
                 hand_transform.translation = BASE_LEFT_HAND_POS;
             } else {
                 hand_transform.translation = BASE_RIGHT_HAND_POS;
+            }
+        }
+    }
+}
+
+fn another_client_begin_skill_use(
+    mut reader: UDPacketEvent<CastSkillUpdateToClient>,
+    mut our_unit: Query<
+        (&NetEntId, Entity, Option<&mut UsingSkillSince>),
+        With<SendNetworkTranformUpdates>,
+    >,
+    //sr: Res<ClientNetworkingResources>,
+    time: Res<Time>,
+    tick: Res<CurrentTick>,
+    server_tick: Res<ServerTick>,
+    //mse: Res<MainServerEndpoint>,
+    mut commands: Commands,
+) {
+    for packet in reader.read() {
+        for (ent_id, entity, maybe_existing_skill) in our_unit.iter_mut() {
+            if packet.event.net_ent_id != *ent_id {
+                continue;
+            }
+
+            // todo no idea if this math is correct tbh but
+            let projected_client_tick =
+                packet.event.begin_casting_tick.0 as i64 - server_tick.tick_offset;
+            let subtick_offset = time.elapsed_secs_f64() - server_tick.realtime;
+            let num_ticks_ago = tick.0.0 as i64 - projected_client_tick;
+            if num_ticks_ago < 0 {
+                warn!("Received CastSkillUpdateToClient for future tick?");
+            }
+
+            let real_time = time.elapsed_secs_f64()
+                - (num_ticks_ago as f64 * BASE_TICKS_PER_SECOND as f64)
+                - subtick_offset;
+            let new_using_skill = UsingSkillSince {
+                real_time,
+                tick: Tick(projected_client_tick as _),
+                skill: packet.event.skill.clone(),
+            };
+
+            if let Some(mut existing_cast) = maybe_existing_skill {
+                if existing_cast.skill == packet.event.skill {
+                    // Already using this skill, no need to do anything
+                    continue;
+                }
+
+                *existing_cast = new_using_skill;
+            } else {
+                commands.entity(entity).insert(new_using_skill);
             }
         }
     }

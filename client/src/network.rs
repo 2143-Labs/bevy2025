@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use avian3d::prelude::LinearVelocity;
+use avian3d::prelude::{LinearVelocity, Rotation};
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
     Config,
@@ -21,7 +21,7 @@ use shared::{
         ours::{PlayerColor, PlayerName},
     },
     netlib::{
-        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint,
+        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, Tick,
         send_outgoing_event_next_tick, send_outgoing_event_now, send_outgoing_event_now_batch,
         setup_incoming_client,
     },
@@ -142,6 +142,7 @@ impl Plugin for NetworkingPlugin {
                     on_special_unit_spawn_man,
                     on_special_unit_spawn_loot,
                     receive_heartbeat,
+                    receive_tick_just_happened,
                     receive_challenge,
                 )
                     .run_if(in_state(NetworkGameState::ClientConnected)),
@@ -154,6 +155,11 @@ impl Plugin for NetworkingPlugin {
             )
             .add_message::<SpawnUnit2>()
             .add_message::<SpawnMan>()
+            .insert_resource(ServerTick {
+                tick: Tick(0),
+                tick_offset: 0,
+                realtime: 0.0,
+            })
             .insert_resource(LocalLatencyMeasurement { latency: -1.0 });
     }
 }
@@ -603,6 +609,41 @@ fn receive_heartbeat(
     }
 }
 
+#[derive(Resource, Debug)]
+pub struct ServerTick {
+    pub tick: Tick,
+    /// positive if server is ahead of us
+    pub tick_offset: i64,
+    pub realtime: f64,
+}
+
+fn receive_tick_just_happened(
+    time: Res<Time>,
+    mut server_tick: ResMut<ServerTick>,
+    client_tick: Res<shared::CurrentTick>,
+    mut tick_events: UDPacketEvent<shared::event::client::TickHappened>,
+) {
+    for event in tick_events.read() {
+        let tick = event.event.tick;
+        if tick.0.is_multiple_of(1000) {
+            info!(
+                ?server_tick,
+                "Server tick just happened: {:?}", event.event.tick
+            );
+        }
+        if tick.0 < server_tick.tick.0 {
+            warn!(
+                "Received out-of-order tick from server: {:?} < {:?}",
+                tick, server_tick.tick
+            );
+            continue;
+        }
+        server_tick.tick.0 = tick.0.max(server_tick.tick.0);
+        server_tick.realtime = time.elapsed_secs_f64();
+        server_tick.tick_offset = (server_tick.tick.0 as i64) - (client_tick.0.0 as i64)
+    }
+}
+
 fn receive_challenge(
     mut heartbeat_challenges: UDPacketEvent<HeartbeatChallenge>,
     local: Res<LocalLatencyMeasurement>,
@@ -661,6 +702,7 @@ fn send_movement_camera(
         events.push(EventToServer::ChangeMovement(ChangeMovement {
             net_ent_id: *ent_id,
             velocity: None,
+            rotation: None,
             transform: *transform,
         }));
 
@@ -672,15 +714,16 @@ fn send_movement_unit(
     sr: Res<ClientNetworkingResources>,
     mse: Res<MainServerEndpoint>,
     our_transform: Query<
-        (&Transform, &LinearVelocity, &NetEntId),
+        (&Transform, &LinearVelocity, &Rotation, &NetEntId),
         (With<CurrentThirdPersonControlledUnit>, Changed<Transform>),
     >,
 ) {
-    if let Ok((transform, velo, ent_id)) = our_transform.single() {
+    if let Ok((transform, velo, rotation, ent_id)) = our_transform.single() {
         let mut events = vec![];
         events.push(EventToServer::ChangeMovement(ChangeMovement {
             net_ent_id: *ent_id,
             velocity: Some(*velo),
+            rotation: Some(*rotation),
             transform: *transform,
         }));
 
