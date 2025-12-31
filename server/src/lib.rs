@@ -72,9 +72,9 @@ struct PlayerEndpoint(Endpoint);
 
 //pub mod chat;
 //pub mod game_manager;
+pub mod animations;
 pub mod spawns;
 pub mod terrain;
-pub mod animations;
 
 pub fn main_multiplayer_server() {
     do_app(|app| {

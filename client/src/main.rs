@@ -1,6 +1,8 @@
 #![allow(clippy::type_complexity)]
+mod animations;
 mod assets;
 mod camera;
+mod character_controller_client;
 mod debug;
 pub mod game_state;
 mod grass;
@@ -12,8 +14,6 @@ mod remote_players;
 mod terrain;
 mod ui;
 mod water;
-mod character_controller_client;
-mod animations;
 
 use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
 

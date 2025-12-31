@@ -1,5 +1,5 @@
-use bevy::prelude::*;
 use avian3d::math::Vector3;
+use bevy::prelude::*;
 use shared::character_controller::SpawnDebugBall;
 
 #[derive(Resource)]
@@ -16,8 +16,12 @@ impl Plugin for ClientCharacterControllerPlugin {
     fn build(&self, app: &mut App) {
         app
             //.init_resource::<ShowPhysicsDebug>()
-            .add_systems(Update, (debug_spawn_collision_ball, remove_old_debug_balls).run_if(resource_exists::<ShowPhysicsDebug>));
-            // Add systems and resources related to character controller here
+            .add_systems(
+                Update,
+                (debug_spawn_collision_ball, remove_old_debug_balls)
+                    .run_if(resource_exists::<ShowPhysicsDebug>),
+            );
+        // Add systems and resources related to character controller here
     }
 }
 

@@ -98,12 +98,18 @@ impl Plugin for SkillBindsPlugin {
             last_pressed_combo: None,
         });
 
-        app.add_systems(Update, tick_disappear_res.run_if(
-            resource_exists::<DisappearIn>
-        ));
         app.add_systems(
             Update,
-            (on_bind_skill_to_key, check_for_key_combo_press, write_begin_skill_use_events.run_if(in_state(SkillBindOverlayState::Inactive)),).run_if(in_state(GameState::Playing)),
+            tick_disappear_res.run_if(resource_exists::<DisappearIn>),
+        );
+        app.add_systems(
+            Update,
+            (
+                on_bind_skill_to_key,
+                check_for_key_combo_press,
+                write_begin_skill_use_events.run_if(in_state(SkillBindOverlayState::Inactive)),
+            )
+                .run_if(in_state(GameState::Playing)),
         );
 
         app.add_systems(
@@ -119,7 +125,8 @@ impl Plugin for SkillBindsPlugin {
             (
                 redraw_skill_bind_overlay,
                 on_skill_combo_key_during_bind_overlay,
-            ).run_if(not(in_state(SkillBindOverlayState::JustFinishedBinding)))
+            )
+                .run_if(not(in_state(SkillBindOverlayState::JustFinishedBinding)))
                 .run_if(not(in_state(SkillBindOverlayState::Inactive))),
         );
     }
@@ -144,13 +151,16 @@ fn write_begin_skill_use_events(
     current_unit_query: Query<&NetEntId, With<CurrentThirdPersonControlledUnit>>,
 ) {
     let Ok(unit_id) = current_unit_query.single() else {
-        error!("No current third person controlled unit found when trying to use skill");
+        // No controlled unit, nothing to do
         return;
     };
 
     for combo_key in combo_key_reader.read() {
         if let Some(skill) = locally_bound_skills.bound_skills.get(combo_key) {
-            debug!("Using bound skill {:?} for key combo {:?}", skill, combo_key);
+            debug!(
+                "Using bound skill {:?} for key combo {:?}",
+                skill, combo_key
+            );
             begin_skill_use_writer.write(BeginSkillUse {
                 skill: skill.clone(),
                 unit: *unit_id,
@@ -257,12 +267,15 @@ fn spawn_skill_bind_overlay(mut commands: Commands) {
 
     // We do 2 things- darken the screen background and then spawn a box to print binds in
     commands
-        .spawn((SkillBindOverlay, Node {
-            position_type: PositionType::Absolute,
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            ..default()
-        }))
+        .spawn((
+            SkillBindOverlay,
+            Node {
+                position_type: PositionType::Absolute,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                ..default()
+            },
+        ))
         .with_children(|parent| {
             // Darken background
             parent.spawn((

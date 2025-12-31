@@ -1,4 +1,49 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{event::NetEntId, items::ItemId, BASE_TICKS_PER_SECOND};
+use crate::{
+    event::NetEntId,
+    items::{ItemId, SkillFromSkillSource},
+    netlib::Tick,
+    CurrentTick, BASE_TICKS_PER_SECOND,
+};
+
+pub struct SharedAnimationPlugin;
+
+impl Plugin for SharedAnimationPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(FixedUpdate, remove_old_skills);
+    }
+}
+
+#[derive(Clone, Component, Debug)]
+pub struct UsingSkillSince {
+    pub real_time: f64,
+    pub tick: Tick,
+    pub skill: SkillFromSkillSource,
+}
+
+fn remove_old_skills(
+    mut query: Query<(Entity, &UsingSkillSince, &NetEntId)>,
+    tick: Res<CurrentTick>,
+    //time: Res<Time>,
+    mut commands: Commands,
+) {
+    for (entity, using_skill, ent_id) in query.iter_mut() {
+        let frontswing = using_skill.skill.skill.frontswing();
+        let windup = using_skill.skill.skill.windup();
+        let winddown = using_skill.skill.skill.winddown();
+        let backswing = using_skill.skill.skill.backswing();
+
+        let total_cast_time = frontswing + windup + winddown + backswing;
+        let total_cast_time = total_cast_time.try_into().unwrap_or(0);
+
+        let ticks_since_begin = tick.0 - using_skill.tick;
+        if ticks_since_begin.0 >= total_cast_time {
+            info!(?ent_id, ?using_skill.skill.skill, "Removing UsingSkillSince component after skill finished");
+            // Skill is finished, remove the component
+            // We can safely despawn the component here
+            commands.entity(entity).remove::<UsingSkillSince>();
+        }
+    }
+}

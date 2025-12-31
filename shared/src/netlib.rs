@@ -157,6 +157,22 @@ impl Tick {
     }
 }
 
+impl std::ops::Sub for Tick {
+    type Output = Tick;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 - rhs.0)
+    }
+}
+
+impl std::ops::Add for Tick {
+    type Output = Tick;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
 pub use crate::event::client::EventToClient;
 pub use crate::event::server::EventToServer;
 use crate::{CurrentTick, BASE_TICKS_PER_SECOND};

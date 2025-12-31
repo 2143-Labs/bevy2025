@@ -3,7 +3,8 @@ use std::time::Duration;
 use avian3d::prelude::LinearVelocity;
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
-    Config, CurrentTick, event::{
+    Config, CurrentTick,
+    event::{
         MyNetEntParentId, NetEntId, PlayerId, UDPacketEvent,
         client::{
             BeginThirdpersonControllingUnit, HeartbeatChallenge, HeartbeatResponse, SpawnUnit2,
@@ -13,13 +14,19 @@ use shared::{
             ChangeMovement, ConnectRequest, Heartbeat, HeartbeatChallengeResponse,
             IWantToDisconnect, SpawnCircle, SpawnMan,
         },
-    }, items::SkillFromSkillSource, net_components::{
+    },
+    items::SkillFromSkillSource,
+    net_components::{
         ents::{Ball, CanAssumeControl, ItemDrop, Man, PlayerCamera, SendNetworkTranformUpdates},
         foreign::ComponentColor,
         ours::{PlayerColor, PlayerName},
-    }, netlib::{
-        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, Tick, send_outgoing_event_next_tick, send_outgoing_event_now, send_outgoing_event_now_batch, setup_incoming_client
-    }, physics::terrain::TerrainParams
+    },
+    netlib::{
+        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, Tick,
+        send_outgoing_event_next_tick, send_outgoing_event_now, send_outgoing_event_now_batch,
+        setup_incoming_client,
+    },
+    physics::terrain::TerrainParams,
 };
 
 use crate::{
@@ -28,7 +35,8 @@ use crate::{
     game_state::{GameState, NetworkGameState, WorldEntity},
     notification::Notification,
     remote_players::{ApplyNoFrustumCulling, NameLabel, RemotePlayerCamera, RemotePlayerModel},
-    terrain::SetupTerrain, ui::skills_menu::binds::BeginSkillUse,
+    terrain::SetupTerrain,
+    ui::skills_menu::binds::BeginSkillUse,
 };
 
 pub mod inventory;
@@ -249,6 +257,11 @@ fn on_special_unit_spawn_loot(
     }
 }
 
+#[derive(Component)]
+pub struct ManHands {
+    pub is_left: bool,
+}
+
 fn on_special_unit_spawn_man(
     mut commands: Commands,
     mut unit_query: Query<(Entity, &NetEntId, &Man), With<NeedsClientConstruction>>,
@@ -271,6 +284,33 @@ fn on_special_unit_spawn_man(
                     half_length: 1.0,
                 }))),
             ))
+            .with_children(|parent| {
+                // Left hand
+                parent.spawn((
+                    ManHands { is_left: true },
+                    Transform::from_xyz(-1.0, 0.0, 1.0),
+                    MeshMaterial3d(materials.add(StandardMaterial {
+                        base_color: Color::linear_rgb(1.0, 0.8, 0.6),
+                        metallic: 0.0,
+                        perceptual_roughness: 0.5,
+                        ..default()
+                    })),
+                    Mesh3d(meshes.add(Mesh::from(Sphere { radius: 0.3 }))),
+                ));
+
+                // Right hand
+                parent.spawn((
+                    ManHands { is_left: false },
+                    Transform::from_xyz(1.0, 0.0, 1.0),
+                    MeshMaterial3d(materials.add(StandardMaterial {
+                        base_color: Color::linear_rgb(1.0, 0.8, 0.6),
+                        metallic: 0.0,
+                        perceptual_roughness: 0.5,
+                        ..default()
+                    })),
+                    Mesh3d(meshes.add(Mesh::from(Sphere { radius: 0.3 }))),
+                ));
+            })
             .remove::<NeedsClientConstruction>();
     }
 }
@@ -715,8 +755,6 @@ fn send_movement_unit(
 //local_spawn_unit.send(event.event.clone());
 //}
 //}
-
-
 
 fn our_client_wants_to_spawn_man(
     mut ev_sa: MessageReader<SpawnMan>,

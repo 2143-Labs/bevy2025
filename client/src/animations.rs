@@ -1,36 +1,41 @@
 use bevy::prelude::*;
-use shared::{CurrentTick, event::NetEntId, items::SkillFromSkillSource, net_components::ents::SendNetworkTranformUpdates, netlib::{ClientNetworkingResources, MainServerEndpoint, Tick, send_outgoing_event_next_tick}};
+use shared::{
+    CurrentTick,
+    event::NetEntId,
+    items::SkillFromSkillSource,
+    net_components::ents::SendNetworkTranformUpdates,
+    netlib::{ClientNetworkingResources, MainServerEndpoint, Tick, send_outgoing_event_next_tick},
+    skills::animations::{SharedAnimationPlugin, UsingSkillSince},
+};
 
-use crate::{game_state::NetworkGameState, ui::skills_menu::binds::BeginSkillUse};
+use crate::{
+    game_state::NetworkGameState, network::ManHands, ui::skills_menu::binds::BeginSkillUse,
+};
 
 pub struct CharacterAnimationPlugin;
 
 impl Plugin for CharacterAnimationPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .add_systems(
-                Update,
-                (
-                    // TODO receive new world data at any time?
-                    our_client_begin_skill_use,
-                )
-                    .run_if(in_state(NetworkGameState::ClientConnected)),
-            );
+        app.add_plugins(SharedAnimationPlugin).add_systems(
+            Update,
+            (
+                // TODO receive new world data at any time?
+                our_client_begin_skill_use,
+                update_animations,
+                on_remove_using_skill_since,
+            )
+                .run_if(in_state(NetworkGameState::ClientConnected)),
+        );
     }
-}
-
-
-#[derive(Clone, Component, Debug)]
-pub struct UsingSkillSince {
-    pub real_time: f64,
-    pub tick: Tick,
-    pub skill: SkillFromSkillSource,
 }
 
 fn our_client_begin_skill_use(
     mut ev_sa: MessageReader<BeginSkillUse>,
     // TODO use another unit query `With`
-    mut our_unit: Query<(&NetEntId, Entity, Option<&mut UsingSkillSince>), With<SendNetworkTranformUpdates>>,
+    mut our_unit: Query<
+        (&NetEntId, Entity, Option<&mut UsingSkillSince>),
+        With<SendNetworkTranformUpdates>,
+    >,
     sr: Res<ClientNetworkingResources>,
     time: Res<Time>,
     tick: Res<CurrentTick>,
@@ -56,11 +61,13 @@ fn our_client_begin_skill_use(
                     continue;
                 }
 
-                let event = shared::netlib::EventToServer::CastSkillUpdate(shared::event::server::CastSkillUpdate {
-                    net_ent_id: *ent_id,
-                    begin_casting: false,
-                    skill: existing_cast.skill.clone(),
-                });
+                let event = shared::netlib::EventToServer::CastSkillUpdate(
+                    shared::event::server::CastSkillUpdate {
+                        net_ent_id: *ent_id,
+                        begin_casting: false,
+                        skill: existing_cast.skill.clone(),
+                    },
+                );
                 info!(
                     "Sending stop skill use {:?} for unit {:?} to server",
                     existing_cast.skill, ent_id
@@ -73,16 +80,72 @@ fn our_client_begin_skill_use(
                 commands.entity(entity).insert(new_using_skill);
             }
 
-            let event = shared::netlib::EventToServer::CastSkillUpdate(shared::event::server::CastSkillUpdate {
-                net_ent_id: *ent_id,
-                begin_casting: true,
-                skill: skill.clone(),
-            });
+            let event = shared::netlib::EventToServer::CastSkillUpdate(
+                shared::event::server::CastSkillUpdate {
+                    net_ent_id: *ent_id,
+                    begin_casting: true,
+                    skill: skill.clone(),
+                },
+            );
             info!(
                 "Sending begin skill use {:?} for unit {:?} to server",
                 skill, ent_id
             );
             send_outgoing_event_next_tick(&sr, mse.0, &event);
+        }
+    }
+}
+
+const BASE_LEFT_HAND_POS: Vec3 = Vec3::new(-1.0, 0.0, 1.0);
+const BASE_RIGHT_HAND_POS: Vec3 = Vec3::new(1.0, 0.0, 1.0);
+
+fn update_animations(
+    mut units: Query<(Entity, &NetEntId, &UsingSkillSince), With<SendNetworkTranformUpdates>>,
+    mut children_hands: Query<(&mut Transform, &ChildOf, &ManHands)>,
+    time: Res<Time>,
+) {
+    for (entity, _net_ent_id, using_skill) in units.iter_mut() {
+        for (mut hand_transform, child_of, man_hands) in children_hands.iter_mut() {
+            if child_of.0 != entity {
+                continue;
+            }
+
+            let pi = std::f64::consts::PI as f32;
+            let rotations_per_second = 2.0;
+            let hand_movement_pct = (rotations_per_second
+                * (time.elapsed_secs_f64() - using_skill.real_time) as f32
+                * 2.0
+                * pi)
+                .sin()
+                / pi
+                + 0.5;
+            let hand_movement = Vec3::Y * hand_movement_pct;
+            let reverse_hand_movement = Vec3::Y - hand_movement;
+            if man_hands.is_left {
+                let hand_loc = BASE_LEFT_HAND_POS + hand_movement;
+                hand_transform.translation = hand_loc;
+            } else {
+                let hand_loc = BASE_RIGHT_HAND_POS + reverse_hand_movement;
+                hand_transform.translation = hand_loc;
+            }
+        }
+    }
+}
+
+fn on_remove_using_skill_since(
+    mut removed_units: RemovedComponents<UsingSkillSince>,
+    mut children_hands: Query<(&mut Transform, &ChildOf, &ManHands)>,
+) {
+    for entity in removed_units.read() {
+        for (mut hand_transform, child_of, man_hands) in children_hands.iter_mut() {
+            if child_of.0 != entity {
+                continue;
+            }
+            if man_hands.is_left {
+                hand_transform.translation = BASE_LEFT_HAND_POS;
+            } else {
+                hand_transform.translation = BASE_RIGHT_HAND_POS;
+            }
         }
     }
 }
