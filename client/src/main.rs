@@ -12,6 +12,7 @@ mod remote_players;
 mod terrain;
 mod ui;
 mod water;
+mod character_controller_client;
 
 use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
 
@@ -80,6 +81,7 @@ fn main() {
             LogDiagnosticsPlugin::default(),
             shared::event::client::NetworkEventPlugin,
             shared::character_controller::CharacterControllerPlugin,
+            character_controller_client::ClientCharacterControllerPlugin,
         ))
         .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue
         .insert_resource(args)

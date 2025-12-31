@@ -29,11 +29,9 @@ fn generate_code_for_event_queue(req: &GenerateRequest) -> String {
         }
 
         pub fn drain_incoming_events (
-            sr: Res<NetworkingResources<#incoming_typename, crate::netlib:: #outgoing_typename>>,
-            #(
-                mut #all_types_lowercase: MessageWriter<EventFromEndpoint< #all_types >>
-            ),*
+            world: &mut World,
         ) {
+            let sr = world.resource::<NetworkingResources<#incoming_typename, crate::netlib:: #outgoing_typename>>().clone();
             let mut new_events = sr.event_list_incoming.write().unwrap();
             let new_events = std::mem::replace(new_events.as_mut(), vec![]);
             for (endpoint, event) in new_events {
@@ -41,7 +39,7 @@ fn generate_code_for_event_queue(req: &GenerateRequest) -> String {
                 match event {
                     #(
                         #incoming_typename :: #all_types (data) => {
-                            #all_types_lowercase . write(EventFromEndpoint::new(endpoint, data));
+                            world.write_message(EventFromEndpoint::new(endpoint, data));
                         }
                     ),*
                 }

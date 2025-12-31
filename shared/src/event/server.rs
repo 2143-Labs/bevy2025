@@ -1,5 +1,6 @@
 //!This is for events that are sent FROM the client TO the server.
 use crate::event::{EventFromEndpoint, NetEntId};
+use crate::items::SkillFromSkillSource;
 //use crate::net_components::NetComponent;
 use crate::netlib::NetworkingResources;
 use avian3d::prelude::LinearVelocity;
@@ -60,5 +61,13 @@ pub struct HeartbeatChallengeResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct IWantToDisconnect {}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct CastSkillUpdate {
+    pub net_ent_id: NetEntId,
+    /// True if starting to cast, false if stopping
+    pub begin_casting: bool,
+    pub skill: SkillFromSkillSource,
+}
 
 include!(concat!(env!("OUT_DIR"), "/server_event.rs"));

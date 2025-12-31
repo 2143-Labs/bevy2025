@@ -133,7 +133,7 @@ pub struct BindSkillToKey {
 
 #[derive(Debug, Clone, Message)]
 pub struct BeginSkillUse {
-    pub skill: Skill,
+    pub skill: SkillFromSkillSource,
     pub unit: NetEntId,
 }
 

@@ -2,7 +2,7 @@
 use std::collections::HashMap;
 
 use crate::event::PlayerId;
-use crate::items::{Inventory, Item, ItemId, ItemInInventory, ItemPlacement};
+use crate::items::{Inventory, Item, ItemId, ItemInInventory, ItemPlacement, SkillFromSkillSource};
 use crate::net_components::PlayerConnectionInfo;
 use crate::netlib::{NetworkingResources, Tick};
 use crate::physics::terrain::TerrainParams;
@@ -111,6 +111,14 @@ pub struct SpawnProjectile {
     pub projectile_origin: Vec3,
     pub projectile_owner: Option<NetEntId>,
     pub projectile_type: ProjectileAI,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct CastSkillUpdateToClient {
+    pub net_ent_id: NetEntId,
+    /// True if starting to cast, false if stopping
+    pub begin_casting: bool,
+    pub skill: SkillFromSkillSource,
 }
 
 include!(concat!(env!("OUT_DIR"), "/client_event.rs"));
