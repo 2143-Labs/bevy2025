@@ -26,7 +26,8 @@ impl Plugin for CharacterControllerPlugin {
                 )
                     .chain(),
             )
-            .add_systems(Update, (debug_spawn_collision_ball, remove_old_debug_balls))
+            // TODO make this a cli argument
+            //.add_systems(Update, (debug_spawn_collision_ball, remove_old_debug_balls))
             .add_systems(
                 // Run collision handling after collision detection.
                 //
