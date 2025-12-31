@@ -4,7 +4,7 @@ use shared::{
     event::{NetEntId, UDPacketEvent, client::CastSkillUpdateToClient},
     net_components::ents::SendNetworkTranformUpdates,
     netlib::{ClientNetworkingResources, MainServerEndpoint, Tick, send_outgoing_event_next_tick},
-    skills::animations::{SharedAnimationPlugin, UsingSkillSince},
+    skills::animations::{CastComplete, SharedAnimationPlugin, UsingSkillSince},
 };
 
 use crate::{
@@ -196,8 +196,10 @@ fn another_client_begin_skill_use(
                 }
 
                 *existing_cast = new_using_skill;
+                commands.entity(entity).remove::<CastComplete>();
             } else {
                 commands.entity(entity).insert(new_using_skill);
+                commands.entity(entity).remove::<CastComplete>();
             }
         }
     }

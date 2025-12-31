@@ -12,7 +12,7 @@ pub struct SharedAnimationPlugin;
 
 impl Plugin for SharedAnimationPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(FixedUpdate, remove_old_skills);
+        app.add_systems(FixedUpdate, (remove_old_skills, check_for_skills_that_will_cast));
     }
 }
 
@@ -21,6 +21,28 @@ pub struct UsingSkillSince {
     pub real_time: f64,
     pub tick: Tick,
     pub skill: SkillFromSkillSource,
+}
+
+#[derive(Clone, Component, Debug)]
+pub struct CastComplete  {
+}
+
+fn check_for_skills_that_will_cast(
+    mut query: Query<(Entity, &UsingSkillSince, &NetEntId), Without<CastComplete>>,
+    tick: Res<CurrentTick>,
+    mut commands: Commands,
+) {
+    for (entity, using_skill, ent_id) in query.iter_mut() {
+        let frontswing = using_skill.skill.skill.frontswing();
+        let windup = using_skill.skill.skill.windup();
+        let total_cast_time = (frontswing + windup) as u64;
+        let been_casting_ticks = tick.0 - using_skill.tick;
+
+        if been_casting_ticks.0 >= total_cast_time {
+            info!(?ent_id, ?using_skill.skill.skill, "Skill has finished casting, adding CastComplete component");
+            commands.entity(entity).insert(CastComplete{});
+        }
+    }
 }
 
 fn remove_old_skills(
@@ -44,6 +66,7 @@ fn remove_old_skills(
             // Skill is finished, remove the component
             // We can safely despawn the component here
             commands.entity(entity).remove::<UsingSkillSince>();
+            commands.entity(entity).remove::<CastComplete>();
         }
     }
 }

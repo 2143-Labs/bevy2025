@@ -1,10 +1,6 @@
 use bevy::prelude::*;
 use shared::{
-    event::{server::CastSkillUpdate, NetEntId, PlayerId, UDPacketEvent},
-    net_components::{ents::SendNetworkTranformUpdates, ours::ControlledBy},
-    netlib::{send_outgoing_event_next_tick, ServerNetworkingResources},
-    skills::animations::{SharedAnimationPlugin, UsingSkillSince},
-    CurrentTick,
+    CurrentTick, event::{NetEntId, PlayerId, UDPacketEvent, server::CastSkillUpdate}, net_components::{ents::SendNetworkTranformUpdates, ours::ControlledBy}, netlib::{ServerNetworkingResources, send_outgoing_event_next_tick}, skills::animations::{CastComplete, SharedAnimationPlugin, UsingSkillSince}
 };
 
 use crate::{ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint};
@@ -88,11 +84,13 @@ fn on_unit_begin_skill_use(
                 // Stopping the current skill
                 info!(?player_id, ?ent_id, "Stopping skill casting early");
                 *existing_cast = new_using_skill;
+                commands.entity(entity).remove::<CastComplete>();
                 // send update to clients as update_entity
                 // TODO
             } else {
                 info!(?player_id, ?ent_id, "Beginning skill casting");
                 commands.entity(entity).insert(new_using_skill);
+                commands.entity(entity).remove::<CastComplete>();
             }
         }
 
