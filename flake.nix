@@ -17,11 +17,38 @@
           alsa-lib
           udev
         ];
-      in {
+        # Server package - headless, doesn't need graphics libraries
+        serverPackage = naersk-lib.buildPackage {
+          src = ./.;
+          nativeBuildInputs = with pkgs; [ pkg-config ];
+          buildInputs = with pkgs; [
+            udev
+          ];
+          cargoBuildOptions = x: x ++ [ "-p" "server" ];
+        };
+      in
+      rec {
         defaultPackage = naersk-lib.buildPackage {
           src = ./.;
           nativeBuildInputs = with pkgs; [ pkg-config ];
           buildInputs = buildInputsAll;
+        };
+        packages.server = serverPackage;
+        packages.container = pkgs.dockerTools.buildLayeredImage {
+          name = "bevy2025";
+          contents = [
+            serverPackage
+            pkgs.cacert
+            pkgs.bashInteractive
+            pkgs.coreutils
+          ];
+          config = {
+            ExposedPorts = { "25565/udp" = { }; };
+            EntryPoint = [ "${serverPackage}/bin/server" ];
+            Env = [
+              "RUST_LOG=info"
+            ];
+          };
         };
         devShell = with pkgs; mkShell {
           buildInputs = [

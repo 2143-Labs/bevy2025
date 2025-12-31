@@ -124,6 +124,45 @@ jobs:
           path: bevy2025-linux
           if-no-files-found: error
 
+  build-container:
+    name: Build and push container
+    runs-on: ubuntu-latest
+    #needs: version-bump
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository at updated main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v26
+
+      - name: Build container with Nix
+        run: nix build .#container
+
+      - name: Install skopeo
+        run: sudo apt-get install -y skopeo
+
+      - name: Push container with skopeo
+        run: |
+          set -euo pipefail
+          skopeo login --username ${{ github.actor }} --password "${{ secrets.GITHUB_TOKEN }}" ghcr.io
+          ls -la ./result
+          RESULT=$(readlink -f ./result)
+          echo "Result path: $RESULT"
+          IMAGE_TAG=$(date +%Y%m%d_%H%M)
+          skopeo copy docker-archive://$RESULT docker://ghcr.io/2143-labs/bevy2025:${IMAGE_TAG}
+          # if not pull request, then also push as latest
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            skopeo copy docker-archive://$RESULT docker://ghcr.io/2143-labs/bevy2025:branch-${{ github.head_ref }}
+          else
+            skopeo copy docker-archive://$RESULT docker://ghcr.io/2143-labs/bevy2025:latest
+          fi
+
   build-windows:
     name: Windows build (cargo)
     runs-on: windows-latest
