@@ -1,6 +1,12 @@
 use bevy::prelude::*;
 use shared::{
-    CurrentTick, event::{NetEntId, PlayerId, UDPacketEvent, client::SpawnProjectile, server::CastSkillUpdate}, net_components::{ents::SendNetworkTranformUpdates, ours::ControlledBy}, netlib::{ServerNetworkingResources, send_outgoing_event_next_tick}, skills::animations::{CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince}
+    event::{client::SpawnProjectile, server::CastSkillUpdate, NetEntId, PlayerId, UDPacketEvent},
+    net_components::{ents::SendNetworkTranformUpdates, ours::ControlledBy},
+    netlib::{send_outgoing_event_next_tick, ServerNetworkingResources},
+    skills::animations::{
+        CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince,
+    },
+    CurrentTick,
 };
 
 use crate::{ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint};
@@ -140,9 +146,15 @@ fn on_unit_finish_cast(
         tick,
         net_ent_id,
         skill,
-    } in cast_event_reader.read() {
-        if tick.0 > 2 + server_tick.0.0 {
-            error!(?net_ent_id, ?tick, ?server_tick, "Received UnitFinishedSkillCast event that is >2 ticks old from ourselves???");
+    } in cast_event_reader.read()
+    {
+        if tick.0 > 2 + server_tick.0 .0 {
+            error!(
+                ?net_ent_id,
+                ?tick,
+                ?server_tick,
+                "Received UnitFinishedSkillCast event that is >2 ticks old from ourselves???"
+            );
         }
 
         for (transform, ent_id) in query {
@@ -157,8 +169,14 @@ fn on_unit_finish_cast(
                         let mut cur_pos = transform.translation;
                         for _target in 0..20 {
                             let mut next_target = Vec3::ZERO;
-                            while next_target.length_squared() < 5.0 || next_target.length_squared() > 8.0 {
-                                next_target = Vec3::new(rand::random_range(-5.0..5.0), 0.0, rand::random_range(-5.0..5.0));
+                            while next_target.length_squared() < 5.0
+                                || next_target.length_squared() > 8.0
+                            {
+                                next_target = Vec3::new(
+                                    rand::random_range(-5.0..5.0),
+                                    0.0,
+                                    rand::random_range(-5.0..5.0),
+                                );
                             }
                             cur_pos += next_target;
                             path_targets.push(cur_pos);
@@ -168,13 +186,18 @@ fn on_unit_finish_cast(
                             spawn_tick: server_tick.0,
                             projectile_origin: transform.translation,
                             projectile_owner: Some(*net_ent_id),
-                            projectile_type: shared::skills::ProjectileAI::Spark { projectile_path_targets: path_targets }
+                            projectile_type: shared::skills::ProjectileAI::Spark {
+                                projectile_path_targets: path_targets,
+                            },
                         };
 
                         for client_endpoint in &connected_clients {
-                            send_outgoing_event_next_tick(&sr, client_endpoint.0, &shared::netlib::EventToClient::SpawnProjectile(event.clone()));
+                            send_outgoing_event_next_tick(
+                                &sr,
+                                client_endpoint.0,
+                                &shared::netlib::EventToClient::SpawnProjectile(event.clone()),
+                            );
                         }
-
                     }
                 }
                 shared::skills::Skill::Hammerdin => {
@@ -192,7 +215,11 @@ fn on_unit_finish_cast(
                         };
 
                         for client_endpoint in &connected_clients {
-                            send_outgoing_event_next_tick(&sr, client_endpoint.0, &shared::netlib::EventToClient::SpawnProjectile(proj.clone()));
+                            send_outgoing_event_next_tick(
+                                &sr,
+                                client_endpoint.0,
+                                &shared::netlib::EventToClient::SpawnProjectile(proj.clone()),
+                            );
                         }
                     }
                 }

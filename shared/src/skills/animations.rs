@@ -12,7 +12,11 @@ pub struct SharedAnimationPlugin;
 
 impl Plugin for SharedAnimationPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(FixedUpdate, (remove_old_skills, check_for_skills_that_will_cast)).add_message::<UnitFinishedSkillCast>();
+        app.add_systems(
+            FixedUpdate,
+            (remove_old_skills, check_for_skills_that_will_cast),
+        )
+        .add_message::<UnitFinishedSkillCast>();
     }
 }
 
@@ -24,8 +28,7 @@ pub struct UsingSkillSince {
 }
 
 #[derive(Clone, Component, Debug)]
-pub struct CastComplete  {
-}
+pub struct CastComplete {}
 
 // TODO: Split this into a client guess and server authoritative version
 #[derive(Clone, Message, Debug)]
@@ -49,7 +52,7 @@ fn check_for_skills_that_will_cast(
 
         if been_casting_ticks.0 >= total_cast_time {
             info!(?ent_id, ?using_skill.skill.skill, "Skill has finished casting, adding CastComplete component");
-            commands.entity(entity).insert(CastComplete{});
+            commands.entity(entity).insert(CastComplete {});
             unit_finished_skill_cast_writer.write(UnitFinishedSkillCast {
                 tick: tick.0,
                 net_ent_id: *ent_id,

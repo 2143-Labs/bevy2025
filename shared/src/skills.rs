@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{BASE_TICKS_PER_SECOND, event::NetEntId, items::ItemId, netlib::Tick};
+use crate::{event::NetEntId, items::ItemId, netlib::Tick, BASE_TICKS_PER_SECOND};
 
 pub mod animations;
 
@@ -33,7 +33,7 @@ pub enum ProjectileAI {
         init_angle_radians: f32,
         speed: f32,
         spiral_width_modifier: f32,
-    }
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -1,8 +1,16 @@
 use bevy::prelude::*;
-use shared::{
-    BASE_TICKS_PER_SECOND, CurrentTick, event::{NetEntId, UDPacketEvent, client::CastSkillUpdateToClient}, net_components::ents::SendNetworkTranformUpdates, netlib::{ClientNetworkingResources, MainServerEndpoint, Tick, send_outgoing_event_next_tick}, physics::terrain::{NOISE_SCALE_FACTOR, TerrainParams}, skills::{ProjDespawn, ProjSpawnedAt, ProjectileAI, animations::{CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince}}
-};
 use noise::NoiseFn;
+use shared::{
+    BASE_TICKS_PER_SECOND, CurrentTick,
+    event::{NetEntId, UDPacketEvent, client::CastSkillUpdateToClient},
+    net_components::ents::SendNetworkTranformUpdates,
+    netlib::{ClientNetworkingResources, MainServerEndpoint, Tick, send_outgoing_event_next_tick},
+    physics::terrain::{NOISE_SCALE_FACTOR, TerrainParams},
+    skills::{
+        ProjDespawn, ProjSpawnedAt, ProjectileAI,
+        animations::{CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince},
+    },
+};
 
 use crate::{
     game_state::NetworkGameState,
@@ -153,7 +161,6 @@ fn on_remove_using_skill_since(
     }
 }
 
-
 /// Take the given input tick, &Time, &ServerTick, and &CurrentTick, return the projected client
 /// tick and real client time to spawn the projectile at.
 pub fn get_client_tick_from_server_tick(
@@ -263,12 +270,16 @@ fn on_unit_finish_cast(
             //spawn 10 skill cast markers above their head
             for _i in 0..1 {
                 commands.spawn((
-                    Transform::from_translation(
-                        transform.translation + Vec3::Y * 2.0,
-                    ).with_rotation(Quat::from_axis_angle(
-                        Vec3::from_array([rand::random_range(-1.0..1.0), rand::random_range(-1.0..1.0), rand::random_range(-1.0..1.0)]).normalize(),
-                        rand::random_range(0.0..std::f32::consts::PI * 2.0),
-                    )),
+                    Transform::from_translation(transform.translation + Vec3::Y * 2.0)
+                        .with_rotation(Quat::from_axis_angle(
+                            Vec3::from_array([
+                                rand::random_range(-1.0..1.0),
+                                rand::random_range(-1.0..1.0),
+                                rand::random_range(-1.0..1.0),
+                            ])
+                            .normalize(),
+                            rand::random_range(0.0..std::f32::consts::PI * 2.0),
+                        )),
                     SkillCastMarker {
                         spin: rand::random_range(45.0..400.0),
                         time_created: time.elapsed_secs_f64(),
@@ -312,7 +323,7 @@ fn rotate_and_move_skill_cast_markers(
 
         let rot = Quat::from_axis_angle(Vec3::Y, marker.spin * time.delta_secs());
         transform.rotation *= rot;
-        transform.translation += rot * Vec3::Y * marker.speed * time.delta_secs() ;
+        transform.translation += rot * Vec3::Y * marker.speed * time.delta_secs();
     }
 }
 
@@ -327,27 +338,19 @@ fn on_spawn_projectile(
 ) {
     for event in spawn_event_reader.read() {
         info!(?event.event.projectile_type, ?event.event.projectile_origin, "Spawning projectile");
-        let (real_time, tick) = get_client_tick_from_server_tick(
-            &event.event.spawn_tick,
-            &time,
-            &tick,
-            &server_tick,
-        );
+        let (real_time, tick) =
+            get_client_tick_from_server_tick(&event.event.spawn_tick, &time, &tick, &server_tick);
 
         let mesh_handle = match event.event.projectile_type {
-            ProjectileAI::Spark { .. } => {
-                meshes.add(Mesh::from(Tetrahedron { 
-                    vertices: [
-                        Vec3::new(0.0, 0.5, 0.0),
-                        Vec3::new(-0.5, -0.5, 0.5),
-                        Vec3::new(0.5, -0.5, 0.5),
-                        Vec3::new(0.0, -0.5, -0.5),
-                    ],
-                }))
-            }
-            ProjectileAI::HammerDin { .. } => {
-                meshes.add(Mesh::from(Sphere { radius: 1.0 }) )
-            }
+            ProjectileAI::Spark { .. } => meshes.add(Mesh::from(Tetrahedron {
+                vertices: [
+                    Vec3::new(0.0, 0.5, 0.0),
+                    Vec3::new(-0.5, -0.5, 0.5),
+                    Vec3::new(0.5, -0.5, 0.5),
+                    Vec3::new(0.0, -0.5, -0.5),
+                ],
+            })),
+            ProjectileAI::HammerDin { .. } => meshes.add(Mesh::from(Sphere { radius: 1.0 })),
             _ => {
                 error!("Unknown projectile type for mesh!");
                 continue;
@@ -371,13 +374,19 @@ fn on_spawn_projectile(
                 base_color: Color::linear_rgb(1.0, 0.5, 0.0),
                 unlit: true,
                 ..Default::default()
-            }))
+            })),
         ));
     }
 }
 
 fn update_projectiles(
-    mut query: Query<(Entity, &mut Transform, &ProjectileAI, &ProjSpawnedAt, &ProjDespawn)>,
+    mut query: Query<(
+        Entity,
+        &mut Transform,
+        &ProjectileAI,
+        &ProjSpawnedAt,
+        &ProjDespawn,
+    )>,
     tick: Res<CurrentTick>,
     time: Res<Time>,
     mut commands: Commands,
@@ -389,11 +398,13 @@ fn update_projectiles(
         if tick.0.0 >= despawn.tick.0 {
             // despawn
             commands.entity(ent).despawn();
-            continue
+            continue;
         }
 
         match projectile_ai {
-            ProjectileAI::Spark { projectile_path_targets } => {
+            ProjectileAI::Spark {
+                projectile_path_targets,
+            } => {
                 // the float index we are targeting
                 let path_target = time_since_spawn * 5.0;
                 let cur_path_index = path_target as usize;
@@ -402,7 +413,7 @@ fn update_projectiles(
                 if cur_path_index + 1 >= projectile_path_targets.len() {
                     // despawn
                     commands.entity(ent).despawn();
-                    continue
+                    continue;
                 }
 
                 let start_pos = projectile_path_targets[cur_path_index];
@@ -410,13 +421,23 @@ fn update_projectiles(
                 let mut new_pos = start_pos.lerp(end_pos, pct_through_current_path as f32);
                 let xz = new_pos.xz();
                 // TODO REFACTOR PAIR TER1
-                let y = noise.get([xz.x as f64 * NOISE_SCALE_FACTOR, xz.y as f64 * NOISE_SCALE_FACTOR]) as f32 * terrain_info.max_height_delta;
+                let y = noise.get([
+                    xz.x as f64 * NOISE_SCALE_FACTOR,
+                    xz.y as f64 * NOISE_SCALE_FACTOR,
+                ]) as f32
+                    * terrain_info.max_height_delta;
                 new_pos.y = y + 1.0;
 
                 transform.translation = new_pos;
-                transform.rotation = Quat::from_rotation_arc(Vec3::Z, (end_pos - start_pos).normalize());
+                transform.rotation =
+                    Quat::from_rotation_arc(Vec3::Z, (end_pos - start_pos).normalize());
             }
-            ProjectileAI::HammerDin { center_point, init_angle_radians, speed, spiral_width_modifier } => {
+            ProjectileAI::HammerDin {
+                center_point,
+                init_angle_radians,
+                speed,
+                spiral_width_modifier,
+            } => {
                 let global_hammer_speed = 7.0;
                 let angle = init_angle_radians + (time_since_spawn as f32 * speed);
                 let angle = angle * global_hammer_speed;
@@ -426,7 +447,11 @@ fn update_projectiles(
                 let new_z = center_point.z + radius * angle.sin();
                 let xz = Vec2::new(new_x, new_z);
                 // TODO REFACTOR PAIR TER1
-                let y = noise.get([xz.x as f64 * NOISE_SCALE_FACTOR, xz.y as f64 * NOISE_SCALE_FACTOR]) as f32 * terrain_info.max_height_delta;
+                let y = noise.get([
+                    xz.x as f64 * NOISE_SCALE_FACTOR,
+                    xz.y as f64 * NOISE_SCALE_FACTOR,
+                ]) as f32
+                    * terrain_info.max_height_delta;
                 let new_pos = Vec3::new(new_x, y + 1.0, new_z);
 
                 transform.translation = new_pos;
