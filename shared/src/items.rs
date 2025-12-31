@@ -3,7 +3,10 @@ use std::sync::{Arc, RwLock};
 use bevy_ecs::resource::Resource;
 use serde::{Deserialize, Serialize};
 
-use crate::stats::{HasMods, Mod, PlayerFinalStats};
+use crate::{
+    skills::{Skill, SkillSource},
+    stats::{HasMods, Mod, PlayerFinalStats},
+};
 
 pub mod diary;
 pub mod footwear;
@@ -22,6 +25,12 @@ pub struct ItemInInventory<ItemRepr> {
     pub item: ItemRepr,
     pub stacksize: u16,
     pub item_placement: ItemPlacement,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SkillFromSkillSource {
+    pub skill: Skill,
+    pub source: SkillSource,
 }
 
 impl ItemInInventory<ItemId> {
@@ -49,7 +58,7 @@ impl Inventory<ItemId> {
 }
 
 impl Inventory<Item> {
-    pub fn get_equipped_skills(&self) -> Vec<crate::skills::Skill> {
+    pub fn get_equipped_skills(&self) -> Vec<SkillFromSkillSource> {
         let mut skills = vec![];
 
         for inv_item in &self.items {
@@ -77,7 +86,10 @@ impl Inventory<Item> {
             println!("Item grants skills: {:?}", item_skills);
 
             for skill in item_skills {
-                skills.push(skill);
+                skills.push(SkillFromSkillSource {
+                    source: SkillSource::Item(inv_item.item.item_id),
+                    skill,
+                });
             }
         }
 
@@ -346,7 +358,7 @@ impl HasMods for Item {
     fn get_mods(&self) -> Vec<Mod> {
         self.data.get_mods()
     }
-    fn grants_skills(&self) -> Vec<crate::skills::Skill> {
+    fn grants_skills(&self) -> Vec<Skill> {
         self.data.grants_skills()
     }
 }
@@ -358,7 +370,7 @@ impl HasMods for ItemData {
         all_mods.extend(base_mods);
         all_mods
     }
-    fn grants_skills(&self) -> Vec<crate::skills::Skill> {
+    fn grants_skills(&self) -> Vec<Skill> {
         self.item_base.grants_skills()
     }
 }
@@ -386,7 +398,7 @@ impl HasMods for BaseItem {
             BaseItem::Footwear(footwear) => footwear.get_mods(),
         }
     }
-    fn grants_skills(&self) -> Vec<crate::skills::Skill> {
+    fn grants_skills(&self) -> Vec<Skill> {
         match self {
             BaseItem::CurrencyPiece => vec![],
             BaseItem::DiaryPage(page) => page.grants_skills(),
@@ -445,9 +457,7 @@ pub fn goblin_drops() -> Inventory<Item> {
         data: ItemData {
             item_base: BaseItem::EnemyDiaryPage(diary::EnemyDiaryPage::Goblin),
             mods: vec![],
-            item_misc: vec![
-                ItemMiscModifiers::Damaged(DamageLevels::Worn),
-            ],
+            item_misc: vec![ItemMiscModifiers::Damaged(DamageLevels::Worn)],
         },
     };
 
@@ -468,9 +478,7 @@ pub fn goblin_drops() -> Inventory<Item> {
         data: ItemData {
             item_base: BaseItem::DiaryPage(diary::DiaryPage::Ranger),
             mods: vec![],
-            item_misc: vec![
-                ItemMiscModifiers::Equipped(EquipSlot::Diary),
-            ],
+            item_misc: vec![ItemMiscModifiers::Equipped(EquipSlot::Diary)],
         },
     };
 

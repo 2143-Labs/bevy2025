@@ -15,8 +15,7 @@ pub enum DiaryBook {
     SummonerSpellbook,
 }
 
-impl HasMods for DiaryBook {
-}
+impl HasMods for DiaryBook {}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum DiaryPage {
@@ -38,15 +37,10 @@ impl HasMods for DiaryPage {
                 Skill::HomingArrows,
             ],
             DiaryPage::Melee => vec![],
-            DiaryPage::Spellcasting => vec![
-                Skill::Spark,
-            ],
+            DiaryPage::Spellcasting => vec![Skill::Spark],
             DiaryPage::Scavenger => vec![],
             DiaryPage::MartialTraining => vec![],
-            DiaryPage::Healing => vec![
-                Skill::Heal,
-                Skill::Revive,
-            ],
+            DiaryPage::Healing => vec![Skill::Heal, Skill::Revive],
         }
     }
 }
@@ -56,5 +50,4 @@ pub enum EnemyDiaryPage {
     Goblin,
 }
 
-impl HasMods for EnemyDiaryPage {
-}
+impl HasMods for EnemyDiaryPage {}

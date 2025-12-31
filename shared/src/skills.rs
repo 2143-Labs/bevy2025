@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{BASE_TICKS_PER_SECOND, event::NetEntId};
+use crate::{event::NetEntId, items::ItemId, BASE_TICKS_PER_SECOND};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ProjectileAI {
@@ -14,7 +14,7 @@ pub enum ProjectileAI {
     },
     Spark {
         projectile_path_targets: Vec<Vec3>,
-    }
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -35,9 +35,14 @@ pub enum Skill {
     RainOfArrows,
 
     /// After hitting a target, fire homing bolts for up to 5 seconds
-    HomingArrows
+    HomingArrows,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum SkillSource {
+    Item(ItemId),
+    Other,
+}
 
 fn ticks_from_secs(secs: f32) -> i16 {
     (secs * BASE_TICKS_PER_SECOND as f32) as i16

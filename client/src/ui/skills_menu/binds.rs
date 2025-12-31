@@ -1,8 +1,10 @@
-use dashmap::DashMap;
-use shared::{Config, GameAction, event::NetEntId, skills::Skill};
 use bevy::prelude::*;
+use dashmap::DashMap;
+use shared::{Config, GameAction, event::NetEntId, items::SkillFromSkillSource, skills::Skill};
 
-use crate::{game_state::GameState, network::CurrentThirdPersonControlledUnit};
+use crate::{
+    camera::ChompInputs, game_state::GameState, network::CurrentThirdPersonControlledUnit,
+};
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug, Message)]
 pub struct SkillComboKey {
@@ -34,6 +36,22 @@ pub struct CurrentlyPressedSkillKeys {
     pub last_pressed_combo: Option<SkillComboKey>,
 }
 
+#[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
+/// This state will block all input and let players bind a skill
+pub enum SkillBindOverlayState {
+    /// Initial state to put menu in when ready to bind a skill
+    Active,
+
+    ReadyForBinding,
+    #[default]
+    Inactive,
+}
+
+#[derive(Resource)]
+pub struct CurrentSkillWeAreBinding {
+    pub skill: SkillFromSkillSource,
+}
+
 pub struct SkillBindsPlugin;
 
 impl Plugin for SkillBindsPlugin {
@@ -41,6 +59,7 @@ impl Plugin for SkillBindsPlugin {
         app.add_message::<SkillComboKey>()
             .add_message::<BindSkillToKey>()
             .add_message::<BeginSkillUse>();
+        app.insert_state(SkillBindOverlayState::Inactive);
         app.insert_resource(LocallyBoundSkills {
             bound_skills: DashMap::new(),
         })
@@ -51,9 +70,24 @@ impl Plugin for SkillBindsPlugin {
         });
         app.add_systems(
             Update,
-            (on_bind_skill_to_key,
-             check_for_key_combo_press
-             ).run_if(in_state(GameState::Playing)),
+            (on_bind_skill_to_key, check_for_key_combo_press).run_if(in_state(GameState::Playing)),
+        );
+
+        app.add_systems(
+            OnExit(SkillBindOverlayState::Inactive),
+            spawn_skill_bind_overlay,
+        );
+        app.add_systems(
+            OnEnter(SkillBindOverlayState::Inactive),
+            despawn_skill_bind_overlay,
+        );
+        app.add_systems(
+            Update,
+            (
+                redraw_skill_bind_overlay,
+                on_skill_combo_key_during_bind_overlay,
+            )
+                .run_if(not(in_state(SkillBindOverlayState::Inactive))),
         );
     }
 }
@@ -79,29 +113,21 @@ fn on_bind_skill_to_key(
             .bound_skills
             .insert(event.key.normalized(), event.skill.clone());
 
-        info!(
-            "Bound skill {:?} to key {:?}",
-            event.skill, event.key
-        );
+        info!("Bound skill {:?} to key {:?}", event.skill, event.key);
     }
 }
 
-const SKILL_KEYS: [GameAction; 6] = [
+const SKILL_KEYS: [GameAction; 7] = [
     GameAction::Jump,
     GameAction::Special1,
     GameAction::Special2,
     GameAction::Special3,
     GameAction::Fire1,
     GameAction::Fire2,
+    GameAction::Escape,
 ];
 
-const MODIFIER_KEYS: [GameAction; 3] = [
-    GameAction::Mod1,
-    GameAction::Mod2,
-    GameAction::Mod3,
-];
-
-
+const MODIFIER_KEYS: [GameAction; 3] = [GameAction::Mod1, GameAction::Mod2, GameAction::Mod3];
 
 fn check_for_key_combo_press(
     keyboard: Res<ButtonInput<KeyCode>>,
@@ -123,13 +149,146 @@ fn check_for_key_combo_press(
             let combo_key = SkillComboKey {
                 base_key: *skill_key,
                 modifier_keys: pressed_modifiers.clone(),
-            }.normalized();
+            }
+            .normalized();
 
             begin_key_combo.write(combo_key.clone());
             currently_pressed_skill_keys.last_pressed_combo = Some(combo_key);
+        }
+
+        if config.pressed(&keyboard, &mouse, *skill_key) {
             pressed_skill_keys.push(*skill_key);
         }
     }
     currently_pressed_skill_keys.pressed_modifier_keys = pressed_modifiers;
     currently_pressed_skill_keys.pressed_keys = pressed_skill_keys;
+}
+
+#[derive(Component)]
+pub struct SkillBindOverlay;
+
+#[derive(Component)]
+pub struct SkillBindOverlayText;
+
+fn spawn_skill_bind_overlay(mut commands: Commands) {
+    // Disable camera/unit inputs
+    commands.insert_resource(ChompInputs);
+
+    // We do 2 things- darken the screen background and then spawn a box to print binds in
+    commands
+        .spawn((SkillBindOverlay, Node { ..default() }))
+        .with_children(|parent| {
+            // Darken background
+            parent.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    width: Val::Percent(100.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
+            ));
+
+            // Box for binds
+            parent
+                .spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Percent(25.0),
+                        top: Val::Percent(25.0),
+                        width: Val::Percent(50.0),
+                        height: Val::Percent(50.0),
+                        border: UiRect::all(Val::Px(3.0)),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
+                    BorderColor::all(Color::BLACK),
+                ))
+                .with_children(|parent| {
+                    parent.spawn((
+                        SkillBindOverlayText,
+                        Text::new("Press a key combination to bind a skill..."),
+                        TextFont {
+                            font_size: 32.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(0.9, 0.9, 0.9)),
+                    ));
+                });
+        });
+}
+
+fn despawn_skill_bind_overlay(
+    mut commands: Commands,
+    query: Query<Entity, With<SkillBindOverlay>>,
+) {
+    let Ok(overlay_entity) = query.single() else {
+        error!("No SkillBindOverlay found when despawning skill bind overlay");
+        return;
+    };
+    commands.entity(overlay_entity).despawn();
+    commands.remove_resource::<ChompInputs>();
+}
+
+fn redraw_skill_bind_overlay(
+    mut query: Query<&mut Text, With<SkillBindOverlayText>>,
+    currently_pressed_skill_keys: Res<CurrentlyPressedSkillKeys>,
+) {
+    let Ok(mut text) = query.single_mut() else {
+        error!("No SkillBindOverlayText found when redrawing skill bind overlay");
+        return;
+    };
+
+    let mut combo_string = String::new();
+    for modifier in &currently_pressed_skill_keys.pressed_modifier_keys {
+        combo_string.push_str(&format!("{:?} + ", modifier));
+    }
+    if let Some(key) = currently_pressed_skill_keys.pressed_keys.first() {
+        combo_string.push_str(&format!("{:?}", key));
+    } else {
+        combo_string.push_str("...");
+    }
+    text.0 = format!("Key: {}", combo_string);
+}
+
+fn on_skill_combo_key_during_bind_overlay(
+    mut reader: MessageReader<SkillComboKey>,
+    cur_state: Res<State<SkillBindOverlayState>>,
+    mut next_state: ResMut<NextState<SkillBindOverlayState>>,
+    mut bind_events: MessageWriter<BindSkillToKey>,
+    current_binding_skill: Res<CurrentSkillWeAreBinding>,
+) {
+    let mut our_cur_state = cur_state.clone();
+    for ev in reader.read() {
+        info!("Checking for skill use during bind overlay {:?}", ev);
+        // We need to eat the first bind, since usually fire will be pressed to open the bind
+        // overlay itsslef
+        if our_cur_state == SkillBindOverlayState::Active {
+            info!(
+                "Key combo {:?} pressed during bind overlay, moving to ReadyForBinding",
+                ev
+            );
+            next_state.set(SkillBindOverlayState::ReadyForBinding);
+            our_cur_state = SkillBindOverlayState::ReadyForBinding;
+            continue;
+        }
+
+        if ev.base_key == GameAction::Escape {
+            info!("Escape pressed during bind overlay, cancelling bind");
+            next_state.set(SkillBindOverlayState::Inactive);
+            return;
+        }
+
+        info!(
+            "Key combo {:?} pressed during bind overlay, moving to Inactive",
+            ev
+        );
+        bind_events.write(BindSkillToKey {
+            skill: current_binding_skill.skill.skill.clone(),
+            key: ev.clone(),
+        });
+        next_state.set(SkillBindOverlayState::Inactive);
+    }
 }

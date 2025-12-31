@@ -86,7 +86,13 @@ pub fn spawn_inventory_menu(
                 let (node, bg_color, border_color) = menu_button_bundle();
                 let (text, font, mut color) = menu_button_text(&item_text);
                 // check if the item is equipped-
-                if item.item.data.item_misc.iter().any(|misc| matches!(misc, shared::items::ItemMiscModifiers::Equipped(_))) {
+                if item
+                    .item
+                    .data
+                    .item_misc
+                    .iter()
+                    .any(|misc| matches!(misc, shared::items::ItemMiscModifiers::Equipped(_)))
+                {
                     // gold
                     color.0 = Color::linear_rgb(1.0, 0.84, 0.0);
                 }

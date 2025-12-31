@@ -24,7 +24,9 @@ pub mod stats;
 
 pub const BASE_TICKS_PER_SECOND: u16 = 128;
 
-#[derive(Reflect, Hash, Eq, PartialEq, Clone, Deserialize, Serialize, Debug, Ord, PartialOrd, Copy)]
+#[derive(
+    Reflect, Hash, Eq, PartialEq, Clone, Deserialize, Serialize, Debug, Ord, PartialOrd, Copy,
+)]
 pub enum GameAction {
     MoveForward,
     MoveBackward,
@@ -77,9 +79,18 @@ static DEFAULT_BINDS: Lazy<Keybinds> = Lazy::new(|| {
         (GameAction::Jump, vec![kk(KeyCode::Space)]),
         (GameAction::Fire1, vec![mb(MouseButton::Left)]),
         (GameAction::Fire2, vec![mb(MouseButton::Right)]),
-        (GameAction::Mod1, vec![kk(KeyCode::ShiftLeft), kk(KeyCode::ShiftRight)]),
-        (GameAction::Mod2, vec![kk(KeyCode::ControlLeft), kk(KeyCode::ControlRight)]),
-        (GameAction::Mod3, vec![kk(KeyCode::AltLeft), kk(KeyCode::AltRight)]),
+        (
+            GameAction::Mod1,
+            vec![kk(KeyCode::ShiftLeft), kk(KeyCode::ShiftRight)],
+        ),
+        (
+            GameAction::Mod2,
+            vec![kk(KeyCode::ControlLeft), kk(KeyCode::ControlRight)],
+        ),
+        (
+            GameAction::Mod3,
+            vec![kk(KeyCode::AltLeft), kk(KeyCode::AltRight)],
+        ),
         (GameAction::Special1, vec![kk(KeyCode::KeyQ)]),
         (GameAction::Special2, vec![kk(KeyCode::KeyE)]),
         (GameAction::Special3, vec![kk(KeyCode::KeyF)]),

@@ -23,27 +23,37 @@ pub struct FreeCam {
 #[derive(Component)]
 pub struct LocalCamera;
 
+#[derive(Resource)]
+/// Insert this global resource to indicate that our controls should not be forwarded to any unit
+/// controller
+pub struct ChompInputs;
+
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Playing), setup_cameras)
             .add_systems(OnExit(GameState::Playing), despawn_cameras)
+            // Input related: dont run in ChompInputs mode
             .add_systems(
                 Update,
                 (
                     handle_pause_and_inventory_input,
                     freecam_controller.run_if(in_state(InputControlState::Freecam)),
-                    (
-                        tps_camera_controller,
-                        update_freecam_transform_from_settings_tps,
-                        keyboard_input_tps,
-                    )
+                    (tps_camera_controller, keyboard_input_tps)
                         .run_if(in_state(InputControlState::ThirdPerson)),
                     //manage_physics_pause,
                 )
-                    .run_if(in_state(GameState::Playing)),
+                    .run_if(in_state(GameState::Playing))
+                    .run_if(not(resource_exists::<ChompInputs>)),
             );
+        // Alawys run these even while Chomping
+        app.add_systems(
+            Update,
+            update_freecam_transform_from_settings_tps
+                .run_if(in_state(InputControlState::ThirdPerson))
+                .run_if(in_state(GameState::Playing)),
+        );
 
         app.insert_resource(LastInputDirection::default());
     }
