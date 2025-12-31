@@ -177,6 +177,25 @@ fn on_unit_finish_cast(
 
                     }
                 }
+                shared::skills::Skill::Hammerdin => {
+                    for hammer in 0..4 {
+                        let proj = SpawnProjectile {
+                            spawn_tick: server_tick.0,
+                            projectile_origin: transform.translation,
+                            projectile_owner: Some(*net_ent_id),
+                            projectile_type: shared::skills::ProjectileAI::HammerDin {
+                                init_angle_radians: (hammer as f32) * std::f32::consts::PI / 2.0,
+                                center_point: transform.translation,
+                                speed: 1.0,
+                                spiral_width_modifier: 1.0,
+                            },
+                        };
+
+                        for client_endpoint in &connected_clients {
+                            send_outgoing_event_next_tick(&sr, client_endpoint.0, &shared::netlib::EventToClient::SpawnProjectile(proj.clone()));
+                        }
+                    }
+                }
                 _ => {
                     warn!(?net_ent_id, ?skill.skill, "Received UnitFinishedSkillCast for unsupported skill");
                     break;

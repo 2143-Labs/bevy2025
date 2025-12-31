@@ -334,6 +334,26 @@ fn on_spawn_projectile(
             &server_tick,
         );
 
+        let mesh_handle = match event.event.projectile_type {
+            ProjectileAI::Spark { .. } => {
+                meshes.add(Mesh::from(Tetrahedron { 
+                    vertices: [
+                        Vec3::new(0.0, 0.5, 0.0),
+                        Vec3::new(-0.5, -0.5, 0.5),
+                        Vec3::new(0.5, -0.5, 0.5),
+                        Vec3::new(0.0, -0.5, -0.5),
+                    ],
+                }))
+            }
+            ProjectileAI::HammerDin { .. } => {
+                meshes.add(Mesh::from(Sphere { radius: 1.0 }) )
+            }
+            _ => {
+                error!("Unknown projectile type for mesh!");
+                continue;
+            }
+        };
+
         commands.spawn((
             Transform::from_translation(event.event.projectile_origin),
             //ProjectileAI
@@ -346,14 +366,7 @@ fn on_spawn_projectile(
                 tick: tick + Tick(300), // despawn after 5 seconds
             },
             // Basic equilateral tetrahedron mesh
-            Mesh3d(meshes.add(Mesh::from(Tetrahedron { 
-                vertices: [
-                    Vec3::new(0.0, 0.5, 0.0),
-                    Vec3::new(-0.5, -0.5, 0.5),
-                    Vec3::new(0.5, -0.5, 0.5),
-                    Vec3::new(0.0, -0.5, -0.5),
-                ],
-            }))),
+            Mesh3d(mesh_handle),
             MeshMaterial3d(materials.add(StandardMaterial {
                 base_color: Color::linear_rgb(1.0, 0.5, 0.0),
                 unlit: true,
@@ -373,6 +386,12 @@ fn update_projectiles(
     let noise: noise::Perlin = terrain_info.perlin();
     for (ent, mut transform, projectile_ai, spawned_at, despawn) in &mut query {
         let time_since_spawn = time.elapsed_secs_f64() - spawned_at.time;
+        if tick.0.0 >= despawn.tick.0 {
+            // despawn
+            commands.entity(ent).despawn();
+            continue
+        }
+
         match projectile_ai {
             ProjectileAI::Spark { projectile_path_targets } => {
                 // the float index we are targeting
@@ -380,7 +399,7 @@ fn update_projectiles(
                 let cur_path_index = path_target as usize;
                 let pct_through_current_path = path_target - path_target.floor();
 
-                if cur_path_index + 1 >= projectile_path_targets.len() || tick.0.0 >= despawn.tick.0 {
+                if cur_path_index + 1 >= projectile_path_targets.len() {
                     // despawn
                     commands.entity(ent).despawn();
                     continue
@@ -396,6 +415,23 @@ fn update_projectiles(
 
                 transform.translation = new_pos;
                 transform.rotation = Quat::from_rotation_arc(Vec3::Z, (end_pos - start_pos).normalize());
+            }
+            ProjectileAI::HammerDin { center_point, init_angle_radians, speed, spiral_width_modifier } => {
+                let global_hammer_speed = 7.0;
+                let angle = init_angle_radians + (time_since_spawn as f32 * speed);
+                let angle = angle * global_hammer_speed;
+                let radius = time_since_spawn as f32 * speed * spiral_width_modifier;
+                let radius = radius * global_hammer_speed;
+                let new_x = center_point.x + radius * angle.cos();
+                let new_z = center_point.z + radius * angle.sin();
+                let xz = Vec2::new(new_x, new_z);
+                // TODO REFACTOR PAIR TER1
+                let y = noise.get([xz.x as f64 * NOISE_SCALE_FACTOR, xz.y as f64 * NOISE_SCALE_FACTOR]) as f32 * terrain_info.max_height_delta;
+                let new_pos = Vec3::new(new_x, y + 1.0, new_z);
+
+                transform.translation = new_pos;
+                let tangent = Vec3::new(-angle.sin(), 0.0, angle.cos()).normalize();
+                transform.rotation = Quat::from_rotation_arc(Vec3::Z, tangent);
             }
             _ => {
                 // TODO

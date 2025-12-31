@@ -28,12 +28,20 @@ pub enum ProjectileAI {
     Spark {
         projectile_path_targets: Vec<Vec3>,
     },
+    HammerDin {
+        center_point: Vec3,
+        init_angle_radians: f32,
+        speed: f32,
+        spiral_width_modifier: f32,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Skill {
     /// Launch 4 projectiles in a random path around you
     Spark,
+
+    Hammerdin,
 
     /// Heal Targeted ally
     Heal,
@@ -73,6 +81,7 @@ impl Skill {
             Skill::BasicBowAttack => ticks_from_secs(0.3),
             Skill::RainOfArrows => ticks_from_secs(1.5),
             Skill::HomingArrows => ticks_from_secs(0.7),
+            _ => ticks_from_secs(0.1),
         }
     }
 
@@ -86,6 +95,7 @@ impl Skill {
             Skill::BasicBowAttack => ticks_from_secs(0.2),
             Skill::RainOfArrows => ticks_from_secs(1.0),
             Skill::HomingArrows => ticks_from_secs(0.3),
+            _ => ticks_from_secs(0.1),
         }
     }
 
@@ -99,6 +109,7 @@ impl Skill {
             Skill::BasicBowAttack => ticks_from_secs(0.2),
             Skill::RainOfArrows => ticks_from_secs(0.5),
             Skill::HomingArrows => ticks_from_secs(0.4),
+            _ => ticks_from_secs(0.1),
         }
     }
 
@@ -112,6 +123,7 @@ impl Skill {
             Skill::BasicBowAttack => ticks_from_secs(0.1),
             Skill::RainOfArrows => ticks_from_secs(0.3),
             Skill::HomingArrows => ticks_from_secs(0.2),
+            _ => ticks_from_secs(0.1),
         }
     }
 }
