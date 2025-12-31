@@ -10,7 +10,7 @@
       let
         pkgs = import nixpkgs { inherit system; };
         naersk-lib = pkgs.callPackage naersk { };
-        buildInputs = with pkgs; [
+        buildInputsAll = with pkgs; [
           wayland
           libxkbcommon
           vulkan-loader
@@ -18,10 +18,10 @@
           udev
         ];
       in {
-        defaultPackage = naersk-lib.buildPackage rec {
+        defaultPackage = naersk-lib.buildPackage {
           src = ./.;
           nativeBuildInputs = with pkgs; [ pkg-config ];
-          buildInputs = buildInputs;
+          buildInputs = buildInputsAll;
         };
         devShell = with pkgs; mkShell {
           buildInputs = [
@@ -34,9 +34,9 @@
             pre-commit 
             pkg-config
             bacon
-          ] ++ buildInputs;
+          ] ++ buildInputsAll;
           RUST_SRC_PATH = rustPlatform.rustLibSrc;
-          LD_LIBRARY_PATH = lib.makeLibraryPath buildInputs;
+          LD_LIBRARY_PATH = lib.makeLibraryPath buildInputsAll;
         };
       }
     );
