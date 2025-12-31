@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use shared::{
-    CurrentTick, event::{NetEntId, PlayerId, UDPacketEvent, server::CastSkillUpdate}, net_components::{ents::SendNetworkTranformUpdates, ours::ControlledBy}, netlib::{ServerNetworkingResources, send_outgoing_event_next_tick}, skills::animations::{CastComplete, SharedAnimationPlugin, UsingSkillSince}
+    CurrentTick, event::{NetEntId, PlayerId, UDPacketEvent, client::SpawnProjectile, server::CastSkillUpdate}, net_components::{ents::SendNetworkTranformUpdates, ours::ControlledBy}, netlib::{ServerNetworkingResources, send_outgoing_event_next_tick}, skills::animations::{CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince}
 };
 
 use crate::{ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint};
@@ -10,7 +10,7 @@ pub struct AnimationPluginServer;
 impl Plugin for AnimationPluginServer {
     fn build(&self, app: &mut App) {
         app.add_plugins(SharedAnimationPlugin)
-            .add_systems(Update, on_unit_begin_skill_use);
+            .add_systems(Update, (on_unit_begin_skill_use, on_unit_finish_cast));
     }
 }
 
@@ -121,6 +121,68 @@ fn on_unit_begin_skill_use(
                 continue;
             }
             send_outgoing_event_next_tick(&sr, client_endpoint.0, &event_to_send);
+        }
+    }
+}
+
+fn on_unit_finish_cast(
+    mut cast_event_reader: MessageReader<UnitFinishedSkillCast>,
+    mut query: Query<(&Transform, &NetEntId), With<UsingSkillSince>>,
+    time: Res<Time>,
+    server_tick: Res<CurrentTick>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    connected_clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
+    sr: Res<ServerNetworkingResources>,
+) {
+    for UnitFinishedSkillCast {
+        tick,
+        net_ent_id,
+        skill,
+    } in cast_event_reader.read() {
+        if tick.0 > 2 + server_tick.0.0 {
+            error!(?net_ent_id, ?tick, ?server_tick, "Received UnitFinishedSkillCast event that is >2 ticks old from ourselves???");
+        }
+
+        for (transform, ent_id) in query {
+            if ent_id != net_ent_id {
+                continue;
+            }
+
+            match &skill.skill {
+                shared::skills::Skill::Spark => {
+                    for _spark in 0..6 {
+                        let mut path_targets: Vec<Vec3> = vec![];
+                        let mut cur_pos = transform.translation;
+                        for _target in 0..20 {
+                            let mut next_target = Vec3::ZERO;
+                            while next_target.length_squared() < 5.0 || next_target.length_squared() > 8.0 {
+                                next_target = Vec3::new(rand::random_range(-5.0..5.0), 0.0, rand::random_range(-5.0..5.0));
+                            }
+                            cur_pos += next_target;
+                            path_targets.push(cur_pos);
+                        }
+
+                        let event = SpawnProjectile {
+                            spawn_tick: server_tick.0,
+                            projectile_origin: transform.translation,
+                            projectile_owner: Some(*net_ent_id),
+                            projectile_type: shared::skills::ProjectileAI::Spark { projectile_path_targets: path_targets }
+                        };
+
+                        for client_endpoint in &connected_clients {
+                            send_outgoing_event_next_tick(&sr, client_endpoint.0, &shared::netlib::EventToClient::SpawnProjectile(event.clone()));
+                        }
+
+                    }
+                }
+                _ => {
+                    warn!(?net_ent_id, ?skill.skill, "Received UnitFinishedSkillCast for unsupported skill");
+                    break;
+                }
+            }
+            break;
         }
     }
 }

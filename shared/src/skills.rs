@@ -1,11 +1,22 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{event::NetEntId, items::ItemId, BASE_TICKS_PER_SECOND};
+use crate::{BASE_TICKS_PER_SECOND, event::NetEntId, items::ItemId, netlib::Tick};
 
 pub mod animations;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Component, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjSpawnedAt {
+    pub tick: Tick,
+    pub time: f64,
+}
+
+#[derive(Debug, Component, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjDespawn {
+    pub tick: Tick,
+}
+
+#[derive(Debug, Component, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ProjectileAI {
     Straight {
         direction_vector: Vec3,
@@ -56,7 +67,7 @@ impl Skill {
     /// Returns the duration of the skill in ticks
     pub fn frontswing(&self) -> i16 {
         match self {
-            Skill::Spark => ticks_from_secs(0.5),
+            Skill::Spark => ticks_from_secs(0.25),
             Skill::Heal => ticks_from_secs(3.0),
             Skill::Revive => ticks_from_secs(5.0),
             Skill::BasicBowAttack => ticks_from_secs(0.3),
@@ -69,7 +80,7 @@ impl Skill {
     /// Returns the duration of the skill in ticks
     pub fn windup(&self) -> i16 {
         match self {
-            Skill::Spark => ticks_from_secs(0.2),
+            Skill::Spark => ticks_from_secs(0.1),
             Skill::Heal => ticks_from_secs(1.0),
             Skill::Revive => ticks_from_secs(2.0),
             Skill::BasicBowAttack => ticks_from_secs(0.2),
@@ -82,7 +93,7 @@ impl Skill {
     /// Returns the duration of the skill in ticks
     pub fn winddown(&self) -> i16 {
         match self {
-            Skill::Spark => ticks_from_secs(0.3),
+            Skill::Spark => ticks_from_secs(0.2),
             Skill::Heal => ticks_from_secs(1.0),
             Skill::Revive => ticks_from_secs(1.0),
             Skill::BasicBowAttack => ticks_from_secs(0.2),
@@ -95,7 +106,7 @@ impl Skill {
     /// Returns the duration of the skill in ticks
     pub fn backswing(&self) -> i16 {
         match self {
-            Skill::Spark => ticks_from_secs(0.2),
+            Skill::Spark => ticks_from_secs(0.1),
             Skill::Heal => ticks_from_secs(0.5),
             Skill::Revive => ticks_from_secs(0.5),
             Skill::BasicBowAttack => ticks_from_secs(0.1),

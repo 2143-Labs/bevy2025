@@ -108,6 +108,7 @@ pub struct RequestScoreboardResponse {
 // TODO impl
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct SpawnProjectile {
+    pub spawn_tick: Tick,
     pub projectile_origin: Vec3,
     pub projectile_owner: Option<NetEntId>,
     pub projectile_type: ProjectileAI,

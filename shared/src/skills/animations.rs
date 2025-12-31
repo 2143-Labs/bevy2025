@@ -12,7 +12,7 @@ pub struct SharedAnimationPlugin;
 
 impl Plugin for SharedAnimationPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(FixedUpdate, (remove_old_skills, check_for_skills_that_will_cast));
+        app.add_systems(FixedUpdate, (remove_old_skills, check_for_skills_that_will_cast)).add_message::<UnitFinishedSkillCast>();
     }
 }
 
@@ -27,10 +27,19 @@ pub struct UsingSkillSince {
 pub struct CastComplete  {
 }
 
+// TODO: Split this into a client guess and server authoritative version
+#[derive(Clone, Message, Debug)]
+pub struct UnitFinishedSkillCast {
+    pub tick: Tick,
+    pub net_ent_id: NetEntId,
+    pub skill: SkillFromSkillSource,
+}
+
 fn check_for_skills_that_will_cast(
     mut query: Query<(Entity, &UsingSkillSince, &NetEntId), Without<CastComplete>>,
     tick: Res<CurrentTick>,
     mut commands: Commands,
+    mut unit_finished_skill_cast_writer: MessageWriter<UnitFinishedSkillCast>,
 ) {
     for (entity, using_skill, ent_id) in query.iter_mut() {
         let frontswing = using_skill.skill.skill.frontswing();
@@ -41,6 +50,11 @@ fn check_for_skills_that_will_cast(
         if been_casting_ticks.0 >= total_cast_time {
             info!(?ent_id, ?using_skill.skill.skill, "Skill has finished casting, adding CastComplete component");
             commands.entity(entity).insert(CastComplete{});
+            unit_finished_skill_cast_writer.write(UnitFinishedSkillCast {
+                tick: tick.0,
+                net_ent_id: *ent_id,
+                skill: using_skill.skill.clone(),
+            });
         }
     }
 }

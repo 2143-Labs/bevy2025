@@ -1,11 +1,8 @@
 use bevy::prelude::*;
 use shared::{
-    BASE_TICKS_PER_SECOND, CurrentTick,
-    event::{NetEntId, UDPacketEvent, client::CastSkillUpdateToClient},
-    net_components::ents::SendNetworkTranformUpdates,
-    netlib::{ClientNetworkingResources, MainServerEndpoint, Tick, send_outgoing_event_next_tick},
-    skills::animations::{CastComplete, SharedAnimationPlugin, UsingSkillSince},
+    BASE_TICKS_PER_SECOND, CurrentTick, event::{NetEntId, UDPacketEvent, client::CastSkillUpdateToClient}, net_components::ents::SendNetworkTranformUpdates, netlib::{ClientNetworkingResources, MainServerEndpoint, Tick, send_outgoing_event_next_tick}, physics::terrain::{NOISE_SCALE_FACTOR, TerrainParams}, skills::{ProjDespawn, ProjSpawnedAt, ProjectileAI, animations::{CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince}}
 };
+use noise::NoiseFn;
 
 use crate::{
     game_state::NetworkGameState,
@@ -25,6 +22,10 @@ impl Plugin for CharacterAnimationPlugin {
                 update_animations,
                 on_remove_using_skill_since,
                 another_client_begin_skill_use,
+                on_unit_finish_cast,
+                rotate_and_move_skill_cast_markers,
+                on_spawn_projectile,
+                update_projectiles,
             )
                 .run_if(in_state(NetworkGameState::ClientConnected)),
         );
@@ -152,6 +153,33 @@ fn on_remove_using_skill_since(
     }
 }
 
+
+/// Take the given input tick, &Time, &ServerTick, and &CurrentTick, return the projected client
+/// tick and real client time to spawn the projectile at.
+pub fn get_client_tick_from_server_tick(
+    input_tick: &Tick,
+    time: &Time,
+    tick: &CurrentTick,
+    server_tick: &ServerTick,
+) -> (f64, Tick) {
+    // TODO no idea if this math is correct tbh but works?
+    let projected_client_tick = input_tick.0 as i64 - server_tick.tick_offset;
+    let subtick_offset = time.elapsed_secs_f64() - server_tick.realtime;
+    let num_ticks_ago = tick.0.0 as i64 - projected_client_tick;
+    if num_ticks_ago < 0 {
+        warn!("Received CastSkillUpdateToClient for future tick?");
+    }
+    if num_ticks_ago > 2 {
+        warn!("Received CastSkillUpdateToClient for tick >2 ticks ago?");
+    }
+
+    let real_time = time.elapsed_secs_f64()
+        - (num_ticks_ago as f64 * BASE_TICKS_PER_SECOND as f64)
+        - subtick_offset;
+
+    (real_time, Tick(projected_client_tick as _))
+}
+
 fn another_client_begin_skill_use(
     mut reader: UDPacketEvent<CastSkillUpdateToClient>,
     mut our_unit: Query<
@@ -171,21 +199,16 @@ fn another_client_begin_skill_use(
                 continue;
             }
 
-            // todo no idea if this math is correct tbh but
-            let projected_client_tick =
-                packet.event.begin_casting_tick.0 as i64 - server_tick.tick_offset;
-            let subtick_offset = time.elapsed_secs_f64() - server_tick.realtime;
-            let num_ticks_ago = tick.0.0 as i64 - projected_client_tick;
-            if num_ticks_ago < 0 {
-                warn!("Received CastSkillUpdateToClient for future tick?");
-            }
+            let (real_time, projected_tick) = get_client_tick_from_server_tick(
+                &packet.event.begin_casting_tick,
+                &time,
+                &tick,
+                &server_tick,
+            );
 
-            let real_time = time.elapsed_secs_f64()
-                - (num_ticks_ago as f64 * BASE_TICKS_PER_SECOND as f64)
-                - subtick_offset;
             let new_using_skill = UsingSkillSince {
                 real_time,
-                tick: Tick(projected_client_tick as _),
+                tick: projected_tick,
                 skill: packet.event.skill.clone(),
             };
 
@@ -200,6 +223,182 @@ fn another_client_begin_skill_use(
             } else {
                 commands.entity(entity).insert(new_using_skill);
                 commands.entity(entity).remove::<CastComplete>();
+            }
+        }
+    }
+}
+
+#[derive(Clone, Component, Debug)]
+/// temp flair to show when a user has finished casting
+pub struct SkillCastMarker {
+    pub spin: f32,
+    pub time_created: f64,
+    pub speed: f32,
+}
+
+fn on_unit_finish_cast(
+    mut cast_event_reader: MessageReader<UnitFinishedSkillCast>,
+    query: Query<(&Transform, &NetEntId), With<UsingSkillSince>>,
+    time: Res<Time>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for UnitFinishedSkillCast {
+        tick: _,
+        net_ent_id,
+        skill: _,
+    } in cast_event_reader.read()
+    {
+        for (transform, ent_id) in &query {
+            if net_ent_id != ent_id {
+                continue;
+            }
+
+            info!(
+                ?net_ent_id,
+                ?transform.translation,
+                "Unit finished skill cast at position"
+            );
+            //spawn 10 skill cast markers above their head
+            for _i in 0..1 {
+                commands.spawn((
+                    Transform::from_translation(
+                        transform.translation + Vec3::Y * 2.0,
+                    ).with_rotation(Quat::from_axis_angle(
+                        Vec3::from_array([rand::random_range(-1.0..1.0), rand::random_range(-1.0..1.0), rand::random_range(-1.0..1.0)]).normalize(),
+                        rand::random_range(0.0..std::f32::consts::PI * 2.0),
+                    )),
+                    SkillCastMarker {
+                        spin: rand::random_range(45.0..400.0),
+                        time_created: time.elapsed_secs_f64(),
+                        speed: rand::random_range(0.5..2.0),
+                    },
+                    Mesh3d(meshes.add(Mesh::from(Tetrahedron {
+                        vertices: [
+                            Vec3::new(0.0, 0.5, 0.0),
+                            Vec3::new(-0.5, -0.5, 0.5),
+                            Vec3::new(0.5, -0.5, 0.5),
+                            Vec3::new(0.0, -0.5, -0.5),
+                        ],
+                    }))),
+                    MeshMaterial3d(materials.add(StandardMaterial {
+                        base_color: Color::linear_rgb(
+                            rand::random_range(0.5..1.0),
+                            rand::random_range(0.5..1.0),
+                            rand::random_range(0.5..1.0),
+                        ),
+                        unlit: true,
+                        ..Default::default()
+                    })),
+                ));
+            }
+        }
+    }
+}
+
+const MAX_TIME_FOR_SKILL_CAST_MARKER: f64 = 3.0;
+
+fn rotate_and_move_skill_cast_markers(
+    time: Res<Time>,
+    mut query: Query<(Entity, &mut Transform, &SkillCastMarker)>,
+    mut commands: Commands,
+) {
+    for (ent, mut transform, marker) in &mut query {
+        if time.elapsed_secs_f64() - marker.time_created > MAX_TIME_FOR_SKILL_CAST_MARKER {
+            commands.entity(ent).despawn();
+            continue;
+        }
+
+        let rot = Quat::from_axis_angle(Vec3::Y, marker.spin * time.delta_secs());
+        transform.rotation *= rot;
+        transform.translation += rot * Vec3::Y * marker.speed * time.delta_secs() ;
+    }
+}
+
+fn on_spawn_projectile(
+    mut spawn_event_reader: UDPacketEvent<shared::event::client::SpawnProjectile>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    tick: Res<CurrentTick>,
+    server_tick: Res<ServerTick>,
+    time: Res<Time>,
+) {
+    for event in spawn_event_reader.read() {
+        info!(?event.event.projectile_type, ?event.event.projectile_origin, "Spawning projectile");
+        let (real_time, tick) = get_client_tick_from_server_tick(
+            &event.event.spawn_tick,
+            &time,
+            &tick,
+            &server_tick,
+        );
+
+        commands.spawn((
+            Transform::from_translation(event.event.projectile_origin),
+            //ProjectileAI
+            event.event.projectile_type.clone(),
+            ProjSpawnedAt {
+                tick,
+                time: real_time,
+            },
+            ProjDespawn {
+                tick: tick + Tick(300), // despawn after 5 seconds
+            },
+            // Basic equilateral tetrahedron mesh
+            Mesh3d(meshes.add(Mesh::from(Tetrahedron { 
+                vertices: [
+                    Vec3::new(0.0, 0.5, 0.0),
+                    Vec3::new(-0.5, -0.5, 0.5),
+                    Vec3::new(0.5, -0.5, 0.5),
+                    Vec3::new(0.0, -0.5, -0.5),
+                ],
+            }))),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: Color::linear_rgb(1.0, 0.5, 0.0),
+                unlit: true,
+                ..Default::default()
+            }))
+        ));
+    }
+}
+
+fn update_projectiles(
+    mut query: Query<(Entity, &mut Transform, &ProjectileAI, &ProjSpawnedAt, &ProjDespawn)>,
+    tick: Res<CurrentTick>,
+    time: Res<Time>,
+    mut commands: Commands,
+    terrain_info: Res<TerrainParams>,
+) {
+    let noise: noise::Perlin = terrain_info.perlin();
+    for (ent, mut transform, projectile_ai, spawned_at, despawn) in &mut query {
+        let time_since_spawn = time.elapsed_secs_f64() - spawned_at.time;
+        match projectile_ai {
+            ProjectileAI::Spark { projectile_path_targets } => {
+                // the float index we are targeting
+                let path_target = time_since_spawn * 5.0;
+                let cur_path_index = path_target as usize;
+                let pct_through_current_path = path_target - path_target.floor();
+
+                if cur_path_index + 1 >= projectile_path_targets.len() || tick.0.0 >= despawn.tick.0 {
+                    // despawn
+                    commands.entity(ent).despawn();
+                    continue
+                }
+
+                let start_pos = projectile_path_targets[cur_path_index];
+                let end_pos = projectile_path_targets[cur_path_index + 1];
+                let mut new_pos = start_pos.lerp(end_pos, pct_through_current_path as f32);
+                let xz = new_pos.xz();
+                // TODO REFACTOR PAIR TER1
+                let y = noise.get([xz.x as f64 * NOISE_SCALE_FACTOR, xz.y as f64 * NOISE_SCALE_FACTOR]) as f32 * terrain_info.max_height_delta;
+                new_pos.y = y + 1.0;
+
+                transform.translation = new_pos;
+                transform.rotation = Quat::from_rotation_arc(Vec3::Z, (end_pos - start_pos).normalize());
+            }
+            _ => {
+                // TODO
             }
         }
     }
