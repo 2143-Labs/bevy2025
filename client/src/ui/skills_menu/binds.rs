@@ -26,7 +26,7 @@ impl SkillComboKey {
 
 #[derive(Resource)]
 pub struct LocallyBoundSkills {
-    pub bound_skills: DashMap<SkillComboKey, Skill>,
+    pub bound_skills: DashMap<SkillComboKey, SkillFromSkillSource>,
 }
 
 #[derive(Resource)]
@@ -103,7 +103,7 @@ impl Plugin for SkillBindsPlugin {
         ));
         app.add_systems(
             Update,
-            (on_bind_skill_to_key, check_for_key_combo_press).run_if(in_state(GameState::Playing)),
+            (on_bind_skill_to_key, check_for_key_combo_press, write_begin_skill_use_events.run_if(in_state(SkillBindOverlayState::Inactive)),).run_if(in_state(GameState::Playing)),
         );
 
         app.add_systems(
@@ -127,7 +127,7 @@ impl Plugin for SkillBindsPlugin {
 
 #[derive(Debug, Clone, Message)]
 pub struct BindSkillToKey {
-    pub skill: Skill,
+    pub skill: SkillFromSkillSource,
     pub key: SkillComboKey,
 }
 
@@ -135,6 +135,28 @@ pub struct BindSkillToKey {
 pub struct BeginSkillUse {
     pub skill: SkillFromSkillSource,
     pub unit: NetEntId,
+}
+
+fn write_begin_skill_use_events(
+    mut begin_skill_use_writer: MessageWriter<BeginSkillUse>,
+    mut combo_key_reader: MessageReader<SkillComboKey>,
+    locally_bound_skills: Res<LocallyBoundSkills>,
+    current_unit_query: Query<&NetEntId, With<CurrentThirdPersonControlledUnit>>,
+) {
+    let Ok(unit_id) = current_unit_query.single() else {
+        error!("No current third person controlled unit found when trying to use skill");
+        return;
+    };
+
+    for combo_key in combo_key_reader.read() {
+        if let Some(skill) = locally_bound_skills.bound_skills.get(combo_key) {
+            debug!("Using bound skill {:?} for key combo {:?}", skill, combo_key);
+            begin_skill_use_writer.write(BeginSkillUse {
+                skill: skill.clone(),
+                unit: *unit_id,
+            });
+        }
+    }
 }
 
 fn on_bind_skill_to_key(
@@ -343,7 +365,7 @@ fn on_skill_combo_key_during_bind_overlay(
             ev
         );
         bind_events.write(BindSkillToKey {
-            skill: current_binding_skill.skill.skill.clone(),
+            skill: current_binding_skill.skill.clone(),
             key: ev.clone(),
         });
         next_state.set(SkillBindOverlayState::JustFinishedBinding);

@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{event::NetEntId, items::ItemId, BASE_TICKS_PER_SECOND};
 
+pub mod animations;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ProjectileAI {
     Straight {
@@ -38,7 +40,7 @@ pub enum Skill {
     HomingArrows,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum SkillSource {
     Item(ItemId),
     Other,

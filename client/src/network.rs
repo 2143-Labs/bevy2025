@@ -3,8 +3,7 @@ use std::time::Duration;
 use avian3d::prelude::LinearVelocity;
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
-    Config,
-    event::{
+    Config, CurrentTick, event::{
         MyNetEntParentId, NetEntId, PlayerId, UDPacketEvent,
         client::{
             BeginThirdpersonControllingUnit, HeartbeatChallenge, HeartbeatResponse, SpawnUnit2,
@@ -14,18 +13,13 @@ use shared::{
             ChangeMovement, ConnectRequest, Heartbeat, HeartbeatChallengeResponse,
             IWantToDisconnect, SpawnCircle, SpawnMan,
         },
-    },
-    net_components::{
-        ents::{Ball, CanAssumeControl, ItemDrop, Man, PlayerCamera},
+    }, items::SkillFromSkillSource, net_components::{
+        ents::{Ball, CanAssumeControl, ItemDrop, Man, PlayerCamera, SendNetworkTranformUpdates},
         foreign::ComponentColor,
         ours::{PlayerColor, PlayerName},
-    },
-    netlib::{
-        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint,
-        send_outgoing_event_next_tick, send_outgoing_event_now, send_outgoing_event_now_batch,
-        setup_incoming_client,
-    },
-    physics::terrain::TerrainParams,
+    }, netlib::{
+        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, Tick, send_outgoing_event_next_tick, send_outgoing_event_now, send_outgoing_event_now_batch, setup_incoming_client
+    }, physics::terrain::TerrainParams
 };
 
 use crate::{
@@ -34,7 +28,7 @@ use crate::{
     game_state::{GameState, NetworkGameState, WorldEntity},
     notification::Notification,
     remote_players::{ApplyNoFrustumCulling, NameLabel, RemotePlayerCamera, RemotePlayerModel},
-    terrain::SetupTerrain,
+    terrain::SetupTerrain, ui::skills_menu::binds::BeginSkillUse,
 };
 
 pub mod inventory;
@@ -96,7 +90,6 @@ impl Plugin for NetworkingPlugin {
                 Update,
                 (
                     // TODO receive new world data at any time?
-                    our_client_wants_to_spawn_circle,
                     our_client_wants_to_spawn_man,
                     apply_pending_camera_id,
                 )
@@ -110,7 +103,6 @@ impl Plugin for NetworkingPlugin {
                     on_begin_controlling_unit,
                     try_control_unit_when_it_spawns,
                 )
-                    .chain()
                     .run_if(in_state(NetworkGameState::ClientConnected)),
             )
             .add_systems(
@@ -155,7 +147,6 @@ impl Plugin for NetworkingPlugin {
                     .run_if(in_state(NetworkGameState::ClientConnected)),
             )
             .add_message::<SpawnUnit2>()
-            .add_message::<SpawnCircle>()
             .add_message::<SpawnMan>()
             .insert_resource(LocalLatencyMeasurement { latency: -1.0 });
     }
@@ -725,17 +716,7 @@ fn send_movement_unit(
 //}
 //}
 
-fn our_client_wants_to_spawn_circle(
-    mut ev_sa: MessageReader<SpawnCircle>,
-    sr: Res<ClientNetworkingResources>,
-    mse: Res<MainServerEndpoint>,
-) {
-    for thing in ev_sa.read() {
-        let event = EventToServer::SpawnCircle(thing.clone());
-        info!("Sending spawn circle event to server");
-        send_outgoing_event_next_tick(&sr, mse.0, &event);
-    }
-}
+
 
 fn our_client_wants_to_spawn_man(
     mut ev_sa: MessageReader<SpawnMan>,

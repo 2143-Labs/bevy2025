@@ -13,10 +13,10 @@ fn generate_code_for_event_queue(req: &GenerateRequest) -> String {
         .map(|x| format_ident!("{}", &x[1]))
         .collect();
 
-    let all_types_lowercase: Vec<_> = all_types
-        .iter()
-        .map(|x| format_ident!("writer_{}", x.to_string().to_lowercase()))
-        .collect();
+    //let all_types_lowercase: Vec<_> = all_types
+        //.iter()
+        //.map(|x| format_ident!("writer_{}", x.to_string().to_lowercase()))
+        //.collect();
 
     let incoming_typename = format_ident!("EventTo{}", req.incoming_type_name);
     let outgoing_typename = format_ident!("EventTo{}", req.outgoing_type_name);

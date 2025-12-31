@@ -27,7 +27,7 @@ pub struct ItemInInventory<ItemRepr> {
     pub item_placement: ItemPlacement,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SkillFromSkillSource {
     pub skill: Skill,
     pub source: SkillSource,

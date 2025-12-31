@@ -74,6 +74,7 @@ struct PlayerEndpoint(Endpoint);
 //pub mod game_manager;
 pub mod spawns;
 pub mod terrain;
+pub mod animations;
 
 pub fn main_multiplayer_server() {
     do_app(|app| {
@@ -112,6 +113,7 @@ fn do_app(f: impl FnOnce(&mut App)) {
             spawns::SpawnPlugin,
             shared::physics::water::SharedWaterPlugin,
             terrain::TerrainPlugin,
+            animations::AnimationPluginServer,
             shared::TickPlugin,
             shared::event::server::NetworkEventPlugin,
             shared::character_controller::CharacterControllerPlugin,
