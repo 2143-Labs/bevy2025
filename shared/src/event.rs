@@ -11,7 +11,9 @@ pub mod server;
 pub struct NetEntId(pub u64);
 
 /// Every unique player gets a unique PlayerId.
-#[derive(Debug, Clone, Copy, Component, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, Copy, Component, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord,
+)]
 pub struct PlayerId(pub u64);
 
 #[derive(Debug, Clone, Copy, Component, Serialize, Deserialize, PartialEq, Eq, Hash)]

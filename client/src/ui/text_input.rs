@@ -46,10 +46,10 @@ pub fn handle_text_input_focus(
     for (entity, interaction, children) in interaction_query.iter() {
         if *interaction == Interaction::Pressed {
             // Unfocus previous input
-            if let Some(prev_entity) = focused.0 {
-                if let Ok(mut prev_input) = all_inputs.get_mut(prev_entity) {
-                    prev_input.is_focused = false;
-                }
+            if let Some(prev_entity) = focused.0
+                && let Ok(mut prev_input) = all_inputs.get_mut(prev_entity)
+            {
+                prev_input.is_focused = false;
             }
 
             // Focus this input
@@ -88,11 +88,9 @@ pub fn handle_text_input_keyboard(
     let mut changed = false;
 
     // Handle backspace
-    if keyboard.just_pressed(KeyCode::Backspace) {
-        if !input.value.is_empty() {
-            input.value.pop();
-            changed = true;
-        }
+    if keyboard.just_pressed(KeyCode::Backspace) && !input.value.is_empty() {
+        input.value.pop();
+        changed = true;
     }
 
     // Handle keyboard events for text input
@@ -105,11 +103,10 @@ pub fn handle_text_input_keyboard(
         if let Some(text_char) = keycode_to_char(
             event.key_code,
             keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight),
-        ) {
-            if input.value.len() < input.max_length {
-                input.value.push(text_char);
-                changed = true;
-            }
+        ) && input.value.len() < input.max_length
+        {
+            input.value.push(text_char);
+            changed = true;
         }
     }
 

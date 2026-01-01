@@ -382,7 +382,7 @@ pub fn setup_incoming_client<TI: NetworkingEvent, TO: NetworkingEvent>(
 
 pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     mut commands: Commands,
-    ip: &str,
+    mut ip: &str,
     port: u16,
     is_listener: bool,
 ) {
@@ -407,6 +407,9 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
         std::any::type_name::<NetworkingResources::<TI, TO>>()
     );
 
+    if ip == "localhost" {
+        ip = "127.0.0.1";
+    }
     let con_str = (ip, port);
     if is_listener {
         let (_, addr) = handler.network().listen(Transport::Udp, con_str).unwrap();

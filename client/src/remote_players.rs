@@ -86,13 +86,11 @@ fn handle_update_unit(
             if net_id == &update.event.net_ent_id {
                 // Update the transform from components
                 for component in &update.event.changed_components {
-                    if let NetComponent::Foreign(foreign) = component {
-                        if let shared::net_components::foreign::NetComponentForeign::Transform(
-                            tfm,
-                        ) = foreign
-                        {
-                            *transform = *tfm;
-                        }
+                    if let NetComponent::Foreign(foreign) = component
+                        && let shared::net_components::foreign::NetComponentForeign::Transform(tfm) =
+                            foreign
+                    {
+                        *transform = *tfm;
                     }
                 }
                 break 'a1;
@@ -103,10 +101,12 @@ fn handle_update_unit(
             if net_id == &update.event.net_ent_id {
                 // Update the velocity from components
                 for component in &update.event.changed_components {
-                    if let NetComponent::Foreign(foreign) = component {
-                        if let shared::net_components::foreign::NetComponentForeign::LinearVelocity(lv) = foreign {
-                            *velocity = *lv;
-                        }
+                    if let NetComponent::Foreign(foreign) = component
+                        && let shared::net_components::foreign::NetComponentForeign::LinearVelocity(
+                            lv,
+                        ) = foreign
+                    {
+                        *velocity = *lv;
                     }
                 }
                 break 'a2;
@@ -117,12 +117,11 @@ fn handle_update_unit(
             if net_id == &update.event.net_ent_id {
                 // Update the rotation from components
                 for component in &update.event.changed_components {
-                    if let NetComponent::Foreign(foreign) = component {
-                        if let shared::net_components::foreign::NetComponentForeign::Rotation(rot) =
+                    if let NetComponent::Foreign(foreign) = component
+                        && let shared::net_components::foreign::NetComponentForeign::Rotation(rot) =
                             foreign
-                        {
-                            *rotation = *rot;
-                        }
+                    {
+                        *rotation = *rot;
                     }
                 }
                 break 'a3;

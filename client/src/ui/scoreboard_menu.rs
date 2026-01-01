@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
-    event::{UDPacketEvent, client::RequestScoreboardResponse},
+    event::{PlayerId, UDPacketEvent, client::RequestScoreboardResponse},
     netlib::{
         ClientNetworkingResources, MainServerEndpoint, NetworkingStats, send_outgoing_event_now,
     },
@@ -198,10 +198,19 @@ pub fn update_scoreboard_menu(
 
     commands.entity(container_entity).despawn_children();
 
-    for (player_id, player_name) in &scoreboard_data.player_names {
+    let mut id_name_array: Vec<(PlayerId, String)> = scoreboard_data
+        .player_names
+        .iter()
+        .map(|(id, name)| (*id, name.clone()))
+        .collect();
+
+    // sort by player id:
+    id_name_array.sort_by_key(|(id, _name)| *id);
+
+    for (player_id, player_name) in id_name_array.iter() {
         let ping = scoreboard_data
             .player_pings
-            .get(&player_id)
+            .get(player_id)
             .cloned()
             .unwrap();
         let is_local_player = false; // TODO: determine if this is the local player
@@ -235,7 +244,7 @@ pub fn update_scoreboard_menu(
                 .with_children(|entry_parent| {
                     // Player name text
                     entry_parent.spawn({
-                        let (text, font, color) = menu_button_text(&format!("{player_name}"));
+                        let (text, font, color) = menu_button_text(player_name);
                         (
                             Node {
                                 ..Default::default()
@@ -247,7 +256,7 @@ pub fn update_scoreboard_menu(
                     });
                     // Ping text
                     entry_parent.spawn({
-                        let (text, font, color) = menu_button_text(&format!(
+                        let (text, font, color) = menu_button_text(format!(
                             "Ping: {} cl ms / {} sv ms",
                             ping.server_challenged_ping_ms, ping.client_reported_ping_ms
                         ));
@@ -277,7 +286,7 @@ pub fn handle_scoreboard_data_packet(
     menu_loading_query: Query<Entity, With<ScoreboardMenuLoading>>,
 ) {
     for packet in packets.read() {
-        info!("Received scoreboard data packet: {:?}", packet.event);
+        trace!("Received scoreboard data packet: {:?}", packet.event);
         // despawn loading screen
         if let Ok(loading_entity) = menu_loading_query.single() {
             commands.entity(loading_entity).despawn();

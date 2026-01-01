@@ -564,13 +564,12 @@ fn receive_world_data(
                 );
                 // TOOD do this gracefully?
                 for component in &unit.components {
-                    if let shared::net_components::NetComponent::Ours(ours) = component {
-                        if let shared::net_components::ours::NetComponentOurs::PlayerName(
+                    if let shared::net_components::NetComponent::Ours(ours) = component
+                        && let shared::net_components::ours::NetComponentOurs::PlayerName(
                             PlayerName { name },
                         ) = ours
-                        {
-                            notif.write(Notification(format!("Connected: {name}")));
-                        }
+                    {
+                        notif.write(Notification(format!("Connected: {name}")));
                     }
                 }
 
@@ -677,15 +676,15 @@ fn apply_pending_camera_id(
     mut commands: Commands,
     local_cam: Query<Entity, (With<LocalCamera>, Without<PlayerCamera>)>,
 ) {
-    if let Some(pending_id) = pending {
-        if let Ok(cam_entity) = local_cam.single() {
-            commands
-                .entity(cam_entity)
-                .insert(pending_id.0)
-                .insert(PlayerCamera);
+    if let Some(pending_id) = pending
+        && let Ok(cam_entity) = local_cam.single()
+    {
+        commands
+            .entity(cam_entity)
+            .insert(pending_id.0)
+            .insert(PlayerCamera);
 
-            commands.remove_resource::<PendingCameraId>();
-        }
+        commands.remove_resource::<PendingCameraId>();
     }
 }
 

@@ -133,12 +133,12 @@ fn on_unit_begin_skill_use(
 
 fn on_unit_finish_cast(
     mut cast_event_reader: MessageReader<UnitFinishedSkillCast>,
-    mut query: Query<(&Transform, &NetEntId), With<UsingSkillSince>>,
-    time: Res<Time>,
+    query: Query<(&Transform, &NetEntId), With<UsingSkillSince>>,
+    _time: Res<Time>,
     server_tick: Res<CurrentTick>,
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    _commands: Commands,
+    _meshes: ResMut<Assets<Mesh>>,
+    _materials: ResMut<Assets<StandardMaterial>>,
     connected_clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
     sr: Res<ServerNetworkingResources>,
 ) {
