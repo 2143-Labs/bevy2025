@@ -1,8 +1,16 @@
 //! Dummy implementation of message-io for web builds
 
 pub mod network {
+    use core::net::SocketAddr;
+
     #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
     pub struct Endpoint(pub u32);
+
+    impl core::fmt::Display for Endpoint {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            write!(f, "Endpoint({})", self.0)
+        }
+    }
 
     #[derive(Clone, Debug)]
     pub enum NetEvent<'a> {
@@ -15,6 +23,12 @@ pub mod network {
     #[derive(Clone, Debug, Copy)]
     pub enum Transport {
         Udp,
+    }
+
+    impl Endpoint {
+        pub fn addr(&self) -> SocketAddr {
+            todo!()
+        }
     }
 }
 
@@ -55,22 +69,35 @@ pub mod node {
         }
     }
 
+    impl<T> NodeListener<T> {
+        pub fn network(&self) -> &NetworkController {
+            &self.network_controller
+        }
+    }
+
     pub trait ToSocketAddrs {
         fn to_socket_addrs(&self) -> Result<Vec<SocketAddr>, String>;
     }
 
     impl NetworkController {
-        pub fn listen(&self, _transport: Transport, _addr: impl ToSocketAddrs) -> Result<(Endpoint, SocketAddr), String> {
+        pub fn listen(
+            &self,
+            _transport: Transport,
+            _addr: impl ToSocketAddrs,
+        ) -> Result<(Endpoint, SocketAddr), String> {
             todo!()
         }
-        pub fn connect(&self, _transport: Transport, _addr: impl ToSocketAddrs) -> Result<(Endpoint, SocketAddr), String> {
+        pub fn connect(
+            &self,
+            _transport: Transport,
+            _addr: impl ToSocketAddrs,
+        ) -> Result<(Endpoint, SocketAddr), String> {
             todo!()
         }
         pub fn send(&self, _endpoint: Endpoint, _data: &[u8]) -> SendStatus {
             SendStatus::Whatever
         }
     }
-
 
     pub fn split<T>() -> (NodeHandler<T>, NodeListener<T>) {
         let network_controller = NetworkController { network_id: 0 };
@@ -98,7 +125,7 @@ pub mod node {
     }
 
     impl<T> NodeListener<T> {
-        pub fn for_each<F>(&self, mut f: F)
+        pub fn for_each<F>(&self, mut _f: F)
         where
             F: FnMut(NodeEvent<'_, T>),
         {
@@ -106,4 +133,3 @@ pub mod node {
         }
     }
 }
-
