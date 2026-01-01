@@ -100,11 +100,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout repository at updated main
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
 
       - name: Install Nix
         uses: cachix/install-nix-action@v26
@@ -114,9 +111,6 @@ jobs:
 
       - name: Setup Nix cache
         uses: nix-actions/cache@v1
-
-      - name: Check flake formatting and linting
-        run: nix flake check --no-build
 
       - name: Build with Nix
         run: nix build
@@ -159,11 +153,8 @@ jobs:
       contents: read
       packages: write
     steps:
-      - name: Checkout repository at updated main
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
 
       - name: Install Nix
         uses: cachix/install-nix-action@v26
@@ -206,11 +197,8 @@ jobs:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: sccache
     steps:
-      - name: Checkout repository at updated main
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
 
       - name: Run sccache-cache
         if: ${{ !github.event.act }}

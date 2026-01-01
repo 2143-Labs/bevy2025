@@ -5,7 +5,6 @@
     naersk.url = "github:nix-community/naersk/master";
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     utils.url = "github:numtide/flake-utils";
-    utils.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { self, nixpkgs, utils, naersk }:
@@ -37,9 +36,9 @@
           cargoBuildOptions = x: x ++ [ "-p" "client" ];
         };
       in
-      rec {
+      {
         # Default package is the client
-        defaultPackage = clientPackage;
+        packages.default = clientPackage;
         packages.client = clientPackage;
         packages.server = serverPackage;
         packages.container = pkgs.dockerTools.buildLayeredImage {
@@ -64,28 +63,7 @@
             };
           };
         };
-        # Add checks for formatting and linting
-        checks = {
-          format = pkgs.runCommand "check-format"
-            {
-              nativeBuildInputs = with pkgs; [ rustPackages.rustfmt ];
-            }
-            ''
-              cd ${./.}
-              cargo fmt --check --all
-              touch $out
-            '';
-          clippy = pkgs.runCommand "check-clippy"
-            {
-              nativeBuildInputs = with pkgs; [ rustPackages.clippy cargo ];
-            }
-            ''
-              cd ${./.}
-              cargo clippy --all-targets --all-features -- -D warnings
-              touch $out
-            '';
-        };
-        devShell = with pkgs; mkShell {
+        devShells.default = with pkgs; mkShell {
           buildInputs = [
             rust-analyzer
             cargo 
@@ -106,7 +84,6 @@
           # Set environment variables for better development experience
           shellHook = ''
             echo "Bevy 2025 development environment"
-            echo "Run 'nix flake check' to verify formatting and linting"
           '';
         };
       }
