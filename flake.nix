@@ -25,6 +25,8 @@
           nativeBuildInputs = with pkgs; [ pkg-config ];
           buildInputs = with pkgs; [
             udev
+            # TODO not really needed?
+            alsa-lib
           ];
           cargoBuildOptions = x: x ++ [ "-p" "server" ];
         };
