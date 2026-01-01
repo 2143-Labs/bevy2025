@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use message_io::network::Endpoint;
+use crate::message_io::network::Endpoint;
 use serde::{Deserialize, Serialize};
 
 pub mod client;

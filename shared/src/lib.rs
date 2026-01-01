@@ -22,6 +22,11 @@ pub mod player_input;
 pub mod skills;
 pub mod stats;
 
+#[cfg(feature = "web")]
+pub mod message_io;
+#[cfg(not(feature = "web"))]
+pub use message_io;
+
 pub const BASE_TICKS_PER_SECOND: u16 = 128;
 
 #[derive(

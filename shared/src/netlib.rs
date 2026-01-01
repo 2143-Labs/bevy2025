@@ -1,13 +1,14 @@
 use bevy::prelude::*;
-use message_io::{
-    network::{Endpoint, NetEvent, Transport},
-    node::{NodeEvent, NodeHandler},
-};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     collections::VecDeque,
     sync::{atomic::AtomicUsize, Arc, RwLock},
+};
+
+use crate::message_io::{
+    network::{Endpoint, NetEvent, Transport},
+    node::{NodeEvent, NodeHandler},
 };
 
 pub struct NetworkingStats {
@@ -336,7 +337,7 @@ pub fn send_outgoing_event_next_tick<TI, TO: NetworkingEvent>(
     resources
         .event_list_outgoing
         .entry(endpoint)
-        .or_insert_with(Vec::new)
+        .or_default()
         .push(event.clone());
 }
 
@@ -348,7 +349,7 @@ pub fn send_outgoing_event_next_tick_batch<TI, TO: NetworkingEvent>(
     resources
         .event_list_outgoing
         .entry(endpoint)
-        .or_insert_with(Vec::new)
+        .or_default()
         .extend_from_slice(events);
 }
 
@@ -388,7 +389,7 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
 ) {
     info!(is_listener, "Seting up networking!");
 
-    let (handler, listener) = message_io::node::split::<()>();
+    let (handler, listener) = crate::message_io::node::split::<()>();
 
     let res = NetworkingResources::<TI, TO> {
         handler: handler.clone(),
