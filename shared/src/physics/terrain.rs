@@ -36,8 +36,12 @@ impl Default for TerrainParams {
 }
 
 impl TerrainParams {
-    pub fn perlin(&self) -> Perlin {
+    pub fn perlin_ground(&self) -> Perlin {
         Perlin::new(self.seed)
+    }
+
+    pub fn perlin_biome(&self) -> Perlin {
+        Perlin::new(self.seed.wrapping_add(1000))
     }
 }
 
@@ -103,7 +107,8 @@ pub const NOISE_SCALE_FACTOR: f64 = 0.05;
 
 /// Generate procedural terrain mesh using Perlin noise
 pub fn generate_terrain_mesh(params: &TerrainParams) -> Mesh {
-    let noise = params.perlin();
+    let noise = params.perlin_ground();
+    let noise_biome = params.perlin_biome();
     let subdivisions = params.subdivisions;
     let size = params.plane_size;
     let height_scale = params.max_height_delta;
@@ -125,11 +130,19 @@ pub fn generate_terrain_mesh(params: &TerrainParams) -> Mesh {
             let x_pos = x as f32 * step - half_size;
             let z_pos = z as f32 * step - half_size;
 
+            let biome_value = noise_biome.get([x_pos as f64 / 1.0, z_pos as f64 / 1.0]);
+
+            let is_mountain = biome_value > 0.3;
+
             // Generate height using Perlin noise
             // TODO REFACTOR PAIR TER1
             let noise_x = x_pos as f64 * NOISE_SCALE_FACTOR; // Scale factor for noise frequency
             let noise_z = z_pos as f64 * NOISE_SCALE_FACTOR;
-            let height = noise.get([noise_x as f64, noise_z as f64]) as f32 * height_scale;
+            let mut height = noise.get([noise_x as f64, noise_z as f64]) as f32 * height_scale;
+
+            if is_mountain {
+                height *= 4.0; // Mountains are taller
+            }
 
             positions.push([x_pos, height, z_pos]);
             normals.push([0.0, 1.0, 0.0]); // Will recalculate proper normals
