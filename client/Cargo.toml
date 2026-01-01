@@ -22,8 +22,14 @@ bevy-inspector-egui = { version = "0.35.0", optional = true }
 clap = { version = "4.5.4", features = ["derive", "env"] }
 dashmap = "6.1.0"
 
+raw-window-handle = { version = "0.6.2", optional = true }
+wasm-bindgen = { version = "0.2.106", optional = true }
+web-sys = { version = "0.3.83", optional = true, features = ["Window", "Document", "HtmlCanvasElement", "console"] }
+
+
 [features]
 inspector = ["dep:bevy-inspector-egui"]
 singleplayer = ["dep:server"]
+web = ["dep:wasm-bindgen", "dep:raw-window-handle", "dep:web-sys"]
 default = []
 

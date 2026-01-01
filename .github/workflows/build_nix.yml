@@ -4,10 +4,13 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 concurrency:
-  group: build-release-main
-  cancel-in-progress: false
+  group: build-release-main-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   #version-bump:
@@ -97,32 +100,92 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout repository at updated main
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
 
       - name: Install Nix
         uses: cachix/install-nix-action@v26
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
 
       - name: Build with Nix
         run: nix build
 
-      - name: Collect Linux executable
+      - name: Collect Linux executables
         run: |
           set -euo pipefail
-          test -x result/bin/bevy2025
-          # Copy and dereference nix store symlink to a regular file for upload
-          cp -L result/bin/bevy2025 bevy2025-linux
-          chmod +x bevy2025-linux
+          # Check for client executable (default package)
+          if [ -x result/bin/client ]; then
+            cp -L result/bin/client bevy2025-client-linux
+            chmod +x bevy2025-client-linux
+          fi
+          # Also check for server if it exists in the default build
+          if [ -x result/bin/server ]; then
+            cp -L result/bin/server bevy2025-server-linux
+            chmod +x bevy2025-server-linux
+          fi
+          # Fallback: check for bevy2025 (legacy name)
+          if [ -x result/bin/bevy2025 ]; then
+            cp -L result/bin/bevy2025 bevy2025-linux
+            chmod +x bevy2025-linux
+          fi
 
-      - name: Upload Linux artifact
+      - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-executable
-          path: bevy2025-linux
-          if-no-files-found: error
+          name: linux-executables
+          path: |
+            bevy2025-client-linux
+            bevy2025-server-linux
+            bevy2025-linux
+          if-no-files-found: warn
+          retention-days: 7
+
+  build-container:
+    name: Build and push container
+    runs-on: ubuntu-latest
+    #needs: version-bump
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v26
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Build container with Nix
+        run: nix build .#container
+
+      - name: Install skopeo
+        run: sudo apt-get install -y skopeo
+
+      - name: Push container with skopeo
+        run: |
+          set -euo pipefail
+          skopeo login --username ${{ github.actor }} --password "${{ secrets.GITHUB_TOKEN }}" ghcr.io
+          ls -la ./result
+          RESULT=$(readlink -f ./result)
+          echo "Result path: $RESULT"
+          IMAGE_TAG=$(date +%Y%m%d_%H%M)
+          skopeo copy docker-archive://$RESULT docker://ghcr.io/2143-labs/bevy2025:${IMAGE_TAG}
+          # if not pull request, then also push as latest
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            skopeo copy docker-archive://$RESULT docker://ghcr.io/2143-labs/bevy2025:branch-${{ github.head_ref }}
+          else
+            skopeo copy docker-archive://$RESULT docker://ghcr.io/2143-labs/bevy2025:latest
+          fi
 
   build-windows:
     name: Windows build (cargo)
@@ -134,15 +197,12 @@ jobs:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: sccache
     steps:
-      - name: Checkout repository at updated main
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
 
       - name: Run sccache-cache
         if: ${{ !github.event.act }}
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
@@ -175,8 +235,11 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs:
-      #- build-linux
+      - build-linux
       - build-windows
+      - build-container
+    # Only create releases on main branch pushes, not PRs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
     steps:
@@ -202,5 +265,8 @@ jobs:
           files: |
             dist/bevy2025-client-windows.exe
             dist/bevy2025-server-windows.exe
+            dist/bevy2025-client-linux
+            dist/bevy2025-server-linux
+            dist/bevy2025-linux
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
