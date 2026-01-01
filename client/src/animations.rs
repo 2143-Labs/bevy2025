@@ -392,7 +392,7 @@ fn update_projectiles(
     mut commands: Commands,
     terrain_info: Res<TerrainParams>,
 ) {
-    let noise: noise::Perlin = terrain_info.perlin();
+    let noise: noise::Perlin = terrain_info.perlin_ground();
     for (ent, mut transform, projectile_ai, spawned_at, despawn) in &mut query {
         let time_since_spawn = time.elapsed_secs_f64() - spawned_at.time;
         if tick.0.0 >= despawn.tick.0 {
