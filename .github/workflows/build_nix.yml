@@ -202,7 +202,7 @@ jobs:
 
       - name: Run sccache-cache
         if: ${{ !github.event.act }}
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
