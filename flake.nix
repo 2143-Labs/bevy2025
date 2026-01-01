@@ -1,8 +1,11 @@
 {
+  description = "Bevy 2025 game project with client and server";
+
   inputs = {
     naersk.url = "github:nix-community/naersk/master";
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     utils.url = "github:numtide/flake-utils";
+    utils.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { self, nixpkgs, utils, naersk }:
@@ -26,16 +29,22 @@
           ];
           cargoBuildOptions = x: x ++ [ "-p" "server" ];
         };
-      in
-      rec {
-        defaultPackage = naersk-lib.buildPackage {
+        # Client package - needs graphics libraries
+        clientPackage = naersk-lib.buildPackage {
           src = ./.;
           nativeBuildInputs = with pkgs; [ pkg-config ];
           buildInputs = buildInputsAll;
+          cargoBuildOptions = x: x ++ [ "-p" "client" ];
         };
+      in
+      rec {
+        # Default package is the client
+        defaultPackage = clientPackage;
+        packages.client = clientPackage;
         packages.server = serverPackage;
         packages.container = pkgs.dockerTools.buildLayeredImage {
           name = "bevy2025";
+          tag = "latest";
           contents = [
             serverPackage
             pkgs.cacert
@@ -48,7 +57,33 @@
             Env = [
               "RUST_LOG=info"
             ];
+            # Add labels for better container metadata
+            Labels = {
+              "org.opencontainers.image.source" = "https://github.com/2143-labs/bevy2025";
+              "org.opencontainers.image.description" = "Bevy 2025 game server";
+            };
           };
+        };
+        # Add checks for formatting and linting
+        checks = {
+          format = pkgs.runCommand "check-format"
+            {
+              nativeBuildInputs = with pkgs; [ rustPackages.rustfmt ];
+            }
+            ''
+              cd ${./.}
+              cargo fmt --check --all
+              touch $out
+            '';
+          clippy = pkgs.runCommand "check-clippy"
+            {
+              nativeBuildInputs = with pkgs; [ rustPackages.clippy cargo ];
+            }
+            ''
+              cd ${./.}
+              cargo clippy --all-targets --all-features -- -D warnings
+              touch $out
+            '';
         };
         devShell = with pkgs; mkShell {
           buildInputs = [
@@ -56,14 +91,23 @@
             cargo 
             rustPackages.rustfmt
             rustPackages.clippy
-            #rustPackages.cargo-flamegraph
             cargo-flamegraph
             pre-commit 
             pkg-config
             bacon
+            # Additional useful development tools
+            cargo-audit
+            cargo-deny
+            cargo-outdated
+            nixpkgs-fmt
           ] ++ buildInputsAll;
           RUST_SRC_PATH = rustPlatform.rustLibSrc;
           LD_LIBRARY_PATH = lib.makeLibraryPath buildInputsAll;
+          # Set environment variables for better development experience
+          shellHook = ''
+            echo "Bevy 2025 development environment"
+            echo "Run 'nix flake check' to verify formatting and linting"
+          '';
         };
       }
     );
