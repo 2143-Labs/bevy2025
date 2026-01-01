@@ -63,36 +63,35 @@ fn main() {
 
     let mut app = App::new();
 
-    app
-        .add_plugins((
-            DefaultPlugins,
-            game_state::StatePlugin,
-            AssetsPlugin,
-            DebugPlugin,
-            UIPlugin,
-            CameraPlugin,
-            TerrainPlugin,
-            PhysicsPlugin,
-            PickingPlugin,
-            network::NetworkingPlugin,
-            RemotePlayersPlugin,
-            shared::ConfigPlugin,
-            notification::NotificationPlugin,
-            WaterPlugin,
-            shared::TickPlugin,
-            // Too many plugins here
-        ))
-        .add_plugins((
-            GrassPlugin,
-            LogDiagnosticsPlugin::default(),
-            shared::event::client::NetworkEventPlugin,
-            shared::character_controller::CharacterControllerPlugin,
-            character_controller_client::ClientCharacterControllerPlugin,
-            animations::CharacterAnimationPlugin,
-        ))
-        .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue
-        .insert_resource(args)
-        .add_systems(Startup, check_all_clap_args);
+    app.add_plugins((
+        DefaultPlugins,
+        game_state::StatePlugin,
+        AssetsPlugin,
+        DebugPlugin,
+        UIPlugin,
+        CameraPlugin,
+        TerrainPlugin,
+        PhysicsPlugin,
+        PickingPlugin,
+        network::NetworkingPlugin,
+        RemotePlayersPlugin,
+        shared::ConfigPlugin,
+        notification::NotificationPlugin,
+        WaterPlugin,
+        shared::TickPlugin,
+        // Too many plugins here
+    ))
+    .add_plugins((
+        GrassPlugin,
+        LogDiagnosticsPlugin::default(),
+        shared::event::client::NetworkEventPlugin,
+        shared::character_controller::CharacterControllerPlugin,
+        character_controller_client::ClientCharacterControllerPlugin,
+        animations::CharacterAnimationPlugin,
+    ))
+    .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue
+    .insert_resource(args)
+    .add_systems(Startup, check_all_clap_args);
 
     #[cfg(feature = "web")]
     {
@@ -100,7 +99,6 @@ fn main() {
     }
 
     app.run();
-
 }
 
 /// This looks for the clap args like autoconnect and modifys the config if neede
