@@ -110,7 +110,7 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Setup Nix cache
-        uses: nix-actions/cache@v1
+        uses: DeterminateSystems/magic-nix-cache-action@v8
 
       - name: Build with Nix
         run: nix build
@@ -163,7 +163,7 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Setup Nix cache
-        uses: nix-actions/cache@v1
+        uses: DeterminateSystems/magic-nix-cache-action@v8
 
       - name: Build container with Nix
         run: nix build .#container
