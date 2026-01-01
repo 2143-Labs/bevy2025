@@ -5591,7 +5591,6 @@ dependencies = [
  "bevy_diagnostic",
  "bevy_ecs",
  "bevy_log",
- "bevy_mesh",
  "bevy_time",
  "bevy_transform",
  "dashmap",

@@ -11,7 +11,7 @@ default-features = false
 features = ["serialize"]
 
 [dependencies]
-message-io = "0.19.0"
+message-io = { version = "0.19.0", optional = true }
 serde_yaml = "0.9.34"
 serde_json = "1.0.145"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -25,7 +25,7 @@ bevy_log = "0.17.2"
 bevy_time = "0.17.2"
 bevy_color = "0.17.2"
 bevy_transform = "0.17.2"
-bevy_mesh = "0.17.2"
+#bevy_mesh = "0.17.2"
 bevy_diagnostic = "0.17.2"
 
 phf = { version = "0.13.1", features = ["macros"] }
@@ -46,3 +46,8 @@ quote = "1.0.41"
 prettyplease = "0.2.37"
 regex = "1.12.2"
 syn = "2.0.108"
+
+[features]
+steam = ["dep:message-io"]
+web = []
+default = []
