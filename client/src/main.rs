@@ -15,6 +15,9 @@ mod terrain;
 mod ui;
 mod water;
 
+#[cfg(feature = "web")]
+mod web;
+
 use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
 
 use assets::AssetsPlugin;
@@ -58,7 +61,9 @@ fn main() {
         args.autoconnect = Some("main".to_string());
     }
 
-    App::new()
+    let mut app = App::new();
+
+    app
         .add_plugins((
             DefaultPlugins,
             game_state::StatePlugin,
@@ -87,8 +92,15 @@ fn main() {
         ))
         .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue
         .insert_resource(args)
-        .add_systems(Startup, check_all_clap_args)
-        .run();
+        .add_systems(Startup, check_all_clap_args);
+
+    #[cfg(feature = "web")]
+    {
+        app.add_plugins(web::WebPlugin);
+    }
+
+    app.run();
+
 }
 
 /// This looks for the clap args like autoconnect and modifys the config if neede
