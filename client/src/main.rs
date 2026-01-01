@@ -11,7 +11,6 @@ pub mod notification;
 mod physics;
 mod picking;
 mod remote_players;
-mod steamworks;
 mod terrain;
 mod ui;
 mod water;
@@ -19,10 +18,14 @@ mod water;
 #[cfg(feature = "web")]
 mod web;
 
+#[cfg(feature = "steam")]
+use bevy_steamworks::{AppId, FriendFlags};
+#[cfg(feature = "steam")]
+mod steamworks;
+
 use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
 
 use assets::AssetsPlugin;
-use bevy_steamworks::{AppId, FriendFlags};
 use camera::CameraPlugin;
 use clap::Parser;
 use debug::DebugPlugin;
