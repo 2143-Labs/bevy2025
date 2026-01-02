@@ -4,8 +4,9 @@ build:
 	cargo b -p client --no-default-features --features web --target wasm32-unknown-unknown --release
 
 optimize:
-	wasm-opt -Oz --output optimized.wasm target/wasm32-unknown-unknown/release/client.wasm
-	mv optimized.wasm target/wasm32-unknown-unknown/release/client.wasm
+	echo no opt
+	#wasm-opt -Oz --output optimized.wasm target/wasm32-unknown-unknown/release/client.wasm
+	#mv optimized.wasm target/wasm32-unknown-unknown/release/client.wasm
 
 serve:
 	python3 -m http.server --directory web 8080
