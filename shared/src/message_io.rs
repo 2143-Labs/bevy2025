@@ -1,6 +1,11 @@
 //! Dummy implementation of message-io for web builds
 
+use dashmap::DashMap;
+static REGISTERED_ENDPOINTS: crate::Lazy<DashMap<u32, core::net::SocketAddr>> = 
+    crate::Lazy::new(|| DashMap::new());
+
 pub mod network {
+    use super::REGISTERED_ENDPOINTS;
     use core::net::SocketAddr;
 
     #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -27,7 +32,10 @@ pub mod network {
 
     impl Endpoint {
         pub fn addr(&self) -> SocketAddr {
-            todo!()
+            REGISTERED_ENDPOINTS
+                .get(&self.0)
+                .map(|entry| *entry.value())
+                .unwrap()
         }
     }
 }
@@ -35,6 +43,7 @@ pub mod network {
 pub mod node {
     use super::network::{Endpoint, NetEvent, Transport};
     use core::net::SocketAddr;
+    use super::REGISTERED_ENDPOINTS;
 
     #[derive(Clone, Debug)]
     pub enum NodeEvent<'a, T> {
@@ -85,16 +94,27 @@ pub mod node {
             _transport: Transport,
             _addr: impl ToSocketAddrs,
         ) -> Result<(Endpoint, SocketAddr), String> {
-            todo!()
+            let id = rand::random_range(0..=u32::MAX);
+            let sa = _addr.to_socket_addrs()?.get(0).cloned().unwrap();
+            REGISTERED_ENDPOINTS.insert(id, sa);
+
+            //TODO
+            Ok((Endpoint(id), sa))
         }
         pub fn connect(
             &self,
             _transport: Transport,
             _addr: impl ToSocketAddrs,
         ) -> Result<(Endpoint, SocketAddr), String> {
-            todo!()
+            let id = rand::random_range(0..=u32::MAX);
+            let sa = _addr.to_socket_addrs()?.get(0).cloned().unwrap();
+            REGISTERED_ENDPOINTS.insert(id, sa);
+            //TODO
+
+            Ok((Endpoint(id), sa))
         }
         pub fn send(&self, _endpoint: Endpoint, _data: &[u8]) -> SendStatus {
+            info!("Web build: pretending to send data to {}", _endpoint);
             SendStatus::Whatever
         }
     }
@@ -123,13 +143,19 @@ pub mod node {
             }
         }
     }
-
     impl<T> NodeListener<T> {
         pub fn for_each<F>(&self, mut _f: F)
         where
             F: FnMut(NodeEvent<'_, T>),
         {
             todo!()
+        }
+
+        pub fn register_web_event_listener<F>(&self, mut _f: F)
+        where
+            F: FnMut(NodeEvent<'_, T>),
+        {
+            crate::info!("Registering web event listener");
         }
     }
 }

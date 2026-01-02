@@ -421,16 +421,28 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
         info!(?addr, "Connected");
     }
 
-    let res2 = res.clone();
-    std::thread::spawn(move || {
-        listener.for_each(|event| on_node_event_incoming(&res2, event));
-    });
+    #[cfg(feature = "web")]
+    {
+        let res2 = res.clone();
+        listener.register_web_event_listener(move |event| {
+            on_node_event_incoming(&res2, event);
+        });
+    }
 
-    let res2 = res.clone();
-    std::thread::spawn(move || loop {
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        res2.networking_stats.flush_and_reset();
-    });
+
+    #[cfg(not(feature = "web"))]
+    {
+        let res2 = res.clone();
+        std::thread::spawn(move || {
+            listener.for_each(|event| on_node_event_incoming(&res2, event));
+        });
+
+        let res2 = res.clone();
+        std::thread::spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            res2.networking_stats.flush_and_reset();
+        });
+    }
 }
 
 pub fn on_node_event_incoming<TI: NetworkingEvent, TO>(

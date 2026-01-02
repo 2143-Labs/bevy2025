@@ -276,7 +276,8 @@ impl Config {
         let Ok(mut path) = current_dir() else {
             // we are in the web build TODO
             return Self {
-                ip: "john2143.com".to_string(),
+                ip: "127.0.0.1".to_string(),
+                port: 25555,
                 ..Self::default()
             }
         };
