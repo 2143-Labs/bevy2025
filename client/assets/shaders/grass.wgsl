@@ -14,22 +14,8 @@ struct GrassMaterial {
     wind_data: vec4<f32>, // direction.x, direction.y, strength, time
 }
 
-struct BallPositions {
-    positions: array<vec4<f32>, 8>, // xyz = position, w = radius
-}
-
-struct BallCount {
-    count: u32,
-}
-
 @group(#{MATERIAL_BIND_GROUP}) @binding(100)
 var<uniform> grass_material: GrassMaterial;
-
-@group(#{MATERIAL_BIND_GROUP}) @binding(101)
-var<uniform> ball_positions: BallPositions;
-
-@group(#{MATERIAL_BIND_GROUP}) @binding(102)
-var<uniform> ball_count: BallCount;
 
 @vertex
 fn vertex(
@@ -71,42 +57,6 @@ fn vertex(
     var world_from_local = mesh_functions::get_world_from_local(instance_index);
 
     let world_position_temp = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(bent_position, 1.0));
-
-    // Ball interaction - bend grass away from balls
-    var ball_bend = vec3<f32>(0.0);
-    for (var i = 0u; i < ball_count.count; i++) {
-        let ball_pos = ball_positions.positions[i].xyz;
-        let ball_radius = ball_positions.positions[i].w;
-
-        // Calculate distance on XZ plane (horizontal distance)
-        let to_grass = world_position_temp.xyz - ball_pos;
-        let horizontal_dist = length(vec2<f32>(to_grass.x, to_grass.z));
-
-        // Larger interaction radius for dense grass (more visible effect)
-        let influence_radius = ball_radius * 4.0;
-
-        if (horizontal_dist < influence_radius) {
-            // Calculate influence strength (stronger when closer)
-            let influence = 1.0 - (horizontal_dist / influence_radius);
-            let influence_squared = influence * influence;
-            let influence_cubed = influence_squared * influence; // Even stronger falloff near ball
-
-            // Bend direction (away from ball on XZ plane)
-            let bend_dir = normalize(vec2<f32>(to_grass.x, to_grass.z));
-
-            // Stronger bending for dense grass visibility
-            // Use cubic influence for very strong effect near ball, gentle far away
-            let bend_strength = influence_cubed * height_factor * 1.5;
-            ball_bend.x += bend_dir.x * bend_strength;
-            ball_bend.z += bend_dir.y * bend_strength;
-
-            // Stronger flattening effect
-            ball_bend.y -= influence_cubed * height_factor * 0.6;
-        }
-    }
-
-    // Apply ball interaction offset
-    var world_position = vec4<f32>(world_position_temp.xyz + ball_bend, world_position_temp.w);
 
     // Camera-facing effects (Ghost of Tsushima technique)
     let camera_pos = view.world_position;

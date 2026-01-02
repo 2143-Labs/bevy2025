@@ -63,14 +63,6 @@ pub struct GrassMaterial {
     /// Wind data: direction.x, direction.y, strength, time
     #[uniform(100)]
     pub wind_data: Vec4,
-
-    /// Ball positions for interaction (up to 8 balls, w component is radius)
-    #[uniform(101)]
-    pub ball_positions: [Vec4; 8],
-
-    /// Number of active balls
-    #[uniform(102)]
-    pub ball_count: u32,
 }
 
 impl MaterialExtension for GrassMaterial {
@@ -149,16 +141,16 @@ fn update_ball_interactions(
     let mut ball_positions = [Vec4::ZERO; 8];
     let mut count = 0u32;
 
-    for (i, (_, ball_vec)) in ball_data.iter().take(8).enumerate() {
-        ball_positions[i] = *ball_vec;
-        count += 1;
-    }
+    //for (i, (_, ball_vec)) in ball_data.iter().take(8).enumerate() {
+        //ball_positions[i] = *ball_vec;
+        //count += 1;
+    //}
 
-    // Update all grass materials with ball data (now only 1 shared material!)
-    for (_, material) in grass_materials.iter_mut() {
-        material.extension.ball_positions = ball_positions;
-        material.extension.ball_count = count;
-    }
+    //// Update all grass materials with ball data (now only 1 shared material!)
+    //for (_, material) in grass_materials.iter_mut() {
+        //material.extension.ball_positions = ball_positions;
+        //material.extension.ball_count = count;
+    //}
 }
 
 /// Create a grass blade mesh using a bezier curve
@@ -282,8 +274,6 @@ pub fn create_grass_bundles(
         },
         extension: GrassMaterial {
             wind_data: Vec4::new(wind.direction.x, wind.direction.y, wind.strength, wind.time),
-            ball_positions: [Vec4::ZERO; 8],
-            ball_count: 0,
         },
     });
 

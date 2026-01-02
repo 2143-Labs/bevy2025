@@ -127,7 +127,7 @@ fn setup_terrain_client(
         DespawnOnWorldData,
         Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
             for bundle in grass_bundles {
-                parent.spawn(bundle);
+                //parent.spawn(bundle);
             }
         })),
     ));

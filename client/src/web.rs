@@ -154,7 +154,7 @@ fn setup(
                     chunk_value.copy_to(&mut chunk_from_blob[chunk_len..]);
                 }
                 let data_len = chunk_from_blob.len();
-                info!("Received blob of size {}", data_len);
+                trace!("Received blob of size {}", data_len);
 
                 use shared::netlib::EventGroupingOwned;
                 let event: EventGroupingOwned<shared::event::client::EventToClient> =
