@@ -73,9 +73,9 @@ struct PlayerEndpoint(Endpoint);
 //pub mod chat;
 //pub mod game_manager;
 pub mod animations;
+pub mod axum;
 pub mod spawns;
 pub mod terrain;
-pub mod axum;
 
 #[derive(Resource, Clone)]
 pub struct TokioRuntimeResource(pub Arc<tokio::runtime::Runtime>);

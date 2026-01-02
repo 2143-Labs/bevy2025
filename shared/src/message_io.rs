@@ -1,7 +1,7 @@
 //! Dummy implementation of message-io for web builds
 
 use dashmap::DashMap;
-static REGISTERED_ENDPOINTS: crate::Lazy<DashMap<network::Endpoint, core::net::SocketAddr>> = 
+static REGISTERED_ENDPOINTS: crate::Lazy<DashMap<network::Endpoint, core::net::SocketAddr>> =
     crate::Lazy::new(|| DashMap::new());
 
 pub mod network {
@@ -42,8 +42,8 @@ pub mod network {
 
 pub mod node {
     use super::network::{Endpoint, NetEvent, Transport};
-    use core::net::SocketAddr;
     use super::REGISTERED_ENDPOINTS;
+    use core::net::SocketAddr;
 
     #[derive(Clone, Debug)]
     pub enum NodeEvent<'a, T> {

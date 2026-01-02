@@ -402,11 +402,17 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     }
     let con_str = (ip.to_string(), port);
     if is_listener {
-        let (_, udp_addr) = handler.network().listen(Transport::Udp, con_str.clone()).unwrap();
+        let (_, udp_addr) = handler
+            .network()
+            .listen(Transport::Udp, con_str.clone())
+            .unwrap();
         //let (_, tcp_addr) = handler.network().listen(Transport::Tcp, con_str).unwrap();
         info!(?udp_addr, "Listening")
     } else {
-        let (endpoint, addr) = handler.network().connect(Transport::Udp, con_str.clone()).unwrap();
+        let (endpoint, addr) = handler
+            .network()
+            .connect(Transport::Udp, con_str.clone())
+            .unwrap();
         commands.insert_resource(MainServerEndpoint(endpoint));
         info!(?addr, "Connected");
     }
@@ -424,7 +430,6 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     commands.insert_resource(res.clone());
     commands.remove_resource::<NetworkConnectionTarget>();
 
-
     #[cfg(feature = "web")]
     {
         let res2 = res.clone();
@@ -432,7 +437,6 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
             on_node_event_incoming(&res2, event);
         });
     }
-
 
     // web doesn't support threads
     #[cfg(not(feature = "web"))]

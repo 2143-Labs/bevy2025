@@ -279,7 +279,7 @@ impl Config {
                 ip: "127.0.0.1".to_string(),
                 port: 25555,
                 ..Self::default()
-            }
+            };
         };
         path.push("config.yaml");
 
