@@ -142,14 +142,14 @@ fn update_ball_interactions(
     let mut count = 0u32;
 
     //for (i, (_, ball_vec)) in ball_data.iter().take(8).enumerate() {
-        //ball_positions[i] = *ball_vec;
-        //count += 1;
+    //ball_positions[i] = *ball_vec;
+    //count += 1;
     //}
 
     //// Update all grass materials with ball data (now only 1 shared material!)
     //for (_, material) in grass_materials.iter_mut() {
-        //material.extension.ball_positions = ball_positions;
-        //material.extension.ball_count = count;
+    //material.extension.ball_positions = ball_positions;
+    //material.extension.ball_count = count;
     //}
 }
 

@@ -73,7 +73,6 @@ async fn handle_websocket_connection(
                 .event_list_outgoing_websocket
                 .retain(|endpoint, msg| {
                     if *endpoint == ws_user {
-
                         use shared::netlib::EventGroupingOwned;
                         let taken_msgs = msg.drain(..).collect::<Vec<_>>();
                         let new_msg = EventGroupingOwned::Batch(taken_msgs);
