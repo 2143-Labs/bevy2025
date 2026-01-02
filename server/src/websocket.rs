@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use tokio_tungstenite::tungstenite::Bytes;
 use std::{collections::HashMap, net::SocketAddr};
 //use dashmap::DashMap;
 use futures_channel::mpsc::{unbounded, UnboundedSender};
@@ -52,9 +53,9 @@ async fn handle_websocket_connection(
         .await
         .expect("Error during the websocket handshake occurred");
 
-    let (tx, rx) = unbounded();
+    let (mut tx, rx) = unbounded();
 
-    let peer = Arc::new(SingleConnectionPeer { tx });
+    let peer = Arc::new(SingleConnectionPeer { tx: tx.clone() });
 
     {
         let mut map = ws_resource.socket_addr_to_player_id.lock().await;
@@ -70,6 +71,11 @@ async fn handle_websocket_connection(
     });
 
     let receive_from_others = rx.map(Ok).forward(outgoing);
+
+    let bytes = Bytes::from("Welcome to the WebSocket server!");
+
+    tx.start_send(Message::Binary(bytes))
+        .unwrap();
 
     futures_util::pin_mut!(broadcast_incoming, receive_from_others);
     futures_util::future::select(broadcast_incoming, receive_from_others).await;
