@@ -73,7 +73,11 @@ async fn handle_websocket_connection(
                 .event_list_outgoing_websocket
                 .retain(|endpoint, msg| {
                     if *endpoint == ws_user {
-                        let bytes = match postcard::to_stdvec(msg) {
+
+                        use shared::netlib::EventGroupingOwned;
+                        let taken_msgs = msg.drain(..).collect::<Vec<_>>();
+                        let new_msg = EventGroupingOwned::Batch(taken_msgs);
+                        let bytes = match postcard::to_stdvec(&new_msg) {
                             Ok(b) => b,
                             Err(e) => {
                                 warn!(

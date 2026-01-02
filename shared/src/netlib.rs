@@ -200,7 +200,7 @@ impl NetworkingEvent for EventToClient {}
 type PacketIdentifier = u32;
 type DuplicationIdentifier = u8;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub enum EventGroupingOwned<T> {
     Single(T),
     Batch(Vec<T>),
