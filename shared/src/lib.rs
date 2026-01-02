@@ -273,7 +273,13 @@ impl Config {
     }
 
     pub fn load_from_main_dir() -> Self {
-        let mut path = current_dir().unwrap();
+        let Ok(mut path) = current_dir() else {
+            // we are in the web build TODO
+            return Self {
+                ip: "john2143.com".to_string(),
+                ..Self::default()
+            }
+        };
         path.push("config.yaml");
 
         info!("Loading config from {path:?}");
