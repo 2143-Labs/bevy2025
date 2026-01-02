@@ -131,6 +131,7 @@ pub struct NetworkingResources<TI, TO> {
     pub reliable_packet_ids_seen: Arc<RwLock<HashMap<PacketIdentifier, Tick>>>,
     pub networking_stats: Arc<NetworkingStats>,
     pub handler: NodeHandler<()>,
+    pub con_str: Arc<(String, u16)>,
 }
 
 /// Networking resources held by the client
@@ -391,35 +392,38 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
 
     let (handler, listener) = crate::message_io::node::split::<()>();
 
-    let res = NetworkingResources::<TI, TO> {
-        handler: handler.clone(),
-        event_list_incoming: Default::default(),
-        event_list_outgoing: Default::default(),
-        reliable_packet_ids_seen: Default::default(),
-        networking_stats: Arc::new(NetworkingStats::default()),
-    };
-
-    // insert the new endpoints and remove the connection data
-    commands.insert_resource(res.clone());
-    commands.remove_resource::<NetworkConnectionTarget>();
-
     info!(
         "Setup networking resources for {}",
         std::any::type_name::<NetworkingResources::<TI, TO>>()
     );
 
     if ip == "localhost" {
-        ip = "127.0.0.1";
+        ip = "[::]";
     }
-    let con_str = (ip, port);
+    let con_str = (ip.to_string(), port);
     if is_listener {
-        let (_, addr) = handler.network().listen(Transport::Udp, con_str).unwrap();
-        info!(?addr, "Listening")
+        let (_, udp_addr) = handler.network().listen(Transport::Udp, con_str.clone()).unwrap();
+        //let (_, tcp_addr) = handler.network().listen(Transport::Tcp, con_str).unwrap();
+        info!(?udp_addr, "Listening")
     } else {
-        let (endpoint, addr) = handler.network().connect(Transport::Udp, con_str).unwrap();
+        let (endpoint, addr) = handler.network().connect(Transport::Udp, con_str.clone()).unwrap();
         commands.insert_resource(MainServerEndpoint(endpoint));
         info!(?addr, "Connected");
     }
+
+    let res = NetworkingResources::<TI, TO> {
+        handler: handler.clone(),
+        event_list_incoming: Default::default(),
+        event_list_outgoing: Default::default(),
+        reliable_packet_ids_seen: Default::default(),
+        networking_stats: Arc::new(NetworkingStats::default()),
+        con_str: Arc::new(con_str),
+    };
+
+    // insert the new endpoints and remove the connection data
+    commands.insert_resource(res.clone());
+    commands.remove_resource::<NetworkConnectionTarget>();
+
 
     #[cfg(feature = "web")]
     {
@@ -430,6 +434,7 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     }
 
 
+    // web doesn't support threads
     #[cfg(not(feature = "web"))]
     {
         let res2 = res.clone();

@@ -1,7 +1,7 @@
 //! Dummy implementation of message-io for web builds
 
 use dashmap::DashMap;
-static REGISTERED_ENDPOINTS: crate::Lazy<DashMap<u32, core::net::SocketAddr>> = 
+static REGISTERED_ENDPOINTS: crate::Lazy<DashMap<network::Endpoint, core::net::SocketAddr>> = 
     crate::Lazy::new(|| DashMap::new());
 
 pub mod network {
@@ -33,7 +33,7 @@ pub mod network {
     impl Endpoint {
         pub fn addr(&self) -> SocketAddr {
             REGISTERED_ENDPOINTS
-                .get(&self.0)
+                .get(&self)
                 .map(|entry| *entry.value())
                 .unwrap()
         }
@@ -94,27 +94,26 @@ pub mod node {
             _transport: Transport,
             _addr: impl ToSocketAddrs,
         ) -> Result<(Endpoint, SocketAddr), String> {
-            let id = rand::random_range(0..=u32::MAX);
+            let id = Endpoint(rand::random_range(0..=u32::MAX));
             let sa = _addr.to_socket_addrs()?.get(0).cloned().unwrap();
             REGISTERED_ENDPOINTS.insert(id, sa);
 
             //TODO
-            Ok((Endpoint(id), sa))
+            Ok((id, sa))
         }
         pub fn connect(
             &self,
             _transport: Transport,
             _addr: impl ToSocketAddrs,
         ) -> Result<(Endpoint, SocketAddr), String> {
-            let id = rand::random_range(0..=u32::MAX);
+            let id = Endpoint(rand::random_range(0..=u32::MAX));
             let sa = _addr.to_socket_addrs()?.get(0).cloned().unwrap();
             REGISTERED_ENDPOINTS.insert(id, sa);
             //TODO
 
-            Ok((Endpoint(id), sa))
+            Ok((id, sa))
         }
         pub fn send(&self, _endpoint: Endpoint, _data: &[u8]) -> SendStatus {
-            info!("Web build: pretending to send data to {}", _endpoint);
             SendStatus::Whatever
         }
     }
@@ -134,15 +133,22 @@ pub mod node {
     }
 
     // GPT GENERATED: CHECK TODO
-    impl ToSocketAddrs for (&str, u16) {
+    impl<T: AsRef<str>> ToSocketAddrs for (T, u16) {
         fn to_socket_addrs(&self) -> Result<Vec<SocketAddr>, String> {
-            let addr_str = format!("{}:{}", self.0, self.1);
+            let addr_str = format!("{}:{}", self.0.as_ref(), self.1);
             match addr_str.parse::<SocketAddr>() {
                 Ok(addr) => Ok(vec![addr]),
                 Err(_) => Err("Invalid socket address".to_string()),
             }
         }
     }
+
+    impl<T: ToSocketAddrs> ToSocketAddrs for &T {
+        fn to_socket_addrs(&self) -> Result<Vec<SocketAddr>, String> {
+            (*self).to_socket_addrs()
+        }
+    }
+
     impl<T> NodeListener<T> {
         pub fn for_each<F>(&self, mut _f: F)
         where

@@ -75,10 +75,22 @@ struct PlayerEndpoint(Endpoint);
 pub mod animations;
 pub mod spawns;
 pub mod terrain;
+pub mod axum;
 
-pub fn main_multiplayer_server() {
+#[derive(Resource, Clone)]
+pub struct TokioRuntimeResource(pub Arc<tokio::runtime::Runtime>);
+impl std::ops::Deref for TokioRuntimeResource {
+    type Target = tokio::runtime::Runtime;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+pub fn main_multiplayer_server(tokio_runtime: Arc<tokio::runtime::Runtime>) {
     do_app(|app| {
         app.add_systems(Startup, add_network_connection_info_from_config);
+        app.insert_resource(TokioRuntimeResource(tokio_runtime));
+        app.add_plugins(axum::AxumServerPlugin);
     });
 }
 
