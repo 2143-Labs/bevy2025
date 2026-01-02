@@ -25,8 +25,10 @@ bevy-steamworks = { version = "0.15.0", optional = true }
 
 raw-window-handle = { version = "0.6.2", optional = true }
 wasm-bindgen = { version = "0.2.106", optional = true }
-web-sys = { version = "0.3.83", optional = true, features = ["Window", "Document", "HtmlCanvasElement", "HtmlParagraphElement", "console"] }
-#webrtc = { version = "0.14.0", optional = true }
+web-sys = { version = "0.3.83", optional = true, features = [
+"Window", "Document", "HtmlCanvasElement", "HtmlParagraphElement", "console",
+"MessageEvent", "WebSocket",
+] }
 
 [features]
 inspector = ["dep:bevy-inspector-egui"]
