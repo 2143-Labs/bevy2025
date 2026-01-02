@@ -34,5 +34,6 @@ web-sys = { version = "0.3.83", optional = true, features = [
 inspector = ["dep:bevy-inspector-egui"]
 singleplayer = ["dep:server"]
 web = ["dep:wasm-bindgen", "dep:raw-window-handle", "dep:web-sys", "shared/web"]
-steam = ["dep:bevy-steamworks", "dep:message-io", "shared/steam"]
-default = ["steam"]
+udp = ["shared/udp", "dep:message-io"]
+steam = ["dep:bevy-steamworks"]
+default = ["steam", "udp"]

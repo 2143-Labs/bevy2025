@@ -49,6 +49,6 @@ regex = "1.12.2"
 syn = "2.0.108"
 
 [features]
-steam = ["dep:message-io"]
+udp = ["dep:message-io"]
 web = []
 default = []

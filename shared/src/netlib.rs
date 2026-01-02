@@ -121,16 +121,19 @@ impl NetworkingStats {
     }
 }
 
+
 use dashmap::DashMap;
 
 #[derive(Resource, Clone)]
 pub struct NetworkingResources<TI, TO> {
-    pub event_list_incoming: Arc<RwLock<Vec<(Endpoint, TI)>>>,
+    pub event_list_incoming_udp: Arc<RwLock<Vec<(Endpoint, TI)>>>,
+    pub event_list_incoming_websocket: Arc<RwLock<Vec<(WebSocketEndpoint, TI)>>>,
     // TODO make this hashmap instead
-    pub event_list_outgoing: Arc<DashMap<Endpoint, Vec<TO>>>,
+    pub event_list_outgoing_udp: Arc<DashMap<Endpoint, Vec<TO>>>,
+    pub event_list_outgoing_websocket: Arc<DashMap<WebSocketEndpoint, Vec<TO>>>,
     pub reliable_packet_ids_seen: Arc<RwLock<HashMap<PacketIdentifier, Tick>>>,
     pub networking_stats: Arc<NetworkingStats>,
-    pub handler: NodeHandler<()>,
+    pub handler: Option<NodeHandler<()>>,
     pub con_str: Arc<(String, u16)>,
 }
 
@@ -203,14 +206,54 @@ pub enum EventGroupingRef<'a, T> {
     Reliable(PacketIdentifier, DuplicationIdentifier, Tick, &'a [T]),
 }
 
-pub fn send_outgoing_event_now<TI, TO: NetworkingEvent>(
+impl<TI, TO: NetworkingEvent> NetworkingResources<TI, TO> {
+    pub fn send_outgoing_event_now(&self, endpoint: EndpointGeneral, event: &TO) {
+        match endpoint {
+            EndpointGeneral::WebSocket(ws_endpoint) => {
+                self.event_list_outgoing_websocket
+                    .entry(ws_endpoint)
+                    .or_default()
+                    .push(event.clone());
+            }
+            EndpointGeneral::UDP(udp_endpoint) => send_outgoing_event_now_udp(&self, udp_endpoint, event),
+        }
+    }
+
+    pub fn send_outgoing_event_next_tick(&self, endpoint: EndpointGeneral, events: &[TO]) {
+        match endpoint {
+            EndpointGeneral::WebSocket(ws_endpoint) => {
+                self.event_list_outgoing_websocket
+                    .entry(ws_endpoint)
+                    .or_default()
+                    .extend_from_slice(events);
+            }
+            EndpointGeneral::UDP(udp_endpoint) => {
+                send_outgoing_event_next_tick_batch_udp(&self, udp_endpoint, events)
+            }
+        }
+    }
+
+}
+
+#[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
+pub struct WebSocketEndpoint {
+    pub id: u32,
+}
+
+#[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
+pub enum EndpointGeneral {
+    WebSocket(WebSocketEndpoint),
+    UDP(Endpoint),
+}
+
+pub fn send_outgoing_event_now_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     event: &TO,
 ) {
     trace!(?event, "Sending event");
     let event = postcard::to_stdvec(&EventGroupingRef::Single(event)).unwrap();
-    resources.handler.network().send(endpoint, &event);
+    resources.handler.as_ref().expect("must have udp handler").network().send(endpoint, &event);
 
     resources
         .networking_stats
@@ -222,7 +265,7 @@ pub fn send_outgoing_event_now<TI, TO: NetworkingEvent>(
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
-pub fn send_outgoing_event_now_batch<TI, TO: NetworkingEvent>(
+pub fn send_outgoing_event_now_batch_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     event: &[TO],
@@ -232,7 +275,7 @@ pub fn send_outgoing_event_now_batch<TI, TO: NetworkingEvent>(
     if data.len() > 6000 {
         warn!(data_len = data.len(), "Sending large batch event");
     }
-    resources.handler.network().send(endpoint, &data);
+    resources.handler.as_ref().expect("must have udp handler").network().send(endpoint, &data);
 
     resources
         .networking_stats
@@ -245,13 +288,14 @@ pub fn send_outgoing_event_now_batch<TI, TO: NetworkingEvent>(
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
-fn send_outgoing_event_reliable_internal_chunk<TI, TO: NetworkingEvent>(
+fn send_outgoing_event_reliable_internal_chunk_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     event: &[TO],
     tick: &Tick,
 ) {
     trace!(?event, "Sending doubled batch event");
+    let handler = resources.handler.as_ref().expect("must have udp handler");
 
     let packet_id: PacketIdentifier = rand::random();
     let dedup_id: DuplicationIdentifier = rand::random();
@@ -260,14 +304,14 @@ fn send_outgoing_event_reliable_internal_chunk<TI, TO: NetworkingEvent>(
     ))
     .unwrap();
     let data_len = data.len() * 2;
-    resources.handler.network().send(endpoint, &data);
+    handler.network().send(endpoint, &data);
 
     let dedup_id: DuplicationIdentifier = rand::random();
     let data = postcard::to_stdvec(&EventGroupingRef::Reliable(
         packet_id, dedup_id, *tick, event,
     ))
     .unwrap();
-    resources.handler.network().send(endpoint, &data);
+    handler.network().send(endpoint, &data);
 
     resources
         .networking_stats
@@ -284,7 +328,7 @@ fn send_outgoing_event_reliable_internal_chunk<TI, TO: NetworkingEvent>(
     }
 }
 
-pub fn send_outgoing_event_reliable_internal<TI, TO: NetworkingEvent>(
+pub fn send_outgoing_event_reliable_internal_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     mut event: &[TO],
@@ -317,7 +361,7 @@ pub fn send_outgoing_event_reliable_internal<TI, TO: NetworkingEvent>(
                 break 'send;
             }
         }
-        send_outgoing_event_reliable_internal_chunk(
+        send_outgoing_event_reliable_internal_chunk_udp(
             resources,
             endpoint,
             &event[..chunk_size],
@@ -330,59 +374,59 @@ pub fn send_outgoing_event_reliable_internal<TI, TO: NetworkingEvent>(
     }
 }
 
-pub fn send_outgoing_event_next_tick<TI, TO: NetworkingEvent>(
+pub fn send_outgoing_event_next_tick_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     event: &TO,
 ) {
     resources
-        .event_list_outgoing
+        .event_list_outgoing_udp
         .entry(endpoint)
         .or_default()
         .push(event.clone());
 }
 
-pub fn send_outgoing_event_next_tick_batch<TI, TO: NetworkingEvent>(
+pub fn send_outgoing_event_next_tick_batch_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     events: &[TO],
 ) {
     resources
-        .event_list_outgoing
+        .event_list_outgoing_udp
         .entry(endpoint)
         .or_default()
         .extend_from_slice(events);
 }
 
-pub fn flush_outgoing_events<TI: NetworkingEvent, TO: NetworkingEvent>(
+pub fn flush_outgoing_events_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
     tick: Res<CurrentTick>,
     resources: Res<NetworkingResources<TI, TO>>,
 ) {
     use rayon::prelude::*;
     resources
-        .event_list_outgoing
+        .event_list_outgoing_udp
         .par_iter_mut()
         .for_each(|mut entry| {
-            send_outgoing_event_reliable_internal(&resources, *entry.key(), entry.value(), &tick.0);
+            send_outgoing_event_reliable_internal_udp(&resources, *entry.key(), entry.value(), &tick.0);
             entry.value_mut().clear();
         })
 }
 
-pub fn setup_incoming_server<TI: NetworkingEvent, TO: NetworkingEvent>(
+pub fn setup_incoming_server_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
     commands: Commands,
     config: Res<NetworkConnectionTarget>,
 ) {
-    setup_incoming_shared::<TI, TO>(commands, &config.ip, config.port, true);
+    setup_incoming_shared_udp::<TI, TO>(commands, &config.ip, config.port, true);
 }
 
-pub fn setup_incoming_client<TI: NetworkingEvent, TO: NetworkingEvent>(
+pub fn setup_incoming_client_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
     commands: Commands,
     config: Res<NetworkConnectionTarget>,
 ) {
-    setup_incoming_shared::<TI, TO>(commands, &config.ip, config.port, false);
+    setup_incoming_shared_udp::<TI, TO>(commands, &config.ip, config.port, false);
 }
 
-pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
+pub fn setup_incoming_shared_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
     mut commands: Commands,
     mut ip: &str,
     port: u16,
@@ -418,11 +462,13 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     }
 
     let res = NetworkingResources::<TI, TO> {
-        handler: handler.clone(),
-        event_list_incoming: Default::default(),
-        event_list_outgoing: Default::default(),
+        handler: Some(handler.clone()),
+        event_list_incoming_udp: Default::default(),
+        event_list_outgoing_udp: Default::default(),
         reliable_packet_ids_seen: Default::default(),
         networking_stats: Arc::new(NetworkingStats::default()),
+        event_list_incoming_websocket: Default::default(),
+        event_list_outgoing_websocket: Default::default(),
         con_str: Arc::new(con_str),
     };
 
@@ -488,7 +534,7 @@ pub fn on_node_event_incoming<TI: NetworkingEvent, TO>(
                 .packets_received_this_second
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-            let mut list = res.event_list_incoming.write().unwrap();
+            let mut list = res.event_list_incoming_udp.write().unwrap();
             match event {
                 EventGroupingOwned::Single(x) => {
                     let pair = (endpoint, x);
