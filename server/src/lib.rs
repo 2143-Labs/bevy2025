@@ -76,6 +76,7 @@ pub mod animations;
 pub mod axum;
 pub mod spawns;
 pub mod terrain;
+pub mod websocket;
 
 #[derive(Resource, Clone)]
 pub struct TokioRuntimeResource(pub Arc<tokio::runtime::Runtime>);
@@ -129,6 +130,7 @@ fn do_app(f: impl FnOnce(&mut App)) {
             shared::TickPlugin,
             shared::event::server::NetworkEventPlugin,
             shared::character_controller::CharacterControllerPlugin,
+            websocket::WebsocketPlugin,
             //StatusPlugin,
         ))
         .init_state::<ServerState>()

@@ -406,7 +406,7 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
             .network()
             .listen(Transport::Udp, con_str.clone())
             .unwrap();
-        //let (_, tcp_addr) = handler.network().listen(Transport::Tcp, con_str).unwrap();
+
         info!(?udp_addr, "Listening")
     } else {
         let (endpoint, addr) = handler
