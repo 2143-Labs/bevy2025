@@ -406,6 +406,7 @@ fn on_player_connect(
 
         // send initial world data
         info!(
+            who = ?player.endpoint,
             "Player connected - sending {} existing units",
             world_data.units.len()
         );

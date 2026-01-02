@@ -145,6 +145,15 @@ pub type ServerNetworkingResources = NetworkingResources<EventToServer, EventToC
 #[derive(Resource, Clone)]
 pub struct MainServerEndpoint(pub EndpointGeneral);
 
+impl MainServerEndpoint {
+    pub fn as_websocket(&self) -> Option<WebSocketEndpoint> {
+        match &self.0 {
+            EndpointGeneral::WebSocket(ws_endpoint) => Some(*ws_endpoint),
+            EndpointGeneral::UDP(_) => None,
+        }
+    }
+}
+
 /// This type is only used for the inital connection, and then it is removed.
 #[derive(Resource, Debug)]
 pub struct NetworkConnectionTarget {
@@ -266,7 +275,7 @@ impl<TI, TO: NetworkingEvent> NetworkingResources<TI, TO> {
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
 pub struct WebSocketEndpoint {
-    pub id: u32,
+    pub socket_addr: std::net::SocketAddr,
 }
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
@@ -506,7 +515,7 @@ fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
         commands.insert_resource(MainServerEndpoint(EndpointGeneral::UDP(endpoint)));
         #[cfg(feature = "web")]
         commands.insert_resource(MainServerEndpoint(EndpointGeneral::WebSocket(
-            WebSocketEndpoint { id: 0 },
+            WebSocketEndpoint { socket_addr: addr },
         )));
         info!(?addr, "Connected");
     }
@@ -527,7 +536,7 @@ fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     commands.remove_resource::<NetworkConnectionTarget>();
 
     // web doesn't support threads
-    #[cfg(feature = "web")]
+    #[cfg(not(feature = "web"))]
     {
         let res2 = res.clone();
         std::thread::spawn(move || {

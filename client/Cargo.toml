@@ -27,8 +27,9 @@ raw-window-handle = { version = "0.6.2", optional = true }
 wasm-bindgen = { version = "0.2.106", optional = true }
 web-sys = { version = "0.3.83", optional = true, features = [
 "Window", "Document", "HtmlCanvasElement", "HtmlParagraphElement", "console",
-"MessageEvent", "WebSocket",
+"MessageEvent", "WebSocket", "PresentationConnection", "Blob", "ReadableStream", "ReadableStreamDefaultReader"
 ] }
+wasm-bindgen-futures = "0.4.56"
 
 [features]
 inspector = ["dep:bevy-inspector-egui"]
