@@ -1,8 +1,8 @@
 use bevy::prelude::*;
+use std::sync::Arc;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlParagraphElement;
-use std::sync::Arc;
 
 //use raw_window_handle::HasRawWindowHandle;
 
@@ -16,8 +16,7 @@ impl Plugin for WebPlugin {
         //while in ClientConencting, run
         app.add_systems(
             Update,
-            while_connecting
-                .run_if(in_state(NetworkGameState::ClientConnecting)),
+            while_connecting.run_if(in_state(NetworkGameState::ClientConnecting)),
         );
     }
 }
@@ -28,16 +27,13 @@ pub struct WebSocketResource {
 }
 
 fn while_connecting(
-    mut commands: Commands,
-    next_game_state: ResMut<NextState<NetworkGameState>>,
+    mut _commands: Commands,
+    mut _next_game_state: ResMut<NextState<NetworkGameState>>,
 ) {
-    next_game_state.set(NetworkGameState::ClientConnected);
+    //next_game_state.set(NetworkGameState::ClientConnected);
 }
 
-
-fn setup(
-    mut commands: Commands,
-) {
+fn setup(mut commands: Commands) {
     //let mut window_desc = WebHandle::empty();
     //handle.id = 1;
     let window = web_sys::window().unwrap();
@@ -68,14 +64,12 @@ fn setup(
 
     let ws_clone = ws.clone();
     let onopen_callback = Closure::wrap(Box::new(move |_e: web_sys::MessageEvent| {
-        ws_clone.send_with_str("Hello from Bevy WebSocket!").unwrap();
+        ws_clone
+            .send_with_str("Hello from Bevy WebSocket!")
+            .unwrap();
         info!("WebSocket connection opened");
     }) as Box<dyn FnMut(_)>);
-    ws.set_onopen(Some(
-        onopen_callback
-        .as_ref()
-        .unchecked_ref(),
-    ));
+    ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
     onopen_callback.forget();
 
     commands.insert_resource(WebSocketResource { ws });

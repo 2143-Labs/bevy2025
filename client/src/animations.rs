@@ -4,7 +4,7 @@ use shared::{
     BASE_TICKS_PER_SECOND, CurrentTick,
     event::{NetEntId, UDPacketEvent, client::CastSkillUpdateToClient},
     net_components::ents::SendNetworkTranformUpdates,
-    netlib::{ClientNetworkingResources, MainServerEndpoint, Tick, send_outgoing_event_next_tick},
+    netlib::{ClientNetworkingResources, MainServerEndpoint, Tick},
     physics::terrain::{NOISE_SCALE_FACTOR, TerrainParams},
     skills::{
         ProjDespawn, ProjSpawnedAt, ProjectileAI,
@@ -83,7 +83,7 @@ fn our_client_begin_skill_use(
                     "Sending stop skill use {:?} for unit {:?} to server",
                     existing_cast.skill, ent_id
                 );
-                send_outgoing_event_next_tick(&sr, mse.0, &event);
+                sr.send_outgoing_event_next_tick(mse.0, &event);
 
                 // Finally, we can change this unit to using this skill instead
                 *existing_cast = new_using_skill;
@@ -102,7 +102,7 @@ fn our_client_begin_skill_use(
                 "Sending begin skill use {:?} for unit {:?} to server",
                 skill, ent_id
             );
-            send_outgoing_event_next_tick(&sr, mse.0, &event);
+            sr.send_outgoing_event_next_tick(mse.0, &event);
         }
     }
 }

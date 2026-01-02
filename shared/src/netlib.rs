@@ -121,7 +121,6 @@ impl NetworkingStats {
     }
 }
 
-
 use dashmap::DashMap;
 
 #[derive(Resource, Clone)]
@@ -144,7 +143,7 @@ pub type ServerNetworkingResources = NetworkingResources<EventToServer, EventToC
 
 /// Exists only on the client, holds the main server endpoint to which we are connected
 #[derive(Resource, Clone)]
-pub struct MainServerEndpoint(pub Endpoint);
+pub struct MainServerEndpoint(pub EndpointGeneral);
 
 /// This type is only used for the inital connection, and then it is removed.
 #[derive(Resource, Debug)]
@@ -210,16 +209,47 @@ impl<TI, TO: NetworkingEvent> NetworkingResources<TI, TO> {
     pub fn send_outgoing_event_now(&self, endpoint: EndpointGeneral, event: &TO) {
         match endpoint {
             EndpointGeneral::WebSocket(ws_endpoint) => {
+                // TODO make this faster- but queue for now
                 self.event_list_outgoing_websocket
                     .entry(ws_endpoint)
                     .or_default()
                     .push(event.clone());
             }
-            EndpointGeneral::UDP(udp_endpoint) => send_outgoing_event_now_udp(&self, udp_endpoint, event),
+            EndpointGeneral::UDP(udp_endpoint) => {
+                send_outgoing_event_now_udp(self, udp_endpoint, event)
+            }
         }
     }
 
-    pub fn send_outgoing_event_next_tick(&self, endpoint: EndpointGeneral, events: &[TO]) {
+    pub fn send_outgoing_event_now_batch(&self, endpoint: EndpointGeneral, events: &[TO]) {
+        match endpoint {
+            EndpointGeneral::WebSocket(ws_endpoint) => {
+                // TODO make this faster- but queue for now
+                self.event_list_outgoing_websocket
+                    .entry(ws_endpoint)
+                    .or_default()
+                    .extend_from_slice(events);
+            }
+            EndpointGeneral::UDP(udp_endpoint) => {
+                send_outgoing_event_now_batch_udp(self, udp_endpoint, events)
+            }
+        }
+    }
+
+    pub fn send_outgoing_event_next_tick(&self, endpoint: EndpointGeneral, event: &TO) {
+        match endpoint {
+            EndpointGeneral::WebSocket(ws_endpoint) => {
+                self.event_list_outgoing_websocket
+                    .entry(ws_endpoint)
+                    .or_default()
+                    .push(event.clone());
+            }
+            EndpointGeneral::UDP(udp_endpoint) => {
+                send_outgoing_event_next_tick_udp(self, udp_endpoint, event)
+            }
+        }
+    }
+    pub fn send_outgoing_event_next_tick_batch(&self, endpoint: EndpointGeneral, events: &[TO]) {
         match endpoint {
             EndpointGeneral::WebSocket(ws_endpoint) => {
                 self.event_list_outgoing_websocket
@@ -228,11 +258,10 @@ impl<TI, TO: NetworkingEvent> NetworkingResources<TI, TO> {
                     .extend_from_slice(events);
             }
             EndpointGeneral::UDP(udp_endpoint) => {
-                send_outgoing_event_next_tick_batch_udp(&self, udp_endpoint, events)
+                send_outgoing_event_next_tick_batch_udp(self, udp_endpoint, events)
             }
         }
     }
-
 }
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
@@ -246,14 +275,19 @@ pub enum EndpointGeneral {
     UDP(Endpoint),
 }
 
-pub fn send_outgoing_event_now_udp<TI, TO: NetworkingEvent>(
+fn send_outgoing_event_now_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     event: &TO,
 ) {
     trace!(?event, "Sending event");
     let event = postcard::to_stdvec(&EventGroupingRef::Single(event)).unwrap();
-    resources.handler.as_ref().expect("must have udp handler").network().send(endpoint, &event);
+    resources
+        .handler
+        .as_ref()
+        .expect("must have udp handler")
+        .network()
+        .send(endpoint, &event);
 
     resources
         .networking_stats
@@ -265,7 +299,7 @@ pub fn send_outgoing_event_now_udp<TI, TO: NetworkingEvent>(
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
-pub fn send_outgoing_event_now_batch_udp<TI, TO: NetworkingEvent>(
+fn send_outgoing_event_now_batch_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     event: &[TO],
@@ -275,7 +309,12 @@ pub fn send_outgoing_event_now_batch_udp<TI, TO: NetworkingEvent>(
     if data.len() > 6000 {
         warn!(data_len = data.len(), "Sending large batch event");
     }
-    resources.handler.as_ref().expect("must have udp handler").network().send(endpoint, &data);
+    resources
+        .handler
+        .as_ref()
+        .expect("must have udp handler")
+        .network()
+        .send(endpoint, &data);
 
     resources
         .networking_stats
@@ -328,7 +367,7 @@ fn send_outgoing_event_reliable_internal_chunk_udp<TI, TO: NetworkingEvent>(
     }
 }
 
-pub fn send_outgoing_event_reliable_internal_udp<TI, TO: NetworkingEvent>(
+fn send_outgoing_event_reliable_internal_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     mut event: &[TO],
@@ -374,7 +413,7 @@ pub fn send_outgoing_event_reliable_internal_udp<TI, TO: NetworkingEvent>(
     }
 }
 
-pub fn send_outgoing_event_next_tick_udp<TI, TO: NetworkingEvent>(
+fn send_outgoing_event_next_tick_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     event: &TO,
@@ -386,7 +425,7 @@ pub fn send_outgoing_event_next_tick_udp<TI, TO: NetworkingEvent>(
         .push(event.clone());
 }
 
-pub fn send_outgoing_event_next_tick_batch_udp<TI, TO: NetworkingEvent>(
+fn send_outgoing_event_next_tick_batch_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     events: &[TO],
@@ -407,7 +446,12 @@ pub fn flush_outgoing_events_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
         .event_list_outgoing_udp
         .par_iter_mut()
         .for_each(|mut entry| {
-            send_outgoing_event_reliable_internal_udp(&resources, *entry.key(), entry.value(), &tick.0);
+            send_outgoing_event_reliable_internal_udp(
+                &resources,
+                *entry.key(),
+                entry.value(),
+                &tick.0,
+            );
             entry.value_mut().clear();
         })
 }
@@ -426,7 +470,7 @@ pub fn setup_incoming_client_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
     setup_incoming_shared_udp::<TI, TO>(commands, &config.ip, config.port, false);
 }
 
-pub fn setup_incoming_shared_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
+fn setup_incoming_shared_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
     mut commands: Commands,
     mut ip: &str,
     port: u16,
@@ -457,7 +501,7 @@ pub fn setup_incoming_shared_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
             .network()
             .connect(Transport::Udp, con_str.clone())
             .unwrap();
-        commands.insert_resource(MainServerEndpoint(endpoint));
+        commands.insert_resource(MainServerEndpoint(EndpointGeneral::UDP(endpoint)));
         info!(?addr, "Connected");
     }
 
@@ -476,28 +520,17 @@ pub fn setup_incoming_shared_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
     commands.insert_resource(res.clone());
     commands.remove_resource::<NetworkConnectionTarget>();
 
-    #[cfg(feature = "web")]
-    {
-        let res2 = res.clone();
-        listener.register_web_event_listener(move |event| {
-            on_node_event_incoming(&res2, event);
-        });
-    }
-
     // web doesn't support threads
-    #[cfg(not(feature = "web"))]
-    {
-        let res2 = res.clone();
-        std::thread::spawn(move || {
-            listener.for_each(|event| on_node_event_incoming(&res2, event));
-        });
+    let res2 = res.clone();
+    std::thread::spawn(move || {
+        listener.for_each(|event| on_node_event_incoming(&res2, event));
+    });
 
-        let res2 = res.clone();
-        std::thread::spawn(move || loop {
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            res2.networking_stats.flush_and_reset();
-        });
-    }
+    let res2 = res.clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        res2.networking_stats.flush_and_reset();
+    });
 }
 
 pub fn on_node_event_incoming<TI: NetworkingEvent, TO>(

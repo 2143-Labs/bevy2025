@@ -22,8 +22,7 @@ use shared::{
     },
     netlib::{
         ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, Tick,
-        send_outgoing_event_next_tick, send_outgoing_event_now, send_outgoing_event_now_batch,
-        setup_incoming_client,
+        setup_incoming_client_udp,
     },
     physics::terrain::TerrainParams,
 };
@@ -57,7 +56,7 @@ impl Plugin for NetworkingPlugin {
                 OnEnter(NetworkGameState::ClientConnecting),
                 (
                     // Setup the client and immediatly advance the state
-                    setup_incoming_client::<EventToClient, EventToServer>,
+                    setup_incoming_client_udp::<EventToClient, EventToServer>,
                     |mut state: ResMut<NextState<NetworkGameState>>| {
                         state.set(NetworkGameState::ClientSendRequestPacket)
                     },
@@ -113,7 +112,7 @@ impl Plugin for NetworkingPlugin {
             )
             .add_systems(
                 FixedPostUpdate,
-                (shared::netlib::flush_outgoing_events::<EventToClient, EventToServer>).run_if(
+                (shared::netlib::flush_outgoing_events_udp::<EventToClient, EventToServer>).run_if(
                     in_state(NetworkGameState::ClientSendRequestPacket)
                         .or(in_state(NetworkGameState::ClientConnected)),
                 ),
@@ -394,17 +393,17 @@ fn send_connect_packet(
         color_hue: config.player_color_hue,
     });
     notif.write(Notification(format!(
-        "Connecting server={} name={name:?}",
-        mse.0.addr(),
+        "Connecting server={:?} name={name:?}",
+        mse.0,
     )));
-    send_outgoing_event_now(&sr, mse.0, &event);
-    info!("Sent connection packet to {}", mse.0);
+    sr.send_outgoing_event_now(mse.0, &event);
+    info!("Sent connection packet to {:?}", mse.0);
 }
 
 fn send_disconnect_packet(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoint>) {
     let event = EventToServer::IWantToDisconnect(IWantToDisconnect {});
-    send_outgoing_event_now(&sr, mse.0, &event);
-    info!("Sent disconnect packet to {}", mse.0);
+    sr.send_outgoing_event_now(mse.0, &event);
+    info!("Sent disconnect packet to {:?}", mse.0);
 }
 
 #[derive(Component)]
@@ -588,7 +587,7 @@ fn send_heartbeat(
     let event = EventToServer::Heartbeat(Heartbeat {
         client_started_time: time.elapsed_secs_f64(),
     });
-    send_outgoing_event_now(&sr, mse.0, &event);
+    sr.send_outgoing_event_now(mse.0, &event);
 }
 
 #[derive(Resource)]
@@ -654,7 +653,7 @@ fn receive_challenge(
             server_time: event.event.server_time,
             local_latency_ms: local.latency * 1000.0,
         });
-        send_outgoing_event_now(&sr, mse.0, &event);
+        sr.send_outgoing_event_now(mse.0, &event);
     }
 }
 
@@ -705,7 +704,7 @@ fn send_movement_camera(
             transform: *transform,
         }));
 
-        send_outgoing_event_now_batch(&sr, mse.0, &events);
+        sr.send_outgoing_event_now_batch(mse.0, &events);
     }
 }
 
@@ -726,7 +725,7 @@ fn send_movement_unit(
             transform: *transform,
         }));
 
-        send_outgoing_event_now_batch(&sr, mse.0, &events);
+        sr.send_outgoing_event_now_batch(mse.0, &events);
     }
 }
 
@@ -804,7 +803,7 @@ fn our_client_wants_to_spawn_man(
     for thing in ev_sa.read() {
         let event = EventToServer::SpawnMan(thing.clone());
         info!("Sending spawn man event to server");
-        send_outgoing_event_next_tick(&sr, mse.0, &event);
+        sr.send_outgoing_event_next_tick(mse.0, &event);
     }
 }
 

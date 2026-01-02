@@ -6,7 +6,6 @@ use std::{
 
 use avian3d::prelude::{Gravity, LinearVelocity, Rotation};
 use bevy::{app::ScheduleRunnerPlugin, platform::collections::HashSet, prelude::*};
-use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
     event::{
@@ -24,8 +23,7 @@ use shared::{
         ToNetComponent,
     },
     netlib::{
-        send_outgoing_event_next_tick, send_outgoing_event_next_tick_batch,
-        send_outgoing_event_now, EventToClient, EventToServer, NetworkConnectionTarget,
+        EndpointGeneral, EventToClient, EventToServer, NetworkConnectionTarget,
         ServerNetworkingResources, Tick,
     },
     physics::terrain::TerrainParams,
@@ -58,11 +56,11 @@ struct HeartbeatList {
 
 #[derive(Resource, Default)]
 struct EndpointToPlayerId {
-    map: DashMap<Endpoint, PlayerId>,
+    map: DashMap<EndpointGeneral, PlayerId>,
 }
 
 #[derive(Debug, Component)]
-struct PlayerEndpoint(Endpoint);
+struct PlayerEndpoint(EndpointGeneral);
 
 //#[derive(Resource, Debug)]
 //struct ServerSettings {
@@ -141,7 +139,7 @@ fn do_app(f: impl FnOnce(&mut App)) {
         .add_systems(
             OnEnter(ServerState::Starting),
             (
-                shared::netlib::setup_incoming_server::<EventToServer, EventToClient>,
+                shared::netlib::setup_incoming_server_udp::<EventToServer, EventToClient>,
                 |mut state: ResMut<NextState<ServerState>>| {
                     info!("Server started, switching to running state");
                     state.set(ServerState::Running)
@@ -178,7 +176,7 @@ fn do_app(f: impl FnOnce(&mut App)) {
             FixedPostUpdate,
             (
                 shared::increment_ticks,
-                shared::netlib::flush_outgoing_events::<EventToServer, EventToClient>,
+                shared::netlib::flush_outgoing_events_udp::<EventToServer, EventToClient>,
                 add_tick_just_happened_packet,
             )
                 .chain()
@@ -211,7 +209,7 @@ fn add_tick_just_happened_packet(
         let event = EventToClient::TickHappened(shared::event::client::TickHappened {
             tick: current_tick.0,
         });
-        send_outgoing_event_next_tick(&sr, net_client.0, &event);
+        sr.send_outgoing_event_next_tick(net_client.0, &event);
     }
 }
 
@@ -305,8 +303,7 @@ fn on_player_connect(
                 });
 
                 // Tell all connected clients about your new player and camera
-                send_outgoing_event_next_tick_batch(
-                    &sr,
+                sr.send_outgoing_event_next_tick_batch(
                     c_net_client.0,
                     &[
                         // their camera
@@ -413,7 +410,7 @@ fn on_player_connect(
             world_data.units.len()
         );
         let event = EventToClient::WorldData2(world_data);
-        send_outgoing_event_next_tick(&sr, player.endpoint, &event);
+        sr.send_outgoing_event_next_tick(player.endpoint, &event);
 
         // send remaining world data in batches
         let events = large_unit_list_to_send
@@ -421,7 +418,7 @@ fn on_player_connect(
             .map(|u| EventToClient::SpawnUnit2(u.clone()))
             .collect::<Vec<_>>();
 
-        send_outgoing_event_next_tick_batch(&sr, player.endpoint, &events);
+        sr.send_outgoing_event_next_tick_batch(player.endpoint, &events);
     }
 }
 
@@ -475,7 +472,7 @@ fn send_ping_challenge(
         server_time: time.elapsed_secs_f64(),
     });
     for net_client in &clients {
-        send_outgoing_event_now(&sr, net_client.0, &event);
+        sr.send_outgoing_event_now(net_client.0, &event);
     }
 }
 
@@ -536,7 +533,7 @@ fn on_player_disconnect(
         }
 
         for (c_ent, net_client, player_id) in &clients {
-            send_outgoing_event_next_tick_batch(&sr, net_client.0, &events);
+            sr.send_outgoing_event_next_tick_batch(net_client.0, &events);
             if player_id == &player.id {
                 commands
                     .entity(c_ent)
@@ -579,7 +576,7 @@ fn on_unit_despawn(
     }
 
     for net_client in &clients {
-        send_outgoing_event_next_tick_batch(&sr, net_client.0, &events);
+        sr.send_outgoing_event_next_tick_batch(net_client.0, &events);
     }
 }
 
@@ -601,7 +598,7 @@ fn on_player_heartbeat(
                     server_time: time.elapsed_secs_f64(),
                     server_tick: tick.0,
                 });
-                send_outgoing_event_now(&sr, hb.endpoint, &event);
+                sr.send_outgoing_event_now(hb.endpoint, &event);
             }
         }
     }
@@ -628,7 +625,7 @@ fn on_player_scoreboard_request(
     }
     for req in pd.read() {
         let event = EventToClient::RequestScoreboardResponse(scoreboard_data.clone());
-        send_outgoing_event_now(&sr, req.endpoint, &event);
+        sr.send_outgoing_event_now(req.endpoint, &event);
     }
 }
 
@@ -720,7 +717,7 @@ fn broadcast_movement_updates(
             events_to_send.len()
         );
         for c_net_client in &clients {
-            send_outgoing_event_next_tick_batch(&sr, c_net_client.0, &events_to_send);
+            sr.send_outgoing_event_next_tick_batch(c_net_client.0, &events_to_send);
         }
     }
 }

@@ -10,7 +10,7 @@ use shared::{
         ours::{ControlledBy, Dead, DespawnOnPlayerDisconnect, HasInventory},
         ToNetComponent,
     },
-    netlib::{send_outgoing_event_next_tick, EventToClient, ServerNetworkingResources},
+    netlib::{EventToClient, ServerNetworkingResources},
     CurrentTick,
 };
 
@@ -97,8 +97,7 @@ fn on_circle_spawn(
                 .to_net_component(),
             );
 
-            send_outgoing_event_next_tick(
-                &sr,
+            sr.send_outgoing_event_next_tick(
                 spawn_ev.endpoint,
                 &EventToClient::NewInventory(shared::event::client::NewInventory { inventory }),
             );
@@ -120,7 +119,7 @@ fn on_circle_spawn(
         info!("Notifying clients of new unit: {:?}", event);
         for endpoint in &clients {
             info!("Sending spawn event to endpoint: {:?}", endpoint.0);
-            send_outgoing_event_next_tick(&sr, endpoint.0, &event);
+            sr.send_outgoing_event_next_tick(endpoint.0, &event);
         }
     }
 }
@@ -178,12 +177,11 @@ fn on_man_spawn(
         info!("Notifying clients of new unit: {:?}", event);
         for endpoint in &clients {
             info!("Sending spawn event to endpoint: {:?}", endpoint.0);
-            send_outgoing_event_next_tick(&sr, endpoint.0, &event);
+            sr.send_outgoing_event_next_tick(endpoint.0, &event);
         }
 
         // Now, we send the user control event to this client
-        send_outgoing_event_next_tick(
-            &sr,
+        sr.send_outgoing_event_next_tick(
             spawn_ev.endpoint,
             &EventToClient::BeginThirdpersonControllingUnit(BeginThirdpersonControllingUnit {
                 player_id: *player_id_of_spawner,
@@ -191,8 +189,7 @@ fn on_man_spawn(
             }),
         );
 
-        send_outgoing_event_next_tick(
-            &sr,
+        sr.send_outgoing_event_next_tick(
             spawn_ev.endpoint,
             &EventToClient::NewInventory(shared::event::client::NewInventory { inventory }),
         );
@@ -248,7 +245,7 @@ fn on_unit_die(
                     };
                     let event = EventToClient::SpawnUnit2(loot);
                     for endpoint in &clients {
-                        send_outgoing_event_next_tick(&sr, endpoint.0, &event);
+                        sr.send_outgoing_event_next_tick(endpoint.0, &event);
                     }
                 }
             }
@@ -266,7 +263,7 @@ fn on_unit_die(
             .to_net_component()],
         });
         for endpoint in &clients {
-            send_outgoing_event_next_tick(&sr, endpoint.0, &event);
+            sr.send_outgoing_event_next_tick(endpoint.0, &event);
         }
     }
 }

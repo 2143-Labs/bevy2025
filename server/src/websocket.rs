@@ -1,6 +1,6 @@
 use bevy::prelude::*;
-use tokio_tungstenite::tungstenite::Bytes;
 use std::{collections::HashMap, net::SocketAddr};
+use tokio_tungstenite::tungstenite::Bytes;
 //use dashmap::DashMap;
 use futures_channel::mpsc::{unbounded, UnboundedSender};
 use shared::netlib::ServerNetworkingResources;
@@ -74,8 +74,7 @@ async fn handle_websocket_connection(
 
     let bytes = Bytes::from("Welcome to the WebSocket server!");
 
-    tx.start_send(Message::Binary(bytes))
-        .unwrap();
+    tx.start_send(Message::Binary(bytes)).unwrap();
 
     futures_util::pin_mut!(broadcast_incoming, receive_from_others);
     futures_util::future::select(broadcast_incoming, receive_from_others).await;

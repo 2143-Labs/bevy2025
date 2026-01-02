@@ -6,9 +6,7 @@ use std::time::Duration;
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
     event::{PlayerId, UDPacketEvent, client::RequestScoreboardResponse},
-    netlib::{
-        ClientNetworkingResources, MainServerEndpoint, NetworkingStats, send_outgoing_event_now,
-    },
+    netlib::{ClientNetworkingResources, MainServerEndpoint, NetworkingStats},
 };
 
 /// Marker for the paused menu root entity
@@ -129,8 +127,7 @@ pub fn send_scoreboard_request_packet(
 ) {
     // send packet
     let event = shared::event::server::RequestScoreboard {};
-    send_outgoing_event_now(
-        &sr,
+    sr.send_outgoing_event_now(
         mse.0,
         &shared::netlib::EventToServer::RequestScoreboard(event),
     );
