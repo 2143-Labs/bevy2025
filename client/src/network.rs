@@ -22,7 +22,7 @@ use shared::{
     },
     netlib::{
         ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, Tick,
-        setup_incoming_client_udp,
+        setup_incoming_client,
     },
     physics::terrain::TerrainParams,
 };
@@ -56,7 +56,7 @@ impl Plugin for NetworkingPlugin {
                 OnEnter(NetworkGameState::ClientConnecting),
                 (
                     // Setup the client and immediatly advance the state
-                    setup_incoming_client_udp::<EventToClient, EventToServer>,
+                    setup_incoming_client::<EventToClient, EventToServer>,
                     |mut state: ResMut<NextState<NetworkGameState>>| {
                         state.set(NetworkGameState::ClientSendRequestPacket)
                     },

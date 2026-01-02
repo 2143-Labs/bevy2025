@@ -12,7 +12,7 @@ use crate::game_state::NetworkGameState;
 
 impl Plugin for WebPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(NetworkGameState::ClientConnecting), setup);
+        app.add_systems(OnEnter(NetworkGameState::ClientSendRequestPacket), setup);
         //while in ClientConencting, run
         app.add_systems(
             Update,
@@ -33,7 +33,10 @@ fn while_connecting(
     //next_game_state.set(NetworkGameState::ClientConnected);
 }
 
-fn setup(mut commands: Commands) {
+fn setup(
+    mut commands: Commands,
+    net_res: Res<ClientNetworkResources>,
+) {
     //let mut window_desc = WebHandle::empty();
     //handle.id = 1;
     let window = web_sys::window().unwrap();

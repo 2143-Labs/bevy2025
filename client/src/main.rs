@@ -109,14 +109,14 @@ fn main() {
             .add_systems(Startup, |client: Res<bevy_steamworks::Client>| {
                 let app_owner = client.apps().app_owner();
                 info!("App Owner Steam ID: {:?}", app_owner);
-                for friend in client.friends().get_friends(FriendFlags::IMMEDIATE) {
-                    info!(
-                        "Friend: {} = {:?} {:?}",
-                        friend.name(),
-                        friend.id(),
-                        friend.state()
-                    );
-                }
+                //for friend in client.friends().get_friends(FriendFlags::IMMEDIATE) {
+                    //info!(
+                        //"Friend: {} = {:?} {:?}",
+                        //friend.name(),
+                        //friend.id(),
+                        //friend.state()
+                    //);
+                //}
             });
     }
 

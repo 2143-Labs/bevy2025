@@ -456,21 +456,21 @@ pub fn flush_outgoing_events_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
         })
 }
 
-pub fn setup_incoming_server_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
+pub fn setup_incoming_server<TI: NetworkingEvent, TO: NetworkingEvent>(
     commands: Commands,
     config: Res<NetworkConnectionTarget>,
 ) {
-    setup_incoming_shared_udp::<TI, TO>(commands, &config.ip, config.port, true);
+    setup_incoming_shared::<TI, TO>(commands, &config.ip, config.port, true);
 }
 
-pub fn setup_incoming_client_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
+pub fn setup_incoming_client<TI: NetworkingEvent, TO: NetworkingEvent>(
     commands: Commands,
     config: Res<NetworkConnectionTarget>,
 ) {
-    setup_incoming_shared_udp::<TI, TO>(commands, &config.ip, config.port, false);
+    setup_incoming_shared::<TI, TO>(commands, &config.ip, config.port, false);
 }
 
-fn setup_incoming_shared_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
+fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     mut commands: Commands,
     mut ip: &str,
     port: u16,
@@ -501,7 +501,13 @@ fn setup_incoming_shared_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
             .network()
             .connect(Transport::Udp, con_str.clone())
             .unwrap();
+
+        #[cfg(not(feature = "web"))]
         commands.insert_resource(MainServerEndpoint(EndpointGeneral::UDP(endpoint)));
+        #[cfg(feature = "web")]
+        commands.insert_resource(MainServerEndpoint(EndpointGeneral::WebSocket(
+            WebSocketEndpoint { id: 0 },
+        )));
         info!(?addr, "Connected");
     }
 
@@ -521,16 +527,19 @@ fn setup_incoming_shared_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
     commands.remove_resource::<NetworkConnectionTarget>();
 
     // web doesn't support threads
-    let res2 = res.clone();
-    std::thread::spawn(move || {
-        listener.for_each(|event| on_node_event_incoming(&res2, event));
-    });
+    #[cfg(feature = "web")]
+    {
+        let res2 = res.clone();
+        std::thread::spawn(move || {
+            listener.for_each(|event| on_node_event_incoming(&res2, event));
+        });
 
-    let res2 = res.clone();
-    std::thread::spawn(move || loop {
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        res2.networking_stats.flush_and_reset();
-    });
+        let res2 = res.clone();
+        std::thread::spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            res2.networking_stats.flush_and_reset();
+        });
+    }
 }
 
 pub fn on_node_event_incoming<TI: NetworkingEvent, TO>(

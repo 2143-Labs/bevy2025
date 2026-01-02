@@ -72,9 +72,8 @@ async fn handle_websocket_connection(
 
     let receive_from_others = rx.map(Ok).forward(outgoing);
 
-    let bytes = Bytes::from("Welcome to the WebSocket server!");
-
-    tx.start_send(Message::Binary(bytes)).unwrap();
+    //let bytes = string::from("Welcome to the WebSocket server!");
+    //tx.start_send(Message::Text(bytes)).unwrap();
 
     futures_util::pin_mut!(broadcast_incoming, receive_from_others);
     futures_util::future::select(broadcast_incoming, receive_from_others).await;

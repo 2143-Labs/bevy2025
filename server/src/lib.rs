@@ -139,7 +139,7 @@ fn do_app(f: impl FnOnce(&mut App)) {
         .add_systems(
             OnEnter(ServerState::Starting),
             (
-                shared::netlib::setup_incoming_server_udp::<EventToServer, EventToClient>,
+                shared::netlib::setup_incoming_server::<EventToServer, EventToClient>,
                 |mut state: ResMut<NextState<ServerState>>| {
                     info!("Server started, switching to running state");
                     state.set(ServerState::Running)
