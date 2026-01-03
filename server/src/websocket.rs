@@ -90,7 +90,7 @@ async fn handle_websocket_connection(
                         let send_result = our_tx.start_send(Message::Binary(Bytes::from(bytes)));
                         if let Err(e) = send_result {
                             warn!(?ws_user, ?e, "Failed to send outgoing websocket message");
-                            return true; // keep in list to try again later
+                            return false; // keep in list to try again later
                         }
                         false // remove from list
                     } else {

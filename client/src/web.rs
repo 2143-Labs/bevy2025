@@ -103,8 +103,8 @@ fn setup(
     net_res: Res<ClientNetworkingResources>,
     endpoint: Res<MainServerEndpoint>,
 ) {
-    //let window = web_sys::window().unwrap();
-    //let document = window.document().unwrap();
+    let window = web_sys::window().unwrap();
+    let document = window.document().unwrap();
     //let canvas = document
     //.get_element_by_id("textbox")
     //.unwrap()
@@ -115,8 +115,14 @@ fn setup(
     //inhtml.push_str("Hello from Bevy Web!");
 
     //info!("We found the canvas element: {:?}", canvas);
+    //get the host and port from document location
 
-    let ws = Box::new(web_sys::WebSocket::new("ws://192.168.1.32:25556").unwrap());
+    //let ip = &net_res.con_str.0;
+    //let port = net_res.con_str.1 + 1;
+    //let url = format!("ws://{}:{}", ip, port);
+
+    let url = "ws://71.126.177.34:25556";
+    let ws = Box::new(web_sys::WebSocket::new(&url).unwrap());
     let mut_ws = Box::leak(ws);
     let magic_ws = MagicWebSocketPointer::new(mut_ws);
     let endpoint = endpoint.as_websocket().unwrap();
