@@ -36,7 +36,7 @@ const HEARTBEAT_MILLIS: u64 = 200;
 const HEARTBEAT_TIMEOUT: u64 = 2000;
 /// How long do you have to connect, as a multipler of the heartbeart timeout.
 /// If the timeout is 1000 ms, then `5` would mean you have `5000ms` to connect.
-const HEARTBEAT_CONNECTION_GRACE_PERIOD: u64 = 5;
+const HEARTBEAT_CONNECTION_GRACE_PERIOD: u64 = 15;
 
 #[derive(States, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 enum ServerState {
