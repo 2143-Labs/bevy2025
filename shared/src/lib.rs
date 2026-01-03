@@ -22,7 +22,12 @@ pub mod player_input;
 pub mod skills;
 pub mod stats;
 
-pub const BASE_TICKS_PER_SECOND: u16 = 128;
+#[cfg(feature = "web")]
+pub mod message_io;
+#[cfg(not(feature = "web"))]
+pub use message_io;
+
+pub const BASE_TICKS_PER_SECOND: u16 = 20;
 
 #[derive(
     Reflect, Hash, Eq, PartialEq, Clone, Deserialize, Serialize, Debug, Ord, PartialOrd, Copy,
@@ -268,7 +273,14 @@ impl Config {
     }
 
     pub fn load_from_main_dir() -> Self {
-        let mut path = current_dir().unwrap();
+        let Ok(mut path) = current_dir() else {
+            // we are in the web build TODO
+            return Self {
+                ip: "127.0.0.1".to_string(),
+                port: 25555,
+                ..Self::default()
+            };
+        };
         path.push("config.yaml");
 
         info!("Loading config from {path:?}");

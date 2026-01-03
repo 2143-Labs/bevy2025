@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use shared::{
     event::{client::SpawnProjectile, server::CastSkillUpdate, NetEntId, PlayerId, UDPacketEvent},
     net_components::{ents::SendNetworkTranformUpdates, ours::ControlledBy},
-    netlib::{send_outgoing_event_next_tick, ServerNetworkingResources},
+    netlib::ServerNetworkingResources,
     skills::animations::{
         CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince,
     },
@@ -126,7 +126,7 @@ fn on_unit_begin_skill_use(
                 // Don't send back to the original sender
                 continue;
             }
-            send_outgoing_event_next_tick(&sr, client_endpoint.0, &event_to_send);
+            sr.send_outgoing_event_next_tick(client_endpoint.0, &event_to_send);
         }
     }
 }
@@ -192,8 +192,7 @@ fn on_unit_finish_cast(
                         };
 
                         for client_endpoint in &connected_clients {
-                            send_outgoing_event_next_tick(
-                                &sr,
+                            sr.send_outgoing_event_next_tick(
                                 client_endpoint.0,
                                 &shared::netlib::EventToClient::SpawnProjectile(event.clone()),
                             );
@@ -215,8 +214,7 @@ fn on_unit_finish_cast(
                         };
 
                         for client_endpoint in &connected_clients {
-                            send_outgoing_event_next_tick(
-                                &sr,
+                            sr.send_outgoing_event_next_tick(
                                 client_endpoint.0,
                                 &shared::netlib::EventToClient::SpawnProjectile(proj.clone()),
                             );

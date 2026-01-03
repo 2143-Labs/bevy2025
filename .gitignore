@@ -1,3 +1,11 @@
+
+# specific to us
+web/assets
+web/rots_example.js
+web/rots_example.d.ts
+
+
+
 # Rust
 /target/
 **/*.rs.bk
