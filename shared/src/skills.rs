@@ -1,10 +1,9 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{BASE_TICKS_PER_SECOND, items::ItemId};
+use crate::{items::ItemId, BASE_TICKS_PER_SECOND};
 
 pub mod animations;
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Skill {

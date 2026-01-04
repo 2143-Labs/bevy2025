@@ -2,7 +2,12 @@ use bevy::prelude::*;
 
 use noise::NoiseFn;
 
-use crate::{CurrentTick, event::client::SpawnProjectile, physics::terrain::{NOISE_SCALE_FACTOR, TerrainParams}, skills::{Skill, SkillSource}};
+use crate::{
+    event::client::SpawnProjectile,
+    physics::terrain::{TerrainParams, NOISE_SCALE_FACTOR},
+    skills::{Skill, SkillSource},
+    CurrentTick,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{event::NetEntId, netlib::Tick};
@@ -88,26 +93,18 @@ pub enum ProjectileAI {
 impl Plugin for ProjectilePlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<SpawnProjectile>()
-            .add_systems(
-                Update,
-                update_projectiles,
-            );
+            .add_systems(Update, update_projectiles);
     }
 }
 
 impl SpawnProjectile {
-    pub fn base_bundle(
-        &self,
-        tick: &Tick,
-    ) -> ProjectileBundle {
+    pub fn base_bundle(&self, tick: &Tick) -> ProjectileBundle {
         ProjectileBundle {
             projectile_type: self.projectile_type.clone(),
             projectile_origin: ProjectileOrigin {
                 origin: self.projectile_origin,
             },
-            spawned_at: ProjSpawnedAt {
-                tick: *tick,
-            },
+            spawned_at: ProjSpawnedAt { tick: *tick },
             despawn: ProjDespawn {
                 tick: *tick + Tick(300),
             },
@@ -132,9 +129,11 @@ fn update_projectiles(
     terrain_info: Res<TerrainParams>,
 ) {
     let noise: noise::Perlin = terrain_info.perlin();
-    for (ent, mut transform, origin, real_spawn_time, projectile_ai, spawned_at, despawn) in &mut query {
+    for (ent, mut transform, origin, real_spawn_time, projectile_ai, spawned_at, despawn) in
+        &mut query
+    {
         let time_since_spawn = time.elapsed_secs_f64() - real_spawn_time.spawn_real_time;
-        if tick.0.0 >= despawn.tick.0 {
+        if tick.0 .0 >= despawn.tick.0 {
             // despawn
             commands.entity(ent).despawn();
             continue;

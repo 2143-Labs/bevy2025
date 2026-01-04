@@ -10,11 +10,11 @@ mod network;
 pub mod notification;
 mod physics;
 mod picking;
+mod projectile;
 mod remote_players;
 mod terrain;
 mod ui;
 mod water;
-mod projectile;
 
 #[cfg(feature = "web")]
 mod web;

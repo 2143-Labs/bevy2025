@@ -45,7 +45,7 @@ fn check_for_skills_that_will_cast(
         let been_casting_ticks = tick.0 - using_skill.tick;
 
         if been_casting_ticks.0 >= total_cast_time {
-            info!(?ent_id, ?using_skill.skill.skill, "Skill has finished casting, adding CastComplete component");
+            debug!(?ent_id, ?using_skill.skill.skill, "Skill has finished casting, adding CastComplete component");
             commands.entity(entity).insert(CastComplete {});
             unit_finished_skill_cast_writer.write(UnitFinishedSkillCast {
                 tick: tick.0,
@@ -73,7 +73,7 @@ fn remove_old_skills(
 
         let ticks_since_begin = tick.0 - using_skill.tick;
         if ticks_since_begin.0 >= total_cast_time {
-            info!(?ent_id, ?using_skill.skill.skill, "Removing UsingSkillSince component after skill finished");
+            trace!(?ent_id, ?using_skill.skill.skill, "Removing UsingSkillSince component after skill finished");
             // Skill is finished, remove the component
             // We can safely despawn the component here
             commands.entity(entity).remove::<UsingSkillSince>();

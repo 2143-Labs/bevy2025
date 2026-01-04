@@ -19,9 +19,9 @@ pub mod net_components;
 pub mod netlib;
 pub mod physics;
 pub mod player_input;
+pub mod projectile;
 pub mod skills;
 pub mod stats;
-pub mod projectile;
 
 #[cfg(not(feature = "udp"))]
 pub mod message_io;

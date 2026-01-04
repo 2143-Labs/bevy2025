@@ -1,5 +1,9 @@
 use bevy::prelude::*;
-use shared::{CurrentTick, event::client::SpawnProjectile, projectile::ProjectileRealtime};
+use shared::{
+    CurrentTick,
+    event::{UDPacketEvent, client::SpawnProjectile},
+    projectile::{ProjectileAI, ProjectileRealtime},
+};
 
 use crate::{animations::get_client_tick_from_server_tick, network::ServerTick};
 
@@ -9,13 +13,7 @@ impl Plugin for ProjectilePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(shared::projectile::ProjectilePlugin);
 
-        app.add_systems(
-            Update,
-            (
-                on_spawn_projectile,
-                spawn_projectiles_read,
-            ),
-        );
+        app.add_systems(Update, (on_spawn_projectile, spawn_projectiles_read));
     }
 }
 
@@ -68,11 +66,11 @@ fn on_spawn_projectile(
 }
 
 fn spawn_projectiles_read(
-    efre: UDPacketEvent<SpawnProjectile>,
-    writer: MessageWriter<SpawnProjectile>,
+    mut efre: UDPacketEvent<SpawnProjectile>,
+    mut writer: MessageWriter<SpawnProjectile>,
 ) {
     for packet in efre.read() {
+        info!("Got a packet");
         writer.write(packet.event.clone());
     }
 }
-

@@ -1,8 +1,13 @@
 use bevy::prelude::*;
 use shared::{
-    CurrentTick, event::{NetEntId, PlayerId, UDPacketEvent, client::SpawnProjectile, server::CastSkillUpdate}, net_components::{ents::SendNetworkTranformUpdates, make_npc, ours::ControlledBy}, netlib::ServerNetworkingResources, projectile::{ProjectileAI, ProjectileSource}, skills::animations::{
+    event::{client::SpawnProjectile, server::CastSkillUpdate, NetEntId, PlayerId, UDPacketEvent},
+    net_components::{ents::SendNetworkTranformUpdates, make_npc, ours::ControlledBy},
+    netlib::ServerNetworkingResources,
+    projectile::{ProjectileAI, ProjectileSource},
+    skills::animations::{
         CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince,
-    }
+    },
+    CurrentTick,
 };
 
 use crate::{ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint};
@@ -84,13 +89,13 @@ fn on_unit_begin_skill_use(
                     }
                 }
                 // Stopping the current skill
-                info!(?player_id, ?ent_id, "Stopping skill casting early");
+                trace!(?player_id, ?ent_id, "Stopping skill casting early");
                 *existing_cast = new_using_skill;
                 commands.entity(entity).remove::<CastComplete>();
                 // send update to clients as update_entity
                 // TODO
             } else {
-                info!(?player_id, ?ent_id, "Beginning skill casting");
+                trace!(?player_id, ?ent_id, "Beginning skill casting");
                 commands.entity(entity).insert(new_using_skill);
                 commands.entity(entity).remove::<CastComplete>();
             }
@@ -135,7 +140,7 @@ fn on_unit_finish_cast(
     mut commands: Commands,
     connected_clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
     sr: Res<ServerNetworkingResources>,
-    spawn_projectile_writer: MessageWriter<SpawnProjectile>,
+    mut spawn_projectile_writer: MessageWriter<SpawnProjectile>,
 ) {
     for UnitFinishedSkillCast {
         tick,
@@ -186,7 +191,7 @@ fn on_unit_finish_cast(
                         let event = SpawnProjectile {
                             spawn_tick: server_tick.0,
                             projectile_origin: transform.translation,
-                            projectile_source,
+                            projectile_source: projectile_source.clone(),
                             projectile_type: ProjectileAI::Spark {
                                 projectile_path_targets: path_targets,
                             },
@@ -200,7 +205,7 @@ fn on_unit_finish_cast(
                         let proj = SpawnProjectile {
                             spawn_tick: server_tick.0,
                             projectile_origin: transform.translation,
-                            projectile_source,
+                            projectile_source: projectile_source.clone(),
                             projectile_type: ProjectileAI::HammerDin {
                                 init_angle_radians: (hammer as f32) * std::f32::consts::PI / 2.0,
                                 center_point: transform.translation,

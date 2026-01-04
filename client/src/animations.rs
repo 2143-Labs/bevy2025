@@ -1,9 +1,18 @@
 use bevy::prelude::*;
 use noise::NoiseFn;
 use shared::{
-    BASE_TICKS_PER_SECOND, CurrentTick, event::{NetEntId, UDPacketEvent, client::{CastSkillUpdateToClient, SpawnProjectile}}, net_components::ents::SendNetworkTranformUpdates, netlib::{ClientNetworkingResources, MainServerEndpoint, Tick}, physics::terrain::{NOISE_SCALE_FACTOR, TerrainParams}, projectile::ProjectileRealtime, skills::{
-        animations::{CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince},
-    }
+    BASE_TICKS_PER_SECOND, CurrentTick,
+    event::{
+        NetEntId, UDPacketEvent,
+        client::{CastSkillUpdateToClient, SpawnProjectile},
+    },
+    net_components::ents::SendNetworkTranformUpdates,
+    netlib::{ClientNetworkingResources, MainServerEndpoint, Tick},
+    physics::terrain::{NOISE_SCALE_FACTOR, TerrainParams},
+    projectile::ProjectileRealtime,
+    skills::animations::{
+        CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince,
+    },
 };
 
 use crate::{
@@ -90,7 +99,7 @@ fn our_client_begin_skill_use(
                     skill: skill.clone(),
                 },
             );
-            info!(
+            trace!(
                 "Sending begin skill use {:?} for unit {:?} to server",
                 skill, ent_id
             );
