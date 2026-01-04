@@ -57,11 +57,12 @@ fn flush_outgoing_events_websocket(
                 .map(|spc| spc.tx.clone());
 
             let Some(mut peer_queue) = maybe_tx_queue else {
-                error!(
+                // this player has dropped the websocket connection but we still have them as a
+                // "Connected Player". They can re-establish a new websocket connection.
+                debug!(
                     "No websocket tx queue found for socket addr: {}",
                     key.socket_addr
                 );
-                info!("msg = {:?}", value);
                 return false;
             };
 

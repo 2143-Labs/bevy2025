@@ -450,18 +450,22 @@ pub fn flush_outgoing_events_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
     tick: Res<CurrentTick>,
     resources: Res<NetworkingResources<TI, TO>>,
 ) {
-    use rayon::prelude::*;
     resources
         .event_list_outgoing_udp
-        .par_iter_mut()
-        .for_each(|mut entry| {
-            send_outgoing_event_reliable_internal_udp(
-                &resources,
-                *entry.key(),
-                entry.value(),
-                &tick.0,
-            );
-            entry.value_mut().clear();
+        .retain(|&key, value| {
+            let value = std::mem::take(&mut *value);
+            let resources = resources.clone();
+            let tick = tick.0;
+            std::thread::spawn(move || {
+                send_outgoing_event_reliable_internal_udp(
+                    &resources,
+                    key,
+                    &value,
+                    &tick,
+                );
+            });
+
+            false
         })
 }
 
