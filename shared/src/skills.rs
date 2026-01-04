@@ -75,11 +75,7 @@ impl Skill {
     pub fn frontswing(&self) -> i16 {
         match self {
             Skill::Spark => ticks_from_secs(0.25),
-            Skill::Heal => ticks_from_secs(3.0),
-            Skill::Revive => ticks_from_secs(5.0),
-            Skill::BasicBowAttack => ticks_from_secs(0.3),
-            Skill::RainOfArrows => ticks_from_secs(1.5),
-            Skill::HomingArrows => ticks_from_secs(0.7),
+            Skill::SummonTestNPC => ticks_from_secs(0.0),
             _ => ticks_from_secs(0.1),
         }
     }
@@ -94,6 +90,7 @@ impl Skill {
             Skill::BasicBowAttack => ticks_from_secs(0.2),
             Skill::RainOfArrows => ticks_from_secs(1.0),
             Skill::HomingArrows => ticks_from_secs(0.3),
+            Skill::SummonTestNPC => ticks_from_secs(0.0),
             _ => ticks_from_secs(0.1),
         }
     }
@@ -108,6 +105,7 @@ impl Skill {
             Skill::BasicBowAttack => ticks_from_secs(0.2),
             Skill::RainOfArrows => ticks_from_secs(0.5),
             Skill::HomingArrows => ticks_from_secs(0.4),
+            Skill::SummonTestNPC => ticks_from_secs(0.1),
             _ => ticks_from_secs(0.1),
         }
     }
@@ -122,6 +120,7 @@ impl Skill {
             Skill::BasicBowAttack => ticks_from_secs(0.1),
             Skill::RainOfArrows => ticks_from_secs(0.3),
             Skill::HomingArrows => ticks_from_secs(0.2),
+            Skill::SummonTestNPC => ticks_from_secs(0.1),
             _ => ticks_from_secs(0.1),
         }
     }

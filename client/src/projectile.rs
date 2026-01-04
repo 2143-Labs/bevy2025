@@ -22,7 +22,9 @@ impl Plugin for ProjectilePlugin {
         app.add_systems(Update, update_dead_units);
 
         app.add_systems(Startup, |world: &mut World| {
-            world.register_component_hooks::<Dead>().on_add(on_client_user_die);
+            world
+                .register_component_hooks::<Dead>()
+                .on_add(on_client_user_die);
         });
     }
 }

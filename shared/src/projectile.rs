@@ -146,17 +146,23 @@ fn update_projectiles(
         &ProjectileOrigin,
         &ProjectileRealtime,
         &ProjectileAI,
+        &ProjectileSource,
         //&ProjSpawnedAt,
         &ProjDespawn,
     )>,
+    unit_targets: Query<(&Transform, &NetEntId), Without<ProjectileAI>>,
     tick: Res<CurrentTick>,
     time: Res<Time>,
     mut commands: Commands,
     terrain_info: Res<TerrainParams>,
+    mut projectile_spawner: MessageWriter<SpawnProjectile>,
 ) {
     let noise: noise::Perlin = terrain_info.perlin();
-    for (ent, mut transform, origin, real_spawn_time, projectile_ai, despawn) in &mut query {
+    for (ent, mut transform, origin, real_spawn_time, projectile_ai, projectile_source, despawn) in
+        &mut query
+    {
         let time_since_spawn = time.elapsed_secs_f64() - real_spawn_time.spawn_real_time;
+        let dt = time.delta_secs_f64();
         if tick.0 .0 >= despawn.tick.0 {
             // despawn
             commands.entity(ent).despawn();
@@ -219,8 +225,140 @@ fn update_projectiles(
                 let tangent = Vec3::new(-angle.sin(), 0.0, angle.cos()).normalize();
                 transform.rotation = Quat::from_rotation_arc(Vec3::Z, tangent);
             }
-            _ => {
-                // TODO
+            ProjectileAI::Straight { target } => {
+                let direction = (*target - origin.origin);
+                let new_pos = origin.origin + direction * time_since_spawn as f32;
+
+                transform.translation = new_pos;
+            }
+            ProjectileAI::Homing {
+                target_entity,
+                turn_rate_deg_per_sec,
+            } => {
+                let Some((target_unit_transform, _)) = unit_targets
+                    .iter()
+                    .find(|(_, net_id)| net_id.0 == target_entity.0)
+                else {
+                    // Target unit not found, despawn projectile
+                    commands.entity(ent).despawn();
+                    continue;
+                };
+                let toward_unit =
+                    (target_unit_transform.translation - transform.translation).normalize();
+                let speed = 10.0;
+
+                let delta_pos = toward_unit * speed * dt as f32;
+                transform.translation += delta_pos;
+            }
+            ProjectileAI::Frostbolt { target } => {
+                let direction = (*target - origin.origin).normalize();
+                let new_pos = origin.origin + direction * time_since_spawn as f32;
+
+                let xz = new_pos.xz();
+                let y = noise.get([
+                    xz.x as f64 * NOISE_SCALE_FACTOR,
+                    xz.y as f64 * NOISE_SCALE_FACTOR,
+                ]) as f32
+                    * terrain_info.max_height_delta;
+                let new_pos = Vec3::new(xz.x, (y + 1.0).max(new_pos.y), xz.y);
+                transform.translation = new_pos;
+            }
+            ProjectileAI::WinterOrbMain { target } => {
+                let direction = (*target - origin.origin).normalize();
+                let new_pos = origin.origin + direction * time_since_spawn as f32;
+
+                let xz = new_pos.xz();
+                let y = noise.get([
+                    xz.x as f64 * NOISE_SCALE_FACTOR,
+                    xz.y as f64 * NOISE_SCALE_FACTOR,
+                ]) as f32
+                    * terrain_info.max_height_delta;
+                let new_pos = Vec3::new(xz.x, (y + 1.0).max(new_pos.y), xz.y);
+                transform.translation = new_pos;
+            }
+            ProjectileAI::WinterOrbSub { target } => {
+                let direction = (*target - origin.origin).normalize();
+                let new_pos = origin.origin + direction * time_since_spawn as f32;
+
+                transform.translation = new_pos;
+            }
+            ProjectileAI::BasicBowAttack { direction_vector } => {
+                // like the straight projectile, but also has an arc for gravity and wind
+                let gravity = -9.81;
+                let wind = Vec3::new(0.0, 0.0, 0.0);
+                let time_f32 = time_since_spawn as f32;
+                let arc_offset = Vec3::new(
+                    0.5 * wind.x * time_f32 * time_f32,
+                    0.5 * gravity * time_f32 * time_f32 + 0.5 * wind.y * time_f32 * time_f32,
+                    0.5 * wind.z * time_f32 * time_f32,
+                );
+
+                let new_pos = origin.origin + (*direction_vector * time_f32) + arc_offset;
+
+                transform.translation = new_pos;
+            }
+            ProjectileAI::RainOfArrowsSpawner {
+                ground_target,
+                sky_target,
+            } => {
+                //Fly from the origin to the sky target over 0.5 seconds, then despawn
+                let flight_duration = 0.5;
+                if time_since_spawn >= flight_duration {
+                    // despawn
+                    commands.entity(ent).despawn();
+
+                    for x in 0..5 {
+                        for y in 0..5 {
+                            let rand_offset_x =
+                                (rand::random_range(-2.0..2.0)) + (x as f32 * 1.0) - 2.0;
+                            let rand_offset_z =
+                                (rand::random_range(-2.0..2.0)) + (y as f32 * 1.0) - 2.0;
+                            let target_xz = Vec2::new(
+                                ground_target.x + rand_offset_x,
+                                ground_target.z + rand_offset_z,
+                            );
+                            let y = noise.get([
+                                target_xz.x as f64 * NOISE_SCALE_FACTOR,
+                                target_xz.y as f64 * NOISE_SCALE_FACTOR,
+                            ]) as f32
+                                * terrain_info.max_height_delta;
+
+                            let ground_target = Vec3::new(target_xz.x, y, target_xz.y);
+
+                            projectile_spawner.write(SpawnProjectile {
+                                projectile_type: ProjectileAI::RainOfArrowsArrow {
+                                    ground_target: ground_target,
+                                },
+                                projectile_origin: *sky_target,
+                                projectile_source: projectile_source.clone(),
+                                spawn_tick: tick.0,
+                            });
+                        }
+                    }
+
+                    continue;
+                }
+                let pct = (time_since_spawn / flight_duration) as f32;
+                let new_pos = origin.origin.lerp(*sky_target, pct);
+                transform.translation = new_pos;
+            }
+            ProjectileAI::RainOfArrowsArrow { ground_target } => {
+                // Fall from the sky to the ground with velocity 30m/s + gravity
+                let gravity = -9.81;
+                let init_vel_y = -30.0;
+                let time_f32 = time_since_spawn as f32;
+                // now lerp between origin and ground target based on vertical position
+                let y_pos =
+                    origin.origin.y + init_vel_y * time_f32 + 0.5 * gravity * time_f32 * time_f32;
+                if y_pos <= ground_target.y {
+                    // landed, leave it in the ground
+                } else {
+                    let pct = (origin.origin.y - y_pos) / (origin.origin.y - ground_target.y);
+                    let new_x = origin.origin.x.lerp(ground_target.x, pct);
+                    let new_z = origin.origin.z.lerp(ground_target.z, pct);
+                    let new_pos = Vec3::new(new_x, y_pos, new_z);
+                    transform.translation = new_pos;
+                }
             }
         }
     }
