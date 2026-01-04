@@ -208,7 +208,6 @@ fn on_unit_finish_cast(
                             projectile_source: projectile_source.clone(),
                             projectile_type: ProjectileAI::HammerDin {
                                 init_angle_radians: (hammer as f32) * std::f32::consts::PI / 2.0,
-                                center_point: transform.translation,
                                 speed: 1.0,
                                 spiral_width_modifier: 1.0,
                             },

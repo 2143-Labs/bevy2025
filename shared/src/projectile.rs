@@ -3,10 +3,7 @@ use bevy::prelude::*;
 use noise::NoiseFn;
 
 use crate::{
-    event::client::SpawnProjectile,
-    physics::terrain::{TerrainParams, NOISE_SCALE_FACTOR},
-    skills::{Skill, SkillSource},
-    CurrentTick,
+    BASE_TICKS_PER_SECOND, CurrentTick, event::client::SpawnProjectile, physics::terrain::{NOISE_SCALE_FACTOR, TerrainParams}, skills::{Skill, SkillSource}
 };
 use serde::{Deserialize, Serialize};
 
@@ -63,7 +60,6 @@ pub enum ProjectileAI {
         projectile_path_targets: Vec<Vec3>,
     },
     HammerDin {
-        center_point: Vec3,
         init_angle_radians: f32,
         speed: f32,
         spiral_width_modifier: f32,
@@ -106,7 +102,7 @@ impl SpawnProjectile {
             },
             spawned_at: ProjSpawnedAt { tick: *tick },
             despawn: ProjDespawn {
-                tick: *tick + Tick(300),
+                tick: *tick + Tick(BASE_TICKS_PER_SECOND as u64 * 3),
             },
             source: self.projectile_source.clone(),
         }
@@ -120,7 +116,7 @@ fn update_projectiles(
         &ProjectileOrigin,
         &ProjectileRealtime,
         &ProjectileAI,
-        &ProjSpawnedAt,
+        //&ProjSpawnedAt,
         &ProjDespawn,
     )>,
     tick: Res<CurrentTick>,
@@ -129,11 +125,11 @@ fn update_projectiles(
     terrain_info: Res<TerrainParams>,
 ) {
     let noise: noise::Perlin = terrain_info.perlin();
-    for (ent, mut transform, origin, real_spawn_time, projectile_ai, spawned_at, despawn) in
+    for (ent, mut transform, origin, real_spawn_time, projectile_ai, despawn) in
         &mut query
     {
         let time_since_spawn = time.elapsed_secs_f64() - real_spawn_time.spawn_real_time;
-        if tick.0 .0 >= despawn.tick.0 {
+        if tick.0 .0 >= despawn.tick.0  {
             // despawn
             commands.entity(ent).despawn();
             continue;
@@ -171,7 +167,6 @@ fn update_projectiles(
                     Quat::from_rotation_arc(Vec3::Z, (end_pos - start_pos).normalize());
             }
             ProjectileAI::HammerDin {
-                center_point,
                 init_angle_radians,
                 speed,
                 spiral_width_modifier,
@@ -181,8 +176,8 @@ fn update_projectiles(
                 let angle = angle * global_hammer_speed;
                 let radius = time_since_spawn as f32 * speed * spiral_width_modifier;
                 let radius = radius * global_hammer_speed;
-                let new_x = center_point.x + radius * angle.cos();
-                let new_z = center_point.z + radius * angle.sin();
+                let new_x = origin.origin.x + radius * angle.cos();
+                let new_z = origin.origin.z + radius * angle.sin();
                 let xz = Vec2::new(new_x, new_z);
                 // TODO REFACTOR PAIR TER1
                 let y = noise.get([
