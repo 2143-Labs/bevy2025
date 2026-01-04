@@ -450,23 +450,16 @@ pub fn flush_outgoing_events_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
     tick: Res<CurrentTick>,
     resources: Res<NetworkingResources<TI, TO>>,
 ) {
-    resources
-        .event_list_outgoing_udp
-        .retain(|&key, value| {
-            let value = std::mem::take(&mut *value);
-            let resources = resources.clone();
-            let tick = tick.0;
-            std::thread::spawn(move || {
-                send_outgoing_event_reliable_internal_udp(
-                    &resources,
-                    key,
-                    &value,
-                    &tick,
-                );
-            });
+    resources.event_list_outgoing_udp.retain(|&key, value| {
+        let value = std::mem::take(&mut *value);
+        let resources = resources.clone();
+        let tick = tick.0;
+        std::thread::spawn(move || {
+            send_outgoing_event_reliable_internal_udp(&resources, key, &value, &tick);
+        });
 
-            false
-        })
+        false
+    })
 }
 
 pub fn setup_incoming_server<TI: NetworkingEvent, TO: NetworkingEvent>(

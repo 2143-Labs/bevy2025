@@ -432,8 +432,12 @@ impl PlayerPing<PlayerPingAtomic> {
 impl PlayerPing<PlayerPingInteger> {
     pub fn to_atomic(&self) -> PlayerPing<PlayerPingAtomic> {
         PlayerPing {
-            server_challenged_ping_microsec: PlayerPingAtomic::new(self.server_challenged_ping_microsec),
-            client_reported_ping_microsec: PlayerPingAtomic::new(self.client_reported_ping_microsec),
+            server_challenged_ping_microsec: PlayerPingAtomic::new(
+                self.server_challenged_ping_microsec,
+            ),
+            client_reported_ping_microsec: PlayerPingAtomic::new(
+                self.client_reported_ping_microsec,
+            ),
         }
     }
 }

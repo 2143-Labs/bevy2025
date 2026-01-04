@@ -57,21 +57,21 @@ impl Inventory<ItemId> {
     }
 }
 
-impl Inventory<Item> {
+impl<T: AsRef<Item> + std::fmt::Debug> Inventory<T> {
     pub fn get_equipped_skills(&self) -> Vec<SkillFromSkillSource> {
         let mut skills = vec![];
 
         for inv_item in &self.items {
-            let Some(_equip_slot) =
-                inv_item
-                    .item
-                    .data
-                    .item_misc
-                    .iter()
-                    .find_map(|misc| match misc {
-                        ItemMiscModifiers::Equipped(i) => Some(i),
-                        _ => None,
-                    })
+            let Some(_equip_slot) = inv_item
+                .item
+                .as_ref()
+                .data
+                .item_misc
+                .iter()
+                .find_map(|misc| match misc {
+                    ItemMiscModifiers::Equipped(i) => Some(i),
+                    _ => None,
+                })
             else {
                 // not equipped, skip this item
                 continue;
@@ -80,14 +80,14 @@ impl Inventory<Item> {
             #[cfg(test)]
             println!("Equipped item found: {:?}", inv_item);
 
-            let item_skills = inv_item.item.grants_skills();
+            let item_skills = inv_item.item.as_ref().grants_skills();
 
             #[cfg(test)]
             println!("Item grants skills: {:?}", item_skills);
 
             for skill in item_skills {
                 skills.push(SkillFromSkillSource {
-                    source: SkillSource::Item(inv_item.item.item_id),
+                    source: SkillSource::Item(inv_item.item.as_ref().item_id),
                     skill,
                 });
             }
@@ -95,10 +95,7 @@ impl Inventory<Item> {
 
         skills
     }
-}
 
-// TODO this is a very basic imlementation, needs to be expanded
-impl Inventory<Item> {
     pub fn get_player_stats(&self) -> PlayerFinalStats {
         let mut final_stats = PlayerFinalStats::default();
 
@@ -112,22 +109,22 @@ impl Inventory<Item> {
         let mut delta_magic_resistance = crate::decimal::Decimal::new(0.0);
 
         for inv_item in &self.items {
-            let Some(_equip_slot) =
-                inv_item
-                    .item
-                    .data
-                    .item_misc
-                    .iter()
-                    .find_map(|misc| match misc {
-                        crate::items::ItemMiscModifiers::Equipped(i) => Some(i),
-                        _ => None,
-                    })
+            let Some(_equip_slot) = inv_item
+                .item
+                .as_ref()
+                .data
+                .item_misc
+                .iter()
+                .find_map(|misc| match misc {
+                    crate::items::ItemMiscModifiers::Equipped(i) => Some(i),
+                    _ => None,
+                })
             else {
                 // not equipped, skip this item
                 continue;
             };
 
-            let mods = inv_item.item.get_mods();
+            let mods = inv_item.item.as_ref().get_mods();
             for modifier in mods {
                 match modifier {
                     Mod::AddsLife { amount } => {
@@ -227,11 +224,27 @@ impl InventoryItemCache {
     }
 
     pub fn insert_inventory(&self, inventory: Inventory<Item>) {
+        let mut item_cache_write = self.item_cache.write().unwrap();
+        let mut self_as_arcs: Inventory<Arc<Item>> = Inventory {
+            id: inventory.id,
+            items: vec![],
+        };
+        for item_in_inv in &inventory.items {
+            let arc = Arc::new(item_in_inv.item.clone());
+            item_cache_write.insert(item_in_inv.item.item_id, arc.clone());
+            self_as_arcs.items.push(ItemInInventory {
+                item: arc,
+                stacksize: item_in_inv.stacksize,
+                item_placement: item_in_inv.item_placement.clone(),
+            });
+        }
+        drop(item_cache_write);
+
         let mut cache_write = self.inventory_cache.write().unwrap();
-        cache_write.insert(inventory.id, Arc::new(inventory));
+        cache_write.insert(inventory.id, Arc::new(self_as_arcs));
     }
 
-    pub fn get_inventory(&self, inventory_id: &InventoryId) -> Option<Arc<Inventory<Item>>> {
+    pub fn get_inventory(&self, inventory_id: &InventoryId) -> Option<ArcInventoryArcItem> {
         let cache_read = self.inventory_cache.read().unwrap();
         cache_read.get(inventory_id).cloned()
     }
@@ -249,10 +262,13 @@ impl InventoryItemCache {
     }
 }
 
+pub type InventoryArcItem = Inventory<Arc<Item>>;
+pub type ArcInventoryArcItem = Arc<Inventory<Arc<Item>>>;
+
 #[derive(Clone, Default, Resource)]
 pub struct InventoryItemCache {
     item_cache: Arc<RwLock<std::collections::HashMap<ItemId, Arc<Item>>>>,
-    inventory_cache: Arc<RwLock<std::collections::HashMap<InventoryId, Arc<Inventory<Item>>>>>,
+    inventory_cache: Arc<RwLock<std::collections::HashMap<InventoryId, ArcInventoryArcItem>>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]

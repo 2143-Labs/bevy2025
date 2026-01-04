@@ -1,24 +1,29 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use avian3d::prelude::{Gravity, LinearVelocity, Rotation};
 use bevy::{app::ScheduleRunnerPlugin, platform::collections::HashSet, prelude::*};
 use rand::Rng;
 use shared::{
-    Config, ConfigPlugin, CurrentTick, PlayerPing, PlayerPingAtomic, PlayerPingInteger, event::{
-        NetEntId, PlayerId, UDPacketEvent, client::{
+    event::{
+        client::{
             DespawnUnit2, HeartbeatChallenge, HeartbeatResponse, PlayerDisconnected, SpawnUnit2,
             UpdateUnit2, WorldData2,
-        }, server::{ChangeMovement, Heartbeat, HeartbeatChallengeResponse, IWantToDisconnect}
-    }, net_components::{
-        ToNetComponent, ents::{PlayerCamera, SendNetworkTranformUpdates}, make_ball, ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName}
-    }, netlib::{
+        },
+        server::{ChangeMovement, Heartbeat, HeartbeatChallengeResponse, IWantToDisconnect},
+        NetEntId, PlayerId, UDPacketEvent,
+    },
+    net_components::{
+        ents::{PlayerCamera, SendNetworkTranformUpdates},
+        make_ball,
+        ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName},
+        ToNetComponent,
+    },
+    netlib::{
         EndpointGeneral, EventToClient, EventToServer, NetworkConnectionTarget,
         ServerNetworkingResources, Tick,
-    }, physics::terrain::TerrainParams
+    },
+    physics::terrain::TerrainParams,
+    Config, ConfigPlugin, CurrentTick, PlayerPing, PlayerPingAtomic, PlayerPingInteger,
 };
 
 /// How often to run the system
@@ -372,7 +377,9 @@ fn on_player_connect(
         let heartbeat_mapping = world.resource::<HeartbeatList>();
         heartbeat_mapping.heartbeats.insert(
             new_player_id,
-            Arc::new(PlayerPingAtomic::new(-(hb_grace_period as PlayerPingInteger))),
+            Arc::new(PlayerPingAtomic::new(
+                -(hb_grace_period as PlayerPingInteger),
+            )),
         );
         heartbeat_mapping.pings.insert(
             new_player_id,

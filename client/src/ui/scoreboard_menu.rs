@@ -255,7 +255,8 @@ pub fn update_scoreboard_menu(
                     entry_parent.spawn({
                         let (text, font, color) = menu_button_text(format!(
                             "Ping: {:.1} cl ms / {:.1} sv ms",
-                            ping.server_challenged_ping_microsec as f32 / 1000.0, ping.client_reported_ping_microsec as f32 / 1000.0
+                            ping.server_challenged_ping_microsec as f32 / 1000.0,
+                            ping.client_reported_ping_microsec as f32 / 1000.0
                         ));
                         (
                             Node {
