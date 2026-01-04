@@ -651,7 +651,7 @@ fn receive_challenge(
     for event in heartbeat_challenges.read() {
         let event = EventToServer::HeartbeatChallengeResponse(HeartbeatChallengeResponse {
             server_time: event.event.server_time,
-            local_latency_ms: local.latency * 1000.0,
+            local_latency_microsecs: local.latency * 1_000_000.0,
         });
         sr.send_outgoing_event_now(mse.0, &event);
     }

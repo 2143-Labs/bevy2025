@@ -8,7 +8,7 @@ use crate::netlib::{NetworkingResources, Tick};
 use crate::physics::terrain::TerrainParams;
 use crate::skills::ProjectileAI;
 use crate::{event::EventFromEndpoint, net_components::NetComponent};
-use crate::{PlayerPing, ServerTPS};
+use crate::{PlayerPing, PlayerPingInteger, ServerTPS};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -102,7 +102,7 @@ pub struct HeartbeatChallenge {
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct RequestScoreboardResponse {
     pub player_names: HashMap<PlayerId, String>,
-    pub player_pings: HashMap<PlayerId, PlayerPing<i16>>,
+    pub player_pings: HashMap<PlayerId, PlayerPing<PlayerPingInteger>>,
 }
 
 // TODO impl

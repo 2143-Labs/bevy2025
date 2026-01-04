@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::{atomic::AtomicI16, Arc},
+    sync::Arc,
     time::Duration,
 };
 
@@ -8,26 +8,17 @@ use avian3d::prelude::{Gravity, LinearVelocity, Rotation};
 use bevy::{app::ScheduleRunnerPlugin, platform::collections::HashSet, prelude::*};
 use rand::Rng;
 use shared::{
-    event::{
-        client::{
+    Config, ConfigPlugin, CurrentTick, PlayerPing, PlayerPingAtomic, PlayerPingInteger, event::{
+        NetEntId, PlayerId, UDPacketEvent, client::{
             DespawnUnit2, HeartbeatChallenge, HeartbeatResponse, PlayerDisconnected, SpawnUnit2,
             UpdateUnit2, WorldData2,
-        },
-        server::{ChangeMovement, Heartbeat, HeartbeatChallengeResponse, IWantToDisconnect},
-        NetEntId, PlayerId, UDPacketEvent,
-    },
-    net_components::{
-        ents::{PlayerCamera, SendNetworkTranformUpdates},
-        make_ball,
-        ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName},
-        ToNetComponent,
-    },
-    netlib::{
+        }, server::{ChangeMovement, Heartbeat, HeartbeatChallengeResponse, IWantToDisconnect}
+    }, net_components::{
+        ToNetComponent, ents::{PlayerCamera, SendNetworkTranformUpdates}, make_ball, ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName}
+    }, netlib::{
         EndpointGeneral, EventToClient, EventToServer, NetworkConnectionTarget,
         ServerNetworkingResources, Tick,
-    },
-    physics::terrain::TerrainParams,
-    Config, ConfigPlugin, CurrentTick, PlayerPing,
+    }, physics::terrain::TerrainParams
 };
 
 /// How often to run the system
@@ -50,8 +41,8 @@ use dashmap::DashMap;
 
 #[derive(Resource, Default)]
 struct HeartbeatList {
-    heartbeats: DashMap<PlayerId, Arc<AtomicI16>>,
-    pings: DashMap<PlayerId, PlayerPing<AtomicI16>>,
+    heartbeats: DashMap<PlayerId, Arc<PlayerPingAtomic>>,
+    pings: DashMap<PlayerId, PlayerPing<PlayerPingAtomic>>,
 }
 
 #[derive(Resource, Default)]
@@ -381,13 +372,13 @@ fn on_player_connect(
         let heartbeat_mapping = world.resource::<HeartbeatList>();
         heartbeat_mapping.heartbeats.insert(
             new_player_id,
-            Arc::new(AtomicI16::new(-(hb_grace_period as i16))),
+            Arc::new(PlayerPingAtomic::new(-(hb_grace_period as PlayerPingInteger))),
         );
         heartbeat_mapping.pings.insert(
             new_player_id,
             PlayerPing {
-                server_challenged_ping_ms: AtomicI16::new(-1),
-                client_reported_ping_ms: AtomicI16::new(-1),
+                server_challenged_ping_microsec: PlayerPingAtomic::new(-1),
+                client_reported_ping_microsec: PlayerPingAtomic::new(-1),
             },
         );
 
@@ -434,7 +425,7 @@ fn check_heartbeats(
 
         let beats = beats_missed.fetch_add(1, std::sync::atomic::Ordering::Acquire);
         trace!(?player_id, ?beats, "hb");
-        if beats >= (HEARTBEAT_TIMEOUT / HEARTBEAT_MILLIS) as i16 {
+        if beats >= (HEARTBEAT_TIMEOUT / HEARTBEAT_MILLIS) as PlayerPingInteger {
             warn!("Missed {beats} beats, disconnecting {player_id:?}");
             return Some(PlayerDisconnected {
                 id: *player_id,
@@ -488,14 +479,14 @@ fn on_receive_ping_challenge(
         if let Some(player_id) = endpoint_mapping.map.get(&hb.endpoint) {
             let ping = time.elapsed_secs_f64() - hb.event.server_time;
             let ping = ping / 2.0;
-            let ping = (ping * 1000.0) as i16; // in ms
+            let ping = (ping * 1_000_000.0) as PlayerPingInteger; // in us
             if let Some(player_ping) = heartbeat_mapping.pings.get(&*player_id) {
                 player_ping
-                    .server_challenged_ping_ms
+                    .server_challenged_ping_microsec
                     .store(ping, std::sync::atomic::Ordering::Release);
 
-                player_ping.client_reported_ping_ms.store(
-                    hb.event.local_latency_ms as i16,
+                player_ping.client_reported_ping_microsec.store(
+                    hb.event.local_latency_microsecs as PlayerPingInteger,
                     std::sync::atomic::Ordering::Release,
                 );
 
