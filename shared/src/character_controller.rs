@@ -310,7 +310,7 @@ fn unit_change_movement(
     }
 }
 
-fn rotation(mut controllers: Query<(&mut Rotation, &MovementAction)>) {
+fn rotation(mut controllers: Query<(&mut Rotation, &MovementAction), Without<Dead>>) {
     for (mut transform, movement_action) in &mut controllers {
         //rotate us around the Y axis based on camera yaw
         *transform = Rotation(Quat::from_rotation_y(movement_action.camera_yaw as Scalar));
@@ -328,7 +328,7 @@ fn movement(
         &Groundedness,
         &GroundNormal,
         &mut JumpBuffer,
-    )>,
+    ), Without<Dead>>,
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
@@ -401,7 +401,7 @@ fn movement(
 /// Applies [`ControllerGravity`] to character controllers.
 fn apply_gravity(
     time: Res<Time>,
-    mut controllers: Query<(&ControllerGravity, &mut LinearVelocity)>,
+    mut controllers: Query<(&ControllerGravity, &mut LinearVelocity), Without<Dead>>,
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
@@ -415,7 +415,7 @@ fn apply_gravity(
 /// Slows down movement in the X direction.
 fn apply_movement_damping(
     time: Res<Time>,
-    mut query: Query<(&MovementDampingFactor, &mut LinearVelocity)>,
+    mut query: Query<(&MovementDampingFactor, &mut LinearVelocity), Without<Dead>>,
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
@@ -451,6 +451,7 @@ fn kinematic_controller_collisions(
         (
             With<RigidBody>,
             Or<(With<CharacterController>, With<NPCController>)>,
+            Without<Dead>,
         ),
     >,
     time: Res<Time>,

@@ -101,12 +101,28 @@ fn on_unit_die(mut cmds: DeferredWorld, hc: HookContext) {
         .entity(hc.entity)
         //.remove::<RigidBody>()
         // ragdoll
-        .insert(RigidBody::Dynamic)
         .insert(DeathAnimation { started_at: time });
 
     // print all components on the entity for debugging
     for comp in cmds.entity(hc.entity).archetype().components() {
         info!("Component on dead entity: {:?}", comp);
+        let type_id = cmds
+            .components()
+            .get_info(*comp)
+            .unwrap()
+            .type_id()
+            .unwrap();
+
+        // SAFETY: Trust that bevy gives us a valid type id and pointer from `get_by_id`
+        if let Some(net_comp) = unsafe {
+            shared::net_components::NetComponent::from_type_id_ptr(
+                type_id,
+                cmds.entity(hc.entity).get_by_id(*comp).unwrap(),
+            )
+        } {
+            info!("Component to send: {:?}", net_comp);
+            //spawn_unit.components.push(net_comp);
+        }
     }
 }
 
