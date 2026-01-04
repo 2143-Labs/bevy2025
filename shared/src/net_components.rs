@@ -12,7 +12,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    character_controller::CharacterControllerBundle,
+    character_controller::{CharacterControllerBundle, NPCControllerBundle},
     decimal::Decimal,
     event::{client::SpawnUnit2, NetEntId, PlayerId},
     net_components::ours::ControlledBy,
@@ -29,6 +29,7 @@ pub enum NetComponent {
     NetEntId(NetEntId),
     PlayerId(PlayerId),
     CharacterControllerBundle(Box<CharacterControllerBundle>),
+    NPCControllerBundle(Box<NPCControllerBundle>),
 }
 
 #[cfg(test)]
@@ -78,6 +79,9 @@ impl NetComponent {
             NetComponent::CharacterControllerBundle(bundle) => {
                 ent_commands.insert(*bundle);
             }
+            NetComponent::NPCControllerBundle(bundle) => {
+                ent_commands.insert(*bundle);
+            }
         }
     }
 
@@ -104,6 +108,10 @@ impl NetComponent {
             Some(NetComponent::CharacterControllerBundle(Box::new(
                 unsafe { ptr.deref::<CharacterControllerBundle>() }.clone(),
             )))
+        } else if type_id == TypeId::of::<NPCControllerBundle>() {
+            Some(NetComponent::NPCControllerBundle(Box::new(
+                unsafe { ptr.deref::<NPCControllerBundle>() }.clone(),
+            )))
         } else {
             None
         }
@@ -118,6 +126,18 @@ impl ToNetComponent for NetEntId {
 impl ToNetComponent for PlayerId {
     fn to_net_component(self) -> NetComponent {
         NetComponent::PlayerId(self)
+    }
+}
+
+impl ToNetComponent for NPCControllerBundle {
+    fn to_net_component(self) -> NetComponent {
+        NetComponent::NPCControllerBundle(Box::new(self))
+    }
+}
+
+impl ToNetComponent for CharacterControllerBundle {
+    fn to_net_component(self) -> NetComponent {
+        NetComponent::CharacterControllerBundle(Box::new(self))
     }
 }
 
@@ -137,66 +157,83 @@ impl SpawnUnit2 {
 
         ent_commands.id()
     }
+
+    pub fn new_with_vec(components: Vec<NetComponent>) -> Self {
+        Self {
+            net_ent_id: NetEntId::random(),
+            components,
+        }
+    }
+
+    pub fn new_with(components: impl IntoIterator<Item = NetComponent>) -> Self {
+        Self {
+            net_ent_id: NetEntId::random(),
+            components: components.into_iter().collect(),
+        }
+    }
 }
 
 pub trait ToNetComponent {
     fn to_net_component(self) -> NetComponent;
 }
 
-pub fn make_ball(
-    net_ent_id: NetEntId,
-    transform: Transform,
-    color: Color,
-    owner: ControlledBy,
-) -> SpawnUnit2 {
+pub fn make_ball(transform: Transform, color: Color, owner: ControlledBy) -> SpawnUnit2 {
     let sphere_size = 0.5;
-    SpawnUnit2 {
-        net_ent_id,
-        components: vec![
-            owner.to_net_component(),
-            ents::Ball(sphere_size).to_net_component(),
-            ents::SendNetworkTranformUpdates.to_net_component(),
-            avian3d::prelude::TransformInterpolation.to_net_component(),
-            transform.to_net_component(),
-            color.to_net_component(),
-            avian3d::prelude::RigidBody::Dynamic.to_net_component(),
-            avian3d::prelude::Collider::sphere(sphere_size).to_net_component(),
-            avian3d::prelude::Mass(0.3).to_net_component(), // Lighter balls that will float (density ~0.57 of water)
-                                                            // Add other ball components here as needed
-        ],
-    }
+    SpawnUnit2::new_with_vec(vec![
+        owner.to_net_component(),
+        ents::Ball(sphere_size).to_net_component(),
+        ents::SendNetworkTranformUpdates.to_net_component(),
+        avian3d::prelude::TransformInterpolation.to_net_component(),
+        transform.to_net_component(),
+        color.to_net_component(),
+        avian3d::prelude::RigidBody::Dynamic.to_net_component(),
+        avian3d::prelude::Collider::sphere(sphere_size).to_net_component(),
+        avian3d::prelude::Mass(0.3).to_net_component(), // Lighter balls that will float (density ~0.57 of water)
+                                                        // Add other ball components here as needed
+    ])
 }
 
-pub fn make_small_loot(net_ent_id: NetEntId, transform: Transform) -> SpawnUnit2 {
-    SpawnUnit2 {
-        net_ent_id,
-        components: vec![
-            ents::ItemDrop { source: None }.to_net_component(),
-            transform.to_net_component(),
-        ],
-    }
+pub fn make_small_loot(transform: Transform) -> SpawnUnit2 {
+    SpawnUnit2::new_with_vec(vec![
+        ents::ItemDrop { source: None }.to_net_component(),
+        transform.to_net_component(),
+    ])
 }
 
-pub fn make_man(net_ent_id: NetEntId, transform: Transform, owner: ControlledBy) -> SpawnUnit2 {
+pub fn make_man(transform: Transform, owner: ControlledBy) -> SpawnUnit2 {
     use crate::character_controller::CharacterControllerBundle;
     use avian3d::prelude::Collider;
-    SpawnUnit2 {
-        net_ent_id,
-        components: vec![
-            owner.to_net_component(),
-            ents::Man(3.0).to_net_component(),
-            ents::SendNetworkTranformUpdates.to_net_component(),
-            avian3d::prelude::TransformInterpolation.to_net_component(),
-            ents::CanAssumeControl.to_net_component(),
-            transform.to_net_component(),
-            CharacterControllerBundle::new(Collider::capsule(1.0, 2.0), Vec3::NEG_Y * 9.81)
-                .with_movement(45.0, 0.9, 4.0, std::f32::consts::PI * 0.20)
-                .to_net_component(),
-            //avian3d::prelude::RigidBody::Dynamic.to_net_component(),
-            //avian3d::prelude::Collider::sphere(3.0).to_net_component(),
-            //avian3d::prelude::Mass(70.0).to_net_component(),
-        ],
-    }
+    SpawnUnit2::new_with_vec(vec![
+        owner.to_net_component(),
+        ents::Man(3.0).to_net_component(),
+        ents::SendNetworkTranformUpdates.to_net_component(),
+        avian3d::prelude::TransformInterpolation.to_net_component(),
+        ents::CanAssumeControl.to_net_component(),
+        transform.to_net_component(),
+        CharacterControllerBundle::new(Collider::capsule(1.0, 2.0), Vec3::NEG_Y * 9.81)
+            .with_movement(45.0, 0.9, 4.0, std::f32::consts::PI * 0.20)
+            .to_net_component(),
+        //avian3d::prelude::RigidBody::Dynamic.to_net_component(),
+        //avian3d::prelude::Collider::sphere(3.0).to_net_component(),
+        //avian3d::prelude::Mass(70.0).to_net_component(),
+    ])
+}
+
+pub fn make_npc(transform: Transform) -> SpawnUnit2 {
+    use crate::character_controller::NPCControllerBundle;
+    use avian3d::prelude::Collider;
+    SpawnUnit2::new_with_vec(vec![
+        ents::NPC.to_net_component(),
+        ents::SendNetworkTranformUpdates.to_net_component(),
+        avian3d::prelude::TransformInterpolation.to_net_component(),
+        transform.to_net_component(),
+        NPCControllerBundle::new(Collider::capsule(1.0, 2.0), Vec3::NEG_Y * 9.81)
+            .with_movement(45.0, 0.9, 4.0, std::f32::consts::PI * 0.20)
+            .to_net_component(),
+        //avian3d::prelude::RigidBody::Dynamic.to_net_component(),
+        //avian3d::prelude::Collider::sphere(3.0).to_net_component(),
+        //avian3d::prelude::Mass(70.0).to_net_component(),
+    ])
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

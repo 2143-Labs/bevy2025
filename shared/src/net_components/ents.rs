@@ -15,6 +15,10 @@ pub struct PlayerCamera;
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct Man(pub f32);
 
+/// Controllable player entity
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct NPC;
+
 /// Simple Interactable entity
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct CanAssumeControl;
@@ -39,6 +43,7 @@ pub enum NetComponentEnts {
     SendNetworkTranformUpdates(SendNetworkTranformUpdates),
     PlayerCamera(PlayerCamera),
     Man(Man),
+    NPC(NPC),
     ItemDrop(ItemDrop),
 }
 
@@ -61,6 +66,9 @@ impl NetComponentEnts {
                 entity.insert(c);
             }
             NetComponentEnts::ItemDrop(c) => {
+                entity.insert(c);
+            }
+            NetComponentEnts::NPC(c) => {
                 entity.insert(c);
             }
         }
@@ -92,6 +100,8 @@ impl NetComponentEnts {
             Some(NetComponentEnts::ItemDrop(
                 unsafe { ptr.deref::<ItemDrop>() }.clone(),
             ))
+        } else if type_id == std::any::TypeId::of::<NPC>() {
+            Some(NetComponentEnts::NPC(unsafe { ptr.deref::<NPC>() }.clone()))
         } else {
             None
         }
@@ -131,5 +141,11 @@ impl ToNetComponent for SendNetworkTranformUpdates {
 impl ToNetComponent for ItemDrop {
     fn to_net_component(self) -> super::NetComponent {
         super::NetComponent::Ents(NetComponentEnts::ItemDrop(self))
+    }
+}
+
+impl ToNetComponent for NPC {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ents(NetComponentEnts::NPC(self))
     }
 }

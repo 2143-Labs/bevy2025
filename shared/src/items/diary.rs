@@ -26,6 +26,8 @@ pub enum DiaryPage {
     Scavenger,
     MartialTraining,
     Healing,
+
+    Omniscience,
 }
 
 impl HasMods for DiaryPage {
@@ -41,6 +43,7 @@ impl HasMods for DiaryPage {
             DiaryPage::Scavenger => vec![],
             DiaryPage::MartialTraining => vec![],
             DiaryPage::Healing => vec![Skill::Heal, Skill::Revive],
+            DiaryPage::Omniscience => crate::skills::all_skills(),
         }
     }
 }

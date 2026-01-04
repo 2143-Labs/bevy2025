@@ -44,7 +44,7 @@ impl HasMods for Footwear {
     fn grants_skills(&self) -> Vec<Skill> {
         match self {
             Footwear::LeatherBoots => vec![],
-            Footwear::Sandals => vec![Skill::Spark, Skill::Hammerdin],
+            Footwear::Sandals => vec![],
             Footwear::Wraps => vec![],
         }
     }

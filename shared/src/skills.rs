@@ -34,6 +34,32 @@ pub enum ProjectileAI {
         speed: f32,
         spiral_width_modifier: f32,
     },
+    Frostbolt {
+        origin: Vec3,
+        target: Vec3,
+    },
+    WinterOrbMain {
+        origin: Vec3,
+        target: Vec3,
+    },
+    WinterOrbSub {
+        origin: Vec3,
+        target: Vec3,
+    },
+
+    BasicBowAttack {
+        origin: Vec3,
+        direction_vector: Vec3,
+    },
+    RainOfArrowsSpawner {
+        origin: Vec3,
+        ground_target: Vec3,
+        sky_target: Vec3,
+    },
+    RainOfArrowsArrow {
+        origin: Vec3,
+        ground_target: Vec3,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -42,6 +68,18 @@ pub enum Skill {
     Spark,
 
     Hammerdin,
+
+    Frostbolt,
+
+    IceNova,
+
+    WinterOrb,
+
+    Blink,
+
+    TownPortal,
+
+    SummonTestNPC,
 
     /// Heal Targeted ally
     Heal,
@@ -57,6 +95,24 @@ pub enum Skill {
 
     /// After hitting a target, fire homing bolts for up to 5 seconds
     HomingArrows,
+}
+
+pub fn all_skills() -> Vec<Skill> {
+    vec![
+        Skill::Spark,
+        Skill::Hammerdin,
+        Skill::Frostbolt,
+        Skill::IceNova,
+        Skill::WinterOrb,
+        Skill::Blink,
+        Skill::TownPortal,
+        Skill::SummonTestNPC,
+        Skill::Heal,
+        Skill::Revive,
+        Skill::BasicBowAttack,
+        Skill::RainOfArrows,
+        Skill::HomingArrows,
+    ]
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]

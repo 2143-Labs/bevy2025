@@ -16,7 +16,7 @@ use shared::{
         },
     },
     net_components::{
-        ents::{Ball, CanAssumeControl, ItemDrop, Man, PlayerCamera},
+        ents::{Ball, CanAssumeControl, ItemDrop, Man, NPC, PlayerCamera},
         foreign::ComponentColor,
         ours::{PlayerColor, PlayerName},
     },
@@ -141,6 +141,7 @@ impl Plugin for NetworkingPlugin {
                     on_special_unit_spawn_remote_camera,
                     on_special_unit_spawn_ball,
                     on_special_unit_spawn_man,
+                    on_special_unit_spawn_npc,
                     on_special_unit_spawn_loot,
                     receive_heartbeat,
                     receive_tick_just_happened,
@@ -254,6 +255,33 @@ fn on_special_unit_spawn_loot(
                 })),
                 Mesh3d(meshes.add(Mesh::from(Cuboid {
                     half_size: Vec3::splat(0.5),
+                }))),
+            ))
+            .remove::<NeedsClientConstruction>();
+    }
+}
+
+fn on_special_unit_spawn_npc(
+    mut commands: Commands,
+    mut unit_query: Query<(Entity, &NetEntId, &NPC), With<NeedsClientConstruction>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for (entity, _ent_id, _man) in unit_query.iter_mut() {
+        // TODO add ball-specific client setup here
+        commands
+            .entity(entity)
+            .insert((
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: Color::linear_rgb(0.8, 0.2, 0.2),
+                    metallic: 0.4,
+                    perceptual_roughness: 0.4,
+
+                    ..default()
+                })),
+                Mesh3d(meshes.add(Mesh::from(Capsule3d {
+                    radius: 1.0,
+                    half_length: 1.0,
                 }))),
             ))
             .remove::<NeedsClientConstruction>();

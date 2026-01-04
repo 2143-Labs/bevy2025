@@ -1,7 +1,11 @@
 use bevy::prelude::*;
 use shared::{
-    event::{client::SpawnProjectile, server::CastSkillUpdate, NetEntId, PlayerId, UDPacketEvent},
-    net_components::{ents::SendNetworkTranformUpdates, ours::ControlledBy},
+    event::{
+        client::{SpawnProjectile, SpawnUnit2},
+        server::CastSkillUpdate,
+        NetEntId, PlayerId, UDPacketEvent,
+    },
+    net_components::{ents::SendNetworkTranformUpdates, make_npc, ours::ControlledBy},
     netlib::ServerNetworkingResources,
     skills::animations::{
         CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince,
@@ -136,9 +140,7 @@ fn on_unit_finish_cast(
     query: Query<(&Transform, &NetEntId), With<UsingSkillSince>>,
     _time: Res<Time>,
     server_tick: Res<CurrentTick>,
-    _commands: Commands,
-    _meshes: ResMut<Assets<Mesh>>,
-    _materials: ResMut<Assets<StandardMaterial>>,
+    mut commands: Commands,
     connected_clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
     sr: Res<ServerNetworkingResources>,
 ) {
@@ -169,13 +171,13 @@ fn on_unit_finish_cast(
                         let mut cur_pos = transform.translation;
                         for _target in 0..20 {
                             let mut next_target = Vec3::ZERO;
-                            while next_target.length_squared() < 5.0
-                                || next_target.length_squared() > 8.0
+                            while next_target.length_squared() < 25.0
+                                || next_target.length_squared() > 40.0
                             {
                                 next_target = Vec3::new(
-                                    rand::random_range(-5.0..5.0),
+                                    rand::random_range(-10.0..10.0),
                                     0.0,
-                                    rand::random_range(-5.0..5.0),
+                                    rand::random_range(-10.0..10.0),
                                 );
                             }
                             cur_pos += next_target;
@@ -219,6 +221,26 @@ fn on_unit_finish_cast(
                                 &shared::netlib::EventToClient::SpawnProjectile(proj.clone()),
                             );
                         }
+                    }
+                }
+                shared::skills::Skill::SummonTestNPC => {
+                    let random_xy = Vec3::new(
+                        rand::random_range(-5.0..5.0),
+                        0.0,
+                        rand::random_range(-5.0..5.0),
+                    );
+                    let transform = Transform::from_translation(
+                        transform.translation + Vec3::Y * 2.5 + random_xy,
+                    );
+                    info!(
+                        ?net_ent_id,
+                        "Spawning test NPC at {:?}", transform.translation
+                    );
+                    let npc = make_npc(transform);
+                    npc.clone().spawn_entity(&mut commands);
+                    let event = shared::netlib::EventToClient::SpawnUnit2(npc);
+                    for client_endpoint in &connected_clients {
+                        sr.send_outgoing_event_next_tick(client_endpoint.0, &event);
                     }
                 }
                 _ => {

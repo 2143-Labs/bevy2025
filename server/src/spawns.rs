@@ -82,13 +82,12 @@ fn on_circle_spawn(
 
         debug!("Spawning circle at position: {:?}", spawn.position);
         let transform = Transform::from_translation(spawn.position);
-        let ent_id = NetEntId::random();
 
         let mut unit;
 
         if rand::random_bool(0.5) {
             info!("Spawning a surprise goblin instead of a ball!");
-            unit = make_small_loot(ent_id, transform);
+            unit = make_small_loot(transform);
             let inventory = shared::items::goblin_drops();
             unit.components.push(
                 HasInventory {
@@ -103,7 +102,6 @@ fn on_circle_spawn(
             );
         } else {
             unit = make_ball(
-                ent_id,
                 transform,
                 spawn.color,
                 ControlledBy::single(*player_id_of_spawner),
@@ -150,17 +148,12 @@ fn on_man_spawn(
 
         debug!("Spawning man at position: {:?}", spawn.position);
         let transform = Transform::from_translation(spawn.position);
-        let ent_id = NetEntId::random();
 
         // for now
         let inventory = shared::items::goblin_drops();
         //TODO add to server inventory
 
-        let mut unit = make_man(
-            ent_id,
-            transform,
-            ControlledBy::single(*player_id_of_spawner),
-        );
+        let mut unit = make_man(transform, ControlledBy::single(*player_id_of_spawner));
         unit.components.push(
             HasInventory {
                 inventory_id: inventory.id,
@@ -173,7 +166,7 @@ fn on_man_spawn(
             player_id: *player_id_of_spawner,
         });
 
-        let event = EventToClient::SpawnUnit2(unit);
+        let event = EventToClient::SpawnUnit2(unit.clone());
         info!("Notifying clients of new unit: {:?}", event);
         for endpoint in &clients {
             info!("Sending spawn event to endpoint: {:?}", endpoint.0);
@@ -185,7 +178,7 @@ fn on_man_spawn(
             spawn_ev.endpoint,
             &EventToClient::BeginThirdpersonControllingUnit(BeginThirdpersonControllingUnit {
                 player_id: *player_id_of_spawner,
-                unit: Some(ent_id),
+                unit: Some(unit.net_ent_id),
             }),
         );
 

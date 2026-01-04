@@ -492,7 +492,7 @@ pub fn goblin_drops() -> Inventory<Item> {
     let ranger_page = Item {
         item_id: ItemId::default(),
         data: ItemData {
-            item_base: BaseItem::DiaryPage(diary::DiaryPage::Ranger),
+            item_base: BaseItem::DiaryPage(diary::DiaryPage::Omniscience),
             mods: vec![],
             item_misc: vec![ItemMiscModifiers::Equipped(EquipSlot::Diary)],
         },
