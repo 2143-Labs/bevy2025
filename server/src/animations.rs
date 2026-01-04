@@ -1,10 +1,6 @@
 use bevy::prelude::*;
 use shared::{
-    event::{
-        client::{SpawnProjectile, SpawnUnit2},
-        server::CastSkillUpdate,
-        NetEntId, PlayerId, UDPacketEvent,
-    },
+    event::{client::SpawnProjectile, server::CastSkillUpdate, NetEntId, PlayerId, UDPacketEvent},
     net_components::{ents::SendNetworkTranformUpdates, make_npc, ours::ControlledBy},
     netlib::ServerNetworkingResources,
     skills::animations::{

@@ -4,10 +4,7 @@ use avian3d::{math::*, prelude::*};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    event::NetEntId,
-    net_components::{NetComponent, ToNetComponent},
-};
+use crate::event::NetEntId;
 
 pub struct CharacterControllerPlugin;
 
