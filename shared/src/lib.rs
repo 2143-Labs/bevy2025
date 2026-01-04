@@ -21,6 +21,7 @@ pub mod physics;
 pub mod player_input;
 pub mod skills;
 pub mod stats;
+pub mod projectile;
 
 #[cfg(not(feature = "udp"))]
 pub mod message_io;

@@ -1,66 +1,10 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{event::NetEntId, items::ItemId, netlib::Tick, BASE_TICKS_PER_SECOND};
+use crate::{BASE_TICKS_PER_SECOND, items::ItemId};
 
 pub mod animations;
 
-#[derive(Debug, Component, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ProjSpawnedAt {
-    pub tick: Tick,
-    pub time: f64,
-}
-
-#[derive(Debug, Component, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ProjDespawn {
-    pub tick: Tick,
-}
-
-#[derive(Debug, Component, Clone, PartialEq, Serialize, Deserialize)]
-pub enum ProjectileAI {
-    Straight {
-        direction_vector: Vec3,
-    },
-    Homing {
-        target_entity: NetEntId,
-        turn_rate_deg_per_sec: f32,
-    },
-    Spark {
-        projectile_path_targets: Vec<Vec3>,
-    },
-    HammerDin {
-        center_point: Vec3,
-        init_angle_radians: f32,
-        speed: f32,
-        spiral_width_modifier: f32,
-    },
-    Frostbolt {
-        origin: Vec3,
-        target: Vec3,
-    },
-    WinterOrbMain {
-        origin: Vec3,
-        target: Vec3,
-    },
-    WinterOrbSub {
-        origin: Vec3,
-        target: Vec3,
-    },
-
-    BasicBowAttack {
-        origin: Vec3,
-        direction_vector: Vec3,
-    },
-    RainOfArrowsSpawner {
-        origin: Vec3,
-        ground_target: Vec3,
-        sky_target: Vec3,
-    },
-    RainOfArrowsArrow {
-        origin: Vec3,
-        ground_target: Vec3,
-    },
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Skill {

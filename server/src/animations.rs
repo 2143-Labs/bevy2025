@@ -1,12 +1,8 @@
 use bevy::prelude::*;
 use shared::{
-    event::{client::SpawnProjectile, server::CastSkillUpdate, NetEntId, PlayerId, UDPacketEvent},
-    net_components::{ents::SendNetworkTranformUpdates, make_npc, ours::ControlledBy},
-    netlib::ServerNetworkingResources,
-    skills::animations::{
+    CurrentTick, event::{NetEntId, PlayerId, UDPacketEvent, client::SpawnProjectile, server::CastSkillUpdate}, net_components::{ents::SendNetworkTranformUpdates, make_npc, ours::ControlledBy}, netlib::ServerNetworkingResources, projectile::{ProjectileAI, ProjectileSource}, skills::animations::{
         CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince,
-    },
-    CurrentTick,
+    }
 };
 
 use crate::{ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint};
@@ -139,6 +135,7 @@ fn on_unit_finish_cast(
     mut commands: Commands,
     connected_clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
     sr: Res<ServerNetworkingResources>,
+    spawn_projectile_writer: MessageWriter<SpawnProjectile>,
 ) {
     for UnitFinishedSkillCast {
         tick,
@@ -159,6 +156,12 @@ fn on_unit_finish_cast(
             if ent_id != net_ent_id {
                 continue;
             }
+
+            let projectile_source = ProjectileSource {
+                source_entity: *ent_id,
+                skill: skill.skill.clone(),
+                skill_source: skill.source.clone(),
+            };
 
             match &skill.skill {
                 shared::skills::Skill::Spark => {
@@ -183,18 +186,13 @@ fn on_unit_finish_cast(
                         let event = SpawnProjectile {
                             spawn_tick: server_tick.0,
                             projectile_origin: transform.translation,
-                            projectile_owner: Some(*net_ent_id),
-                            projectile_type: shared::skills::ProjectileAI::Spark {
+                            projectile_source,
+                            projectile_type: ProjectileAI::Spark {
                                 projectile_path_targets: path_targets,
                             },
                         };
 
-                        for client_endpoint in &connected_clients {
-                            sr.send_outgoing_event_next_tick(
-                                client_endpoint.0,
-                                &shared::netlib::EventToClient::SpawnProjectile(event.clone()),
-                            );
-                        }
+                        spawn_projectile_writer.write(event.clone());
                     }
                 }
                 shared::skills::Skill::Hammerdin => {
@@ -202,8 +200,8 @@ fn on_unit_finish_cast(
                         let proj = SpawnProjectile {
                             spawn_tick: server_tick.0,
                             projectile_origin: transform.translation,
-                            projectile_owner: Some(*net_ent_id),
-                            projectile_type: shared::skills::ProjectileAI::HammerDin {
+                            projectile_source,
+                            projectile_type: ProjectileAI::HammerDin {
                                 init_angle_radians: (hammer as f32) * std::f32::consts::PI / 2.0,
                                 center_point: transform.translation,
                                 speed: 1.0,
@@ -211,12 +209,7 @@ fn on_unit_finish_cast(
                             },
                         };
 
-                        for client_endpoint in &connected_clients {
-                            sr.send_outgoing_event_next_tick(
-                                client_endpoint.0,
-                                &shared::netlib::EventToClient::SpawnProjectile(proj.clone()),
-                            );
-                        }
+                        spawn_projectile_writer.write(proj.clone());
                     }
                 }
                 shared::skills::Skill::SummonTestNPC => {

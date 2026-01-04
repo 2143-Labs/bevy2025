@@ -14,6 +14,7 @@ mod remote_players;
 mod terrain;
 mod ui;
 mod water;
+mod projectile;
 
 #[cfg(feature = "web")]
 mod web;
@@ -93,6 +94,7 @@ fn main() {
         shared::character_controller::CharacterControllerPlugin,
         character_controller_client::ClientCharacterControllerPlugin,
         animations::CharacterAnimationPlugin,
+        projectile::ProjectilePlugin,
     ))
     .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue
     .insert_resource(args)

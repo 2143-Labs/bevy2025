@@ -6,7 +6,7 @@ use crate::items::{Inventory, Item, ItemId, ItemInInventory, ItemPlacement, Skil
 use crate::net_components::PlayerConnectionInfo;
 use crate::netlib::{NetworkingResources, Tick};
 use crate::physics::terrain::TerrainParams;
-use crate::skills::ProjectileAI;
+use crate::projectile::{ProjectileAI, ProjectileSource};
 use crate::{event::EventFromEndpoint, net_components::NetComponent};
 use crate::{PlayerPing, PlayerPingInteger, ServerTPS};
 use bevy::prelude::*;
@@ -110,7 +110,7 @@ pub struct RequestScoreboardResponse {
 pub struct SpawnProjectile {
     pub spawn_tick: Tick,
     pub projectile_origin: Vec3,
-    pub projectile_owner: Option<NetEntId>,
+    pub projectile_source: ProjectileSource,
     pub projectile_type: ProjectileAI,
 }
 
