@@ -22,7 +22,7 @@ impl Plugin for ProjectilePlugin {
         app.add_systems(Update, update_dead_units);
 
         app.add_systems(Startup, |world: &mut World| {
-            world.register_component_hooks::<Dead>().on_add(on_unit_die);
+            world.register_component_hooks::<Dead>().on_add(on_client_user_die);
         });
     }
 }
@@ -92,7 +92,7 @@ pub struct DeathAnimation {
 }
 
 /// This is called when a unit receives the Dead component
-fn on_unit_die(mut cmds: DeferredWorld, hc: HookContext) {
+fn on_client_user_die(mut cmds: DeferredWorld, hc: HookContext) {
     info!("Unit {:?} died, starting death animation", hc.entity);
     let time = cmds.resource::<Time>().elapsed_secs_f64();
     cmds.commands()
