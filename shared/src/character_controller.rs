@@ -4,7 +4,7 @@ use avian3d::{math::*, prelude::*};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::event::NetEntId;
+use crate::{event::NetEntId, net_components::ours::Dead};
 
 pub struct CharacterControllerPlugin;
 
@@ -295,12 +295,16 @@ fn update_grounded(
 fn unit_change_movement(
     mut reader: MessageReader<UnitChangedMovement>,
     // TODO make this smaller?
-    mut query: Query<(&mut MovementAction, &NetEntId)>,
+    mut query: Query<(&mut MovementAction, &NetEntId, Has<Dead>)>,
 ) {
     for event in reader.read() {
-        for (mut movement_action, net_ent_id) in &mut query {
+        for (mut movement_action, net_ent_id, dead) in &mut query {
             if net_ent_id == &event.net_ent_id {
-                *movement_action = event.movement_action.clone();
+                if dead {
+                    *movement_action = MovementAction::default();
+                } else {
+                    *movement_action = event.movement_action.clone();
+                }
             }
         }
     }
@@ -634,7 +638,7 @@ fn kinematic_controller_collisions(
 
 /// -------- below this line is AI controllers ---------
 fn ai_thunk(
-    query_ai: Query<(&Transform, &mut MovementAction), With<NPCController>>,
+    query_ai: Query<(&Transform, &mut MovementAction), (With<NPCController>, Without<Dead>)>,
     time: Res<Time>,
 ) {
     for (transform, mut movement_action) in query_ai {

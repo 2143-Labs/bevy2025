@@ -201,8 +201,8 @@ fn on_man_spawn(
 }
 
 #[derive(Message)]
-struct UnitDie {
-    unit_id: NetEntId,
+pub struct UnitDie {
+    pub unit_id: NetEntId,
 }
 
 fn on_unit_die(

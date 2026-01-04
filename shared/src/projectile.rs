@@ -4,7 +4,10 @@ use bevy::prelude::*;
 use noise::NoiseFn;
 
 use crate::{
-    BASE_TICKS_PER_SECOND, CurrentTick, event::client::SpawnProjectile, physics::terrain::{NOISE_SCALE_FACTOR, TerrainParams}, skills::{Skill, SkillSource}
+    event::client::SpawnProjectile,
+    physics::terrain::{TerrainParams, NOISE_SCALE_FACTOR},
+    skills::{Skill, SkillSource},
+    CurrentTick, BASE_TICKS_PER_SECOND,
 };
 use serde::{Deserialize, Serialize};
 
@@ -126,13 +129,13 @@ impl SpawnProjectile {
         }
     }
     pub fn collider_bundle(&self) -> Option<ProjectileColliderBundle> {
-        self.projectile_type.get_collider().map(|collider|
-            ProjectileColliderBundle {
+        self.projectile_type
+            .get_collider()
+            .map(|collider| ProjectileColliderBundle {
                 sensor: Sensor,
                 coll_events_enabled: CollisionEventsEnabled,
                 collider,
-            }
-        )
+            })
     }
 }
 
@@ -152,11 +155,9 @@ fn update_projectiles(
     terrain_info: Res<TerrainParams>,
 ) {
     let noise: noise::Perlin = terrain_info.perlin();
-    for (ent, mut transform, origin, real_spawn_time, projectile_ai, despawn) in
-        &mut query
-    {
+    for (ent, mut transform, origin, real_spawn_time, projectile_ai, despawn) in &mut query {
         let time_since_spawn = time.elapsed_secs_f64() - real_spawn_time.spawn_real_time;
-        if tick.0 .0 >= despawn.tick.0  {
+        if tick.0 .0 >= despawn.tick.0 {
             // despawn
             commands.entity(ent).despawn();
             continue;

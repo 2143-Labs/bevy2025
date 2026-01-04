@@ -1,7 +1,11 @@
-use bevy::prelude::*;
+use bevy::{
+    ecs::{lifecycle::HookContext, world::DeferredWorld},
+    prelude::*,
+};
 use shared::{
     CurrentTick,
     event::{UDPacketEvent, client::SpawnProjectile},
+    net_components::ours::Dead,
     projectile::{ProjectileAI, ProjectileRealtime},
 };
 
@@ -14,6 +18,12 @@ impl Plugin for ProjectilePlugin {
         app.add_plugins(shared::projectile::ProjectilePlugin);
 
         app.add_systems(Update, (on_spawn_projectile, spawn_projectiles_read));
+
+        app.add_systems(Update, update_dead_units);
+
+        app.add_systems(Startup, |world: &mut World| {
+            world.register_component_hooks::<Dead>().on_add(on_unit_die);
+        });
     }
 }
 
@@ -74,5 +84,32 @@ fn spawn_projectiles_read(
     for packet in efre.read() {
         info!("Got a packet");
         writer.write(packet.event.clone());
+    }
+}
+
+#[derive(Component)]
+pub struct DeathAnimation {
+    pub started_at: f64,
+}
+
+/// This is called when a unit receives the Dead component
+fn on_unit_die(mut cmds: DeferredWorld, hc: HookContext) {
+    info!("Unit {:?} died, starting death animation", hc.entity);
+    let time = cmds.resource::<Time>().elapsed_secs_f64();
+    cmds.commands()
+        .entity(hc.entity)
+        .insert(DeathAnimation { started_at: time });
+}
+
+fn update_dead_units(
+    //mut commands: Commands,
+    time: Res<Time>,
+    query: Query<(Entity, &mut Transform, &DeathAnimation), With<Dead>>,
+) {
+    for (_, mut transform, death_anim) in query {
+        let elapsed = time.elapsed_secs_f64() - death_anim.started_at;
+        let elapsed = elapsed.clamp(0.0, 1.0);
+        transform.rotation =
+            Quat::from_rotation_x(1.0 / 2.0 * -std::f32::consts::FRAC_PI_2 * elapsed as f32);
     }
 }

@@ -1,3 +1,4 @@
+#![allow(unused)]
 use bevy::prelude::*;
 use noise::NoiseFn;
 use shared::{

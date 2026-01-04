@@ -37,6 +37,17 @@ pub struct UpdateUnit2 {
     pub removed_components: Vec<String>,
 }
 
+impl Default for UpdateUnit2 {
+    fn default() -> Self {
+        Self {
+            net_ent_id: NetEntId::none(),
+            changed_components: Vec::new(),
+            new_component: Vec::new(),
+            removed_components: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct DespawnUnit2 {
     pub net_ent_id: NetEntId,
