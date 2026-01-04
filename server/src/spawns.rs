@@ -225,12 +225,6 @@ fn on_unit_die(
         for (net_id, has_inv, loc, ent) in units.iter() {
             if *net_id == death.unit_id {
                 //TODO dedup this with client
-                commands
-                    .entity(ent)
-                    .insert(death_event.clone())
-                    .insert(RigidBody::Dynamic)
-                    .remove::<NPCController>()
-                    .remove::<CharacterController>();
 
                 let mut angular_velocity = avian3d::prelude::AngularVelocity::default();
                 angular_velocity.0 = Vec3::new(
@@ -239,11 +233,27 @@ fn on_unit_die(
                     rand::random_range(-5.0..5.0),
                 );
 
+                let mut linear_velocity = avian3d::prelude::LinearVelocity::default();
+                linear_velocity.0 = Vec3::new(
+                    rand::random_range(-2.0..2.0),
+                    rand::random_range(2.0..5.0),
+                    rand::random_range(-2.0..2.0),
+                );
+
+                commands
+                    .entity(ent)
+                    .insert(death_event.clone())
+                    .insert(RigidBody::Dynamic)
+                    .insert(linear_velocity.clone())
+                    .insert(angular_velocity.clone())
+                    .remove::<NPCController>()
+                    .remove::<CharacterController>();
+
                 // Notify all clients about the unit death
                 let event = EventToClient::UpdateUnit2(shared::event::client::UpdateUnit2 {
                     net_ent_id: death.unit_id,
                     changed_components: vec![
-                        avian3d::prelude::LinearVelocity::default().to_net_component(),
+                        linear_velocity.to_net_component(),
                         angular_velocity.to_net_component(),
                     ],
                     removed_components: vec![
