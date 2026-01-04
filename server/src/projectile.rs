@@ -13,6 +13,7 @@ pub struct ProjectilePlugin;
 impl Plugin for ProjectilePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(shared::projectile::ProjectilePlugin);
+        app.add_message::<ProjectileCollisionLocalServer>();
         app.add_systems(
             Update,
             (network_projectiles, read_projectile_collision_local_server)
