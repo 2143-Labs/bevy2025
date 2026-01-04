@@ -129,7 +129,8 @@ fn send_messages_over_websocket(
     use shared::netlib::EventGroupingRef;
     let data = postcard::to_stdvec(&EventGroupingRef::Batch(&taken_events)).unwrap();
 
-    ws_res.websocket.send_with_u8_array(&data).unwrap();
+    // don't check result
+    let _ = ws_res.websocket.send_with_u8_array(&data);
 }
 
 fn setup(

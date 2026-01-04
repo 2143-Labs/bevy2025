@@ -232,7 +232,6 @@ fn on_unit_die(
                     .remove::<NPCController>()
                     .remove::<CharacterController>();
 
-
                 let mut angular_velocity = avian3d::prelude::AngularVelocity::default();
                 angular_velocity.0 = Vec3::new(
                     rand::random_range(-5.0..5.0),
@@ -252,8 +251,10 @@ fn on_unit_die(
                         "CharacterController".to_string(),
                         "RigidBody".to_string(),
                     ],
-                    new_component: vec![death_event.clone().to_net_component(),
-                        RigidBody::Dynamic.to_net_component(),],
+                    new_component: vec![
+                        death_event.clone().to_net_component(),
+                        RigidBody::Dynamic.to_net_component(),
+                    ],
                 });
 
                 for endpoint in &clients {

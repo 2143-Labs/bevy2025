@@ -320,15 +320,18 @@ fn rotation(mut controllers: Query<(&mut Rotation, &MovementAction), Without<Dea
 /// Responds to [`MovementAction`] events and moves character controllers accordingly.
 fn movement(
     time: Res<Time>,
-    mut controllers: Query<(
-        &MovementAcceleration,
-        &MovementAction,
-        &JumpImpulse,
-        &mut LinearVelocity,
-        &Groundedness,
-        &GroundNormal,
-        &mut JumpBuffer,
-    ), Without<Dead>>,
+    mut controllers: Query<
+        (
+            &MovementAcceleration,
+            &MovementAction,
+            &JumpImpulse,
+            &mut LinearVelocity,
+            &Groundedness,
+            &GroundNormal,
+            &mut JumpBuffer,
+        ),
+        Without<Dead>,
+    >,
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.

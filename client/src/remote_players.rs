@@ -105,10 +105,7 @@ fn handle_update_unit(
                 // Add any new components
                 let mut ec = commands.entity(ent);
                 for component in &update.event.removed_components {
-                    warn!(
-                        "Removing component {:?} from entity {:?}",
-                        component, ent
-                    );
+                    warn!("Removing component {:?} from entity {:?}", component, ent);
                     match &**component {
                         //TODO fill rest as needed
                         "NPCController" => ec.remove::<NPCController>(),

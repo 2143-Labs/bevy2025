@@ -66,7 +66,7 @@ fn flush_outgoing_events_websocket(
                 return false;
             };
 
-            let new_msg = EventGroupingRef::Batch(&value);
+            let new_msg = EventGroupingRef::Batch(value);
             let bytes = match postcard::to_stdvec(&new_msg) {
                 Ok(b) => b,
                 Err(e) => {

@@ -1,11 +1,9 @@
-use avian3d::prelude::RigidBody;
 use bevy::{
     ecs::{lifecycle::HookContext, world::DeferredWorld},
     prelude::*,
 };
 use shared::{
     CurrentTick,
-    character_controller::{CharacterController, NPCController},
     event::{UDPacketEvent, client::SpawnProjectile},
     net_components::ours::Dead,
     projectile::{ProjectileAI, ProjectileRealtime},
