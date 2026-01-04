@@ -1,3 +1,4 @@
+use avian3d::prelude::{Collider, CollisionEventsEnabled, Sensor};
 use bevy::prelude::*;
 
 use noise::NoiseFn;
@@ -47,6 +48,13 @@ pub struct ProjectileBundle {
     pub source: ProjectileSource,
 }
 
+#[derive(Bundle, Clone)]
+pub struct ProjectileColliderBundle {
+    pub sensor: Sensor,
+    pub coll_events_enabled: CollisionEventsEnabled,
+    pub collider: Collider,
+}
+
 #[derive(Debug, Component, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ProjectileAI {
     Straight {
@@ -86,6 +94,16 @@ pub enum ProjectileAI {
     },
 }
 
+impl ProjectileAI {
+    pub fn get_collider(&self) -> Option<Collider> {
+        Some(match self {
+            ProjectileAI::Spark { .. } => Collider::sphere(0.2),
+            ProjectileAI::HammerDin { .. } => Collider::sphere(0.3),
+            _ => return None,
+        })
+    }
+}
+
 impl Plugin for ProjectilePlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<SpawnProjectile>()
@@ -106,6 +124,15 @@ impl SpawnProjectile {
             },
             source: self.projectile_source.clone(),
         }
+    }
+    pub fn collider_bundle(&self) -> Option<ProjectileColliderBundle> {
+        self.projectile_type.get_collider().map(|collider|
+            ProjectileColliderBundle {
+                sensor: Sensor,
+                coll_events_enabled: CollisionEventsEnabled,
+                collider,
+            }
+        )
     }
 }
 

@@ -47,9 +47,7 @@ fn on_spawn_projectile(
             }
         };
 
-        let projectile_source = event.projectile_source.clone();
-
-        commands.spawn((
+        let mut ec = commands.spawn((
             event.base_bundle(&real_tick),
             ProjectileRealtime {
                 spawn_real_time: real_time,
@@ -62,6 +60,10 @@ fn on_spawn_projectile(
                 ..Default::default()
             })),
         ));
+
+        if let Some(collider) = event.collider_bundle() {
+            ec.insert(collider);
+        }
     }
 }
 
