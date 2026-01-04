@@ -1,4 +1,4 @@
-all: build optimize bindgen assets
+all: build bindgen assets
 
 build:
 	cargo b -p client --no-default-features --features web --target wasm32-unknown-unknown --release
