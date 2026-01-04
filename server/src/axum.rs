@@ -53,7 +53,7 @@ pub struct AxumServerResource {
 
 #[derive(Clone)]
 struct AxumState {
-    server_networking_resources: ServerNetworkingResources,
+    _server_networking_resources: ServerNetworkingResources,
     axum_bevy_queues: AxumServerResource,
 }
 
@@ -63,10 +63,10 @@ fn setup_shared_axum_server(
     tokio_runtime: Res<TokioRuntimeResource>,
 ) {
     let (ip, port) = res.con_str.as_ref().clone();
-    info!("Starting shared axum server on {}:{}", ip, port);
+    info!("Starting shared axum server on {}:{}", ip, port + 1);
 
     let state = AxumState {
-        server_networking_resources: res.clone(),
+        _server_networking_resources: res.clone(),
         axum_bevy_queues: axum_server_res.clone(),
     };
 
@@ -78,7 +78,7 @@ fn setup_shared_axum_server(
     let _x = tokio_runtime.spawn(async move {
         info!("Axum server task started.");
         for i in 0..5 {
-            let listener = tokio::net::TcpListener::bind(format!("{}:{}", ip, port))
+            let listener = tokio::net::TcpListener::bind(format!("{}:{}", ip, port + 1))
                 .await
                 .unwrap();
             let server = axum::serve(listener, router.clone());

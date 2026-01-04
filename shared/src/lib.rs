@@ -22,9 +22,9 @@ pub mod player_input;
 pub mod skills;
 pub mod stats;
 
-#[cfg(feature = "web")]
+#[cfg(not(feature = "udp"))]
 pub mod message_io;
-#[cfg(not(feature = "web"))]
+#[cfg(feature = "udp")]
 pub use message_io;
 
 pub const BASE_TICKS_PER_SECOND: u16 = 20;

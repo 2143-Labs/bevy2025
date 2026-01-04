@@ -102,7 +102,7 @@ fn setup_terrain_client(
     // Create grass bundles before spawning terrain
     // Very dense grass with height-based variation
     // Using mesh merging + LOD, we can handle extremely high density!
-    let grass_bundles = create_grass_bundles(
+    let _grass_bundles = create_grass_bundles(
         &mut meshes,
         &mut materials,
         &mut grass_materials,
@@ -125,11 +125,11 @@ fn setup_terrain_client(
         Terrain,
         WorldEntity,
         DespawnOnWorldData,
-        Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
-            for bundle in grass_bundles {
-                //parent.spawn(bundle);
-            }
-        })),
+        //Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
+        //for bundle in _grass_bundles {
+        ////parent.spawn(bundle);
+        //}
+        //})),
     ));
 
     // Spawn water at calculated level

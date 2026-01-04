@@ -102,7 +102,7 @@ fn update_ball_interactions(
     all_balls: Query<&Transform, With<Ball>>,
     // TODO make this change if you change camera?
     camera_query: Query<&Transform, (With<Camera>, With<LocalCamera>)>,
-    mut grass_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, GrassMaterial>>>,
+    _grass_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, GrassMaterial>>>,
 ) {
     // Initialize timer on first run
     let timer = update_timer.get_or_insert_with(BallInteractionTimer::default);
@@ -116,7 +116,8 @@ fn update_ball_interactions(
     // Get camera position to prioritize nearest balls
     let camera_pos = camera_query
         .iter()
-        .find_map(|t| Some(t.translation))
+        .map(|t| t.translation)
+        .next()
         .unwrap_or(Vec3::ZERO);
 
     // Collect balls sorted by distance to camera (prioritize nearest 8)
@@ -138,8 +139,8 @@ fn update_ball_interactions(
     ball_data.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
     // Take closest 8 balls
-    let mut ball_positions = [Vec4::ZERO; 8];
-    let mut count = 0u32;
+    //let ball_positions = [Vec4::ZERO; 8];
+    //let count = 0u32;
 
     //for (i, (_, ball_vec)) in ball_data.iter().take(8).enumerate() {
     //ball_positions[i] = *ball_vec;

@@ -19,7 +19,7 @@ mod water;
 mod web;
 
 #[cfg(feature = "steam")]
-use bevy_steamworks::{AppId, FriendFlags};
+use bevy_steamworks::AppId;
 #[cfg(feature = "steam")]
 mod steamworks;
 

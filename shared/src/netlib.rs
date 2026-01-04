@@ -506,17 +506,14 @@ fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
 
         info!(?udp_addr, "Listening")
     } else {
-        let (endpoint, addr) = handler
+        let (_endpoint, addr) = handler
             .network()
             .connect(Transport::Udp, con_str.clone())
             .unwrap();
 
         #[cfg(not(feature = "web"))]
-        commands.insert_resource(MainServerEndpoint(EndpointGeneral::UDP(endpoint)));
-        #[cfg(feature = "web")]
-        commands.insert_resource(MainServerEndpoint(EndpointGeneral::WebSocket(
-            WebSocketEndpoint { socket_addr: addr },
-        )));
+        commands.insert_resource(MainServerEndpoint(EndpointGeneral::UDP(_endpoint)));
+
         info!(?addr, "Connected");
     }
 
@@ -536,7 +533,8 @@ fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     commands.remove_resource::<NetworkConnectionTarget>();
 
     // web doesn't support threads
-    #[cfg(not(feature = "web"))]
+    // server must support both ws and udp listeners
+    #[cfg(feature = "udp")]
     {
         let res2 = res.clone();
         std::thread::spawn(move || {
@@ -570,44 +568,72 @@ pub fn on_node_event_incoming<TI: NetworkingEvent, TO>(
             info!(?endpoint, ?listener, "Connection Accepted")
         }
         NetEvent::Message(endpoint, data) => {
-            let event: EventGroupingOwned<TI> = match postcard::from_bytes(data) {
-                Ok(e) => e,
-                Err(p) => {
-                    warn!(?endpoint, ?p, "Got invalid json from endpoint");
-                    return;
-                }
-            };
-            let data_len = data.len();
-            res.networking_stats
-                .total_bytes_received_this_second
-                .fetch_add(data_len, std::sync::atomic::Ordering::Relaxed);
-            res.networking_stats
-                .packets_received_this_second
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-            let mut list = res.event_list_incoming_udp.write().unwrap();
-            match event {
-                EventGroupingOwned::Single(x) => {
-                    let pair = (endpoint, x);
-                    list.push(pair);
-                }
-                EventGroupingOwned::Batch(events) => {
-                    list.extend(events.into_iter().map(|x| (endpoint, x)));
-                }
-                EventGroupingOwned::Reliable(packet_id, _dedup_id, tick, events) => {
-                    let mut seen_map = res.reliable_packet_ids_seen.write().unwrap();
-
-                    if seen_map.get(&packet_id).is_some() {
-                        res.networking_stats
-                            .total_bytes_received_ignored_this_second
-                            .fetch_add(data_len, std::sync::atomic::Ordering::Relaxed);
-                    } else {
-                        seen_map.insert(packet_id, tick); // TODO store tick properly
-                        list.extend(events.into_iter().map(|x| (endpoint, x)));
-                    }
-                }
-            }
+            on_data_incoming(res, endpoint, res.event_list_incoming_udp.clone(), data);
         }
         NetEvent::Disconnected(endpoint) => warn!(?endpoint, "Client disconnected"),
+    }
+}
+
+pub trait EndpointTrait: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
+    fn as_socket_addr(&self) -> std::net::SocketAddr;
+}
+
+impl EndpointTrait for WebSocketEndpoint {
+    fn as_socket_addr(&self) -> std::net::SocketAddr {
+        self.socket_addr
+    }
+}
+
+impl EndpointTrait for Endpoint {
+    fn as_socket_addr(&self) -> std::net::SocketAddr {
+        self.addr()
+    }
+}
+
+pub fn on_data_incoming<TI: NetworkingEvent, TO, K: EndpointTrait>(
+    resources: &NetworkingResources<TI, TO>,
+    endpoint: K,
+    data_buffer: Arc<RwLock<Vec<(K, TI)>>>,
+    data: &[u8],
+) {
+    let event: EventGroupingOwned<TI> = match postcard::from_bytes(data) {
+        Ok(e) => e,
+        Err(p) => {
+            warn!(?endpoint, ?p, "Got invalid json from endpoint");
+            return;
+        }
+    };
+    let data_len = data.len();
+    resources
+        .networking_stats
+        .total_bytes_received_this_second
+        .fetch_add(data_len, std::sync::atomic::Ordering::Relaxed);
+    resources
+        .networking_stats
+        .packets_received_this_second
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+    let mut list = data_buffer.write().unwrap();
+    match event {
+        EventGroupingOwned::Single(x) => {
+            let pair = (endpoint, x);
+            list.push(pair);
+        }
+        EventGroupingOwned::Batch(events) => {
+            list.extend(events.into_iter().map(|x| (endpoint, x)));
+        }
+        EventGroupingOwned::Reliable(packet_id, _dedup_id, tick, events) => {
+            let mut seen_map = resources.reliable_packet_ids_seen.write().unwrap();
+
+            if seen_map.get(&packet_id).is_some() {
+                resources
+                    .networking_stats
+                    .total_bytes_received_ignored_this_second
+                    .fetch_add(data_len, std::sync::atomic::Ordering::Relaxed);
+            } else {
+                seen_map.insert(packet_id, tick); // TODO store tick properly
+                list.extend(events.into_iter().map(|x| (endpoint, x)));
+            }
+        }
     }
 }
