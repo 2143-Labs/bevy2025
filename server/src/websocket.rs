@@ -46,42 +46,38 @@ fn flush_outgoing_events_websocket(
     resources: Res<ServerNetworkingResources>,
     ws_resource: Res<WebsocketResource>,
 ) {
-    use rayon::prelude::*;
-
     resources
         .event_list_outgoing_websocket
-        .par_iter_mut()
-        .for_each(|mut entry| {
+        .retain(|key, value| {
             let maybe_tx_queue = ws_resource
                 .socket_addr_to_tx_queue
                 .read()
                 .unwrap()
-                .get(&entry.key().socket_addr)
+                .get(&key.socket_addr)
                 .map(|spc| spc.tx.clone());
 
             let Some(mut peer_queue) = maybe_tx_queue else {
                 error!(
                     "No websocket tx queue found for socket addr: {}",
-                    entry.key().socket_addr
+                    key.socket_addr
                 );
-                entry.value_mut().clear();
-                return;
+                info!("msg = {:?}", value);
+                return false;
             };
 
-            let new_msg = EventGroupingRef::Batch(entry.value());
+            let new_msg = EventGroupingRef::Batch(&value);
             let bytes = match postcard::to_stdvec(&new_msg) {
                 Ok(b) => b,
                 Err(e) => {
                     warn!(?e, "Failed to serialize outgoing websocket message");
-                    entry.value_mut().clear();
-                    return;
+                    return false;
                 }
             };
             let send_result = peer_queue.start_send(Message::Binary(Bytes::from(bytes)));
             if let Err(e) = send_result {
                 warn!(?e, "Failed to send outgoing websocket message");
             }
-            entry.value_mut().clear();
+            false
         })
 }
 

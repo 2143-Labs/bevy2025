@@ -21,6 +21,40 @@ impl Plugin for WebPlugin {
             while_connecting.run_if(in_state(NetworkGameState::ClientConnecting)),
         );
 
+        // get our default location
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        let ip_str: String = document
+            .get_element_by_id("server_ip")
+            .expect("No server_ip element in html")
+            .text_content()
+            .expect("server_ip element has no text content");
+
+        let port: u16 = document
+            .get_element_by_id("server_port")
+            .expect("No server_port element in html")
+            .text_content()
+            .expect("server_port element has no text content")
+            .parse()
+            .expect("server_port element text content is not a valid u16");
+
+        let ip_addr: std::net::IpAddr = ip_str
+            .parse()
+            .expect("server_ip element text content is not a valid IpAddr");
+
+        app.insert_resource(MainServerEndpoint(
+            shared::netlib::EndpointGeneral::WebSocket(shared::netlib::WebSocketEndpoint {
+                socket_addr: (ip_addr, port).into(),
+            }),
+        ));
+
+        info!("Connecting to server at {}:{}", ip_str, port);
+        use crate::Config;
+        app.add_systems(Startup, move |mut config: ResMut<Config>| {
+            config.ip = ip_str.clone();
+            config.port = port.clone();
+        });
+
         app.add_systems(
             Update,
             send_messages_over_websocket.run_if(resource_exists::<WebSocketResource>),
@@ -36,7 +70,7 @@ fn while_connecting(
 }
 
 /// This type exists to allow us to store a web_sys::WebSocket in a Resource while still being Send
-/// + Sync.
+/// + Sync. This is safe because we arent calling this from a WebWorker.
 #[derive(Clone)]
 struct MagicWebSocketPointer {
     ptr: *mut web_sys::WebSocket,
@@ -55,7 +89,8 @@ impl std::ops::Deref for MagicWebSocketPointer {
     type Target = web_sys::WebSocket;
 
     fn deref(&self) -> &Self::Target {
-        // SAFETY: wasm is always single-threaded and we leaked this ptr in new
+        // SAFETY: We aren't using any WebWorkers, and we created this pointer from a static
+        // reference
         unsafe { &*self.ptr }
     }
 }
@@ -83,14 +118,13 @@ fn send_messages_over_websocket(
         taken_events = Vec::new();
     }
 
-    info!(
+    trace!(
         "Sending {} queued events over websocket",
         taken_events.len()
     );
     if taken_events.is_empty() {
         return;
     }
-    info!(e = ?taken_events[0], "Events");
 
     use shared::netlib::EventGroupingRef;
     let data = postcard::to_stdvec(&EventGroupingRef::Batch(&taken_events)).unwrap();
@@ -103,12 +137,8 @@ fn setup(
     net_res: Res<ClientNetworkingResources>,
     main_server_endpoint: Res<MainServerEndpoint>,
 ) {
-    //let window = web_sys::window().unwrap();
-    //let document = window.document().unwrap();
-
     let ws_endpoint = main_server_endpoint.as_websocket().unwrap();
     let addr = ws_endpoint.socket_addr;
-    //let url = "ws://71.126.177.34:25555";
     let url = format!("ws://{}:{}", addr.ip(), addr.port());
     let ws = web_sys::WebSocket::new(&url).unwrap();
     let magic_ws = MagicWebSocketPointer::new(ws);

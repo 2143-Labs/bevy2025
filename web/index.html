@@ -17,15 +17,20 @@
       canvas {
         background-color: white;
       }
+      .invisible {
+        display: none;
+      }
     </style>
-    <title>Wasm Example</title>
+    <title>ROTS</title>
   </head>
   <script type="module">
+    //document.getElementById("game_ip").innerHTML = window.location.hostname;
     import init from './rots_example.js'
     init()
   </script>
   <body>
-    <h1>The game is loading</h1>
-    <p id="textbox"></p>
+    <h1 id="loading">ROTS is loading</h1>
+    <p id="server_ip" class="invisible">71.126.177.34</p>
+    <p id="server_port" class="invisible">25555</p>
   </body>
 </html>

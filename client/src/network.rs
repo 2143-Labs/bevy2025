@@ -30,7 +30,7 @@ use shared::{
 use crate::{
     assets::{FontAssets, ModelAssets},
     camera::LocalCamera,
-    game_state::{GameState, NetworkGameState, WorldEntity},
+    game_state::{GameState, NetworkGameState, TerrainEntity},
     notification::Notification,
     remote_players::{ApplyNoFrustumCulling, NameLabel, RemotePlayerCamera, RemotePlayerModel},
     terrain::SetupTerrain,
@@ -38,8 +38,10 @@ use crate::{
 
 pub mod inventory;
 
+/// This component marks all entities that are part of the world and should be cleaned up when
+/// going to menu and such.
 #[derive(Component)]
-pub struct DespawnOnWorldData;
+pub struct WorldEntity;
 
 /// Temporary storage for camera NetEntId until camera is spawned
 #[derive(Resource)]
@@ -189,8 +191,6 @@ fn on_general_spawn_network_unit(
     mut unit_spawns: MessageReader<SpawnUnit2>,
     mut commands: Commands,
 ) {
-    use crate::game_state::WorldEntity;
-
     for spawn in unit_spawns.read() {
         // Spawn ball with physics
         let entity = spawn.clone().spawn_entity(&mut commands);
@@ -525,7 +525,7 @@ fn receive_world_data(
     mut game_state: ResMut<NextState<NetworkGameState>>,
     asset_server: ResMut<AssetServer>,
     mut terrain_data: ResMut<TerrainParams>,
-    ents_to_despawn: Query<Entity, Or<(With<DespawnOnWorldData>, With<WorldEntity>)>>,
+    ents_to_despawn: Query<Entity, Or<(With<WorldEntity>, With<TerrainEntity>)>>,
     mut msg_terrain_events: MessageWriter<SetupTerrain>,
     mut next_control_state: ResMut<NextState<crate::game_state::InputControlState>>,
 ) {

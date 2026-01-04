@@ -12,7 +12,7 @@ use bevy::{
 use noise::{NoiseFn, Perlin};
 use shared::net_components::ents::Ball;
 
-use crate::{camera::LocalCamera, game_state::WorldEntity, network::DespawnOnWorldData};
+use crate::{camera::LocalCamera, game_state::TerrainEntity, network::WorldEntity};
 
 /// Marker for grass entities
 #[derive(Component)]
@@ -244,8 +244,8 @@ type GrassChunkBundle = (
     Transform,
     Visibility,
     OcclusionCulling,
+    TerrainEntity,
     WorldEntity,
-    DespawnOnWorldData,
 );
 
 /// Create grass chunk bundles for terrain
@@ -428,8 +428,8 @@ pub fn create_grass_bundles(
                     Transform::default(),
                     Visibility::default(),
                     OcclusionCulling, // Enable Bevy's built-in occlusion culling
+                    TerrainEntity,
                     WorldEntity,
-                    DespawnOnWorldData,
                 ));
             }
         }

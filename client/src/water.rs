@@ -6,9 +6,9 @@ use bevy::{
 };
 use shared::physics::water::{Water, apply_buoyancy, check_water_immersion, spawn_water_shared};
 
-use crate::game_state::{GameState, WorldEntity};
+use crate::game_state::{GameState, TerrainEntity};
 
-use crate::network::DespawnOnWorldData;
+use crate::network::WorldEntity;
 
 pub struct WaterPlugin;
 
@@ -76,7 +76,7 @@ pub fn spawn_water_client(
         Transform::from_xyz(0.0, water_level, 0.0)
             .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)), // Rotate to be horizontal
         Water,
+        TerrainEntity,
         WorldEntity,
-        DespawnOnWorldData,
     ));
 }
