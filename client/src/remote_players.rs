@@ -1,6 +1,7 @@
 use avian3d::prelude::{LinearVelocity, Rotation};
 use bevy::{camera::visibility::NoFrustumCulling, prelude::*};
 use shared::{
+    character_controller::{CharacterController, NPCController},
     event::{
         MyNetEntParentId, NetEntId, UDPacketEvent,
         client::{DespawnUnit2, PlayerDisconnected, UpdateUnit2},
@@ -131,9 +132,17 @@ fn handle_update_unit(
         'anu: for (ent, net_id) in &mut new_component_units {
             if net_id == &update.event.net_ent_id {
                 // Add any new components
+                let mut ec = commands.entity(ent);
                 for component in &update.event.new_component {
-                    let mut ec = commands.entity(ent);
                     component.clone().insert_components(&mut ec);
+                }
+                for component in &update.event.removed_components {
+                    match &**component {
+                        //TODO fill rest as needed
+                        "NPCController" => ec.remove::<NPCController>(),
+                        "CharacterController" => ec.remove::<CharacterController>(),
+                        _ => continue,
+                    };
                 }
                 break 'anu;
             }

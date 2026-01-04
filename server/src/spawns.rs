@@ -1,5 +1,7 @@
+use avian3d::prelude::RigidBody;
 use bevy::prelude::*;
 use shared::{
+    character_controller::{CharacterController, NPCController},
     event::{
         client::{BeginThirdpersonControllingUnit, SpawnUnit2},
         server::{SpawnCircle, SpawnMan},
@@ -208,20 +210,43 @@ pub struct UnitDie {
 fn on_unit_die(
     mut unit_deaths: MessageReader<UnitDie>,
     mut commands: Commands,
-    units: Query<(&NetEntId, Option<&HasInventory>, &Transform, Entity)>,
+    units: Query<(&NetEntId, Option<&HasInventory>, &Transform, Entity), Without<Dead>>,
     sr: Res<ServerNetworkingResources>,
     tick: Res<CurrentTick>,
     clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
 ) {
     for death in unit_deaths.read() {
         info!("Unit died: {:?}", death.unit_id);
+        let death_event = Dead {
+            reason: "Died".to_string(),
+            died_on_tick: tick.0,
+        };
         // Despawn the unit
         for (net_id, has_inv, loc, ent) in units.iter() {
             if *net_id == death.unit_id {
-                commands.entity(ent).insert(Dead {
-                    reason: "Died".to_string(),
-                    died_on_tick: tick.0,
+                //TODO dedup this with client
+                commands
+                    .entity(ent)
+                    .insert(death_event.clone())
+                    .insert(RigidBody::Dynamic)
+                    .remove::<NPCController>()
+                    .remove::<CharacterController>();
+
+                // Notify all clients about the unit death
+                let event = EventToClient::UpdateUnit2(shared::event::client::UpdateUnit2 {
+                    net_ent_id: death.unit_id,
+                    changed_components: vec![RigidBody::Dynamic.to_net_component()],
+                    removed_components: vec![
+                        "NPCController".to_string(),
+                        "CharacterController".to_string(),
+                    ],
+                    new_component: vec![death_event.clone().to_net_component()],
                 });
+
+                for endpoint in &clients {
+                    sr.send_outgoing_event_next_tick(endpoint.0, &event);
+                }
+
                 if let Some(inv) = has_inv {
                     let position = loc.translation;
                     let loot = SpawnUnit2 {
@@ -242,21 +267,6 @@ fn on_unit_die(
                     }
                 }
             }
-        }
-
-        // Notify all clients about the unit death
-        let event = EventToClient::UpdateUnit2(shared::event::client::UpdateUnit2 {
-            net_ent_id: death.unit_id,
-            changed_components: vec![],
-            removed_components: vec![],
-            new_component: vec![Dead {
-                reason: "Died".to_string(),
-                died_on_tick: tick.0,
-            }
-            .to_net_component()],
-        });
-        for endpoint in &clients {
-            sr.send_outgoing_event_next_tick(endpoint.0, &event);
         }
     }
 }

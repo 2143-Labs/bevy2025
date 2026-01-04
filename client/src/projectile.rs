@@ -1,9 +1,11 @@
+use avian3d::prelude::RigidBody;
 use bevy::{
     ecs::{lifecycle::HookContext, world::DeferredWorld},
     prelude::*,
 };
 use shared::{
     CurrentTick,
+    character_controller::{CharacterController, NPCController},
     event::{UDPacketEvent, client::SpawnProjectile},
     net_components::ours::Dead,
     projectile::{ProjectileAI, ProjectileRealtime},
@@ -37,7 +39,7 @@ fn on_spawn_projectile(
     time: Res<Time>,
 ) {
     for event in spawn_event_reader.read() {
-        info!(?event.projectile_type, ?event.projectile_origin, "Spawning projectile");
+        trace!(?event.projectile_type, ?event.projectile_origin, "Spawning projectile");
         let (real_time, real_tick) =
             get_client_tick_from_server_tick(&event.spawn_tick, &time, &tick, &server_tick);
 
@@ -82,7 +84,6 @@ fn spawn_projectiles_read(
     mut writer: MessageWriter<SpawnProjectile>,
 ) {
     for packet in efre.read() {
-        info!("Got a packet");
         writer.write(packet.event.clone());
     }
 }
@@ -98,18 +99,26 @@ fn on_unit_die(mut cmds: DeferredWorld, hc: HookContext) {
     let time = cmds.resource::<Time>().elapsed_secs_f64();
     cmds.commands()
         .entity(hc.entity)
+        //.remove::<RigidBody>()
+        // ragdoll
+        .insert(RigidBody::Dynamic)
         .insert(DeathAnimation { started_at: time });
+
+    // print all components on the entity for debugging
+    for comp in cmds.entity(hc.entity).archetype().components() {
+        info!("Component on dead entity: {:?}", comp);
+    }
 }
 
 fn update_dead_units(
-    //mut commands: Commands,
+    mut commands: Commands,
     time: Res<Time>,
     query: Query<(Entity, &mut Transform, &DeathAnimation), With<Dead>>,
 ) {
-    for (_, mut transform, death_anim) in query {
+    for (e, mut _transform, death_anim) in query {
         let elapsed = time.elapsed_secs_f64() - death_anim.started_at;
-        let elapsed = elapsed.clamp(0.0, 1.0);
-        transform.rotation =
-            Quat::from_rotation_x(1.0 / 2.0 * -std::f32::consts::FRAC_PI_2 * elapsed as f32);
+        if elapsed >= 10.0 {
+            commands.entity(e).despawn();
+        }
     }
 }

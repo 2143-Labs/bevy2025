@@ -100,8 +100,8 @@ pub enum ProjectileAI {
 impl ProjectileAI {
     pub fn get_collider(&self) -> Option<Collider> {
         Some(match self {
-            ProjectileAI::Spark { .. } => Collider::sphere(0.2),
-            ProjectileAI::HammerDin { .. } => Collider::sphere(0.3),
+            ProjectileAI::Spark { .. } => Collider::sphere(0.5),
+            ProjectileAI::HammerDin { .. } => Collider::sphere(1.0),
             _ => return None,
         })
     }
