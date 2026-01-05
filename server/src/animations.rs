@@ -1,13 +1,8 @@
 use bevy::prelude::*;
 use shared::{
-    event::{client::SpawnProjectile, server::CastSkillUpdate, NetEntId, PlayerId, UDPacketEvent},
-    net_components::{ents::SendNetworkTranformUpdates, make_npc, ours::ControlledBy},
-    netlib::ServerNetworkingResources,
-    projectile::{ProjectileAI, ProjectileSource},
-    skills::animations::{
+    CurrentTick, event::{NetEntId, PlayerId, UDPacketEvent, client::SpawnProjectile, server::CastSkillUpdate}, net_components::{ents::SendNetworkTranformUpdates, make_npc, ours::ControlledBy}, netlib::ServerNetworkingResources, physics::terrain::{NOISE_SCALE_FACTOR, TerrainParams}, projectile::{ProjectileAI, ProjectileSource}, skills::{Skill, animations::{
         CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince,
-    },
-    CurrentTick,
+    }}
 };
 
 use crate::{ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint};
@@ -141,6 +136,7 @@ fn on_unit_finish_cast(
     connected_clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
     sr: Res<ServerNetworkingResources>,
     mut spawn_projectile_writer: MessageWriter<SpawnProjectile>,
+    terrain: Res<TerrainParams>,
 ) {
     for UnitFinishedSkillCast {
         tick,
@@ -169,7 +165,7 @@ fn on_unit_finish_cast(
             };
 
             match &skill.skill {
-                shared::skills::Skill::Spark => {
+                Skill::Spark => {
                     for _spark in 0..6 {
                         let mut path_targets: Vec<Vec3> = vec![];
                         let mut cur_pos = transform.translation;
@@ -200,7 +196,7 @@ fn on_unit_finish_cast(
                         spawn_projectile_writer.write(event.clone());
                     }
                 }
-                shared::skills::Skill::Hammerdin => {
+                Skill::Hammerdin => {
                     for hammer in 0..4 {
                         let proj = SpawnProjectile {
                             spawn_tick: server_tick.0,
@@ -216,7 +212,7 @@ fn on_unit_finish_cast(
                         spawn_projectile_writer.write(proj.clone());
                     }
                 }
-                shared::skills::Skill::SummonTestNPC => {
+                Skill::SummonTestNPC => {
                     let random_xy = Vec3::new(
                         rand::random_range(-5.0..5.0),
                         0.0,
@@ -236,6 +232,85 @@ fn on_unit_finish_cast(
                         sr.send_outgoing_event_next_tick(client_endpoint.0, &event);
                     }
                 }
+
+                Skill::Blink => {
+                    info!(?net_ent_id, "Blink skill cast complete - no projectiles to spawn");
+                }
+
+                Skill::WinterOrb => {
+                    let aim_dir = transform.forward() * 1.0 + Vec3::Y * 0.2;
+                    let proj = SpawnProjectile {
+                        spawn_tick: server_tick.0,
+                        projectile_origin: transform.translation + aim_dir.normalize() * 1.5,
+                        projectile_source: projectile_source.clone(),
+                        projectile_type: ProjectileAI::WinterOrbMain {
+                            target: aim_dir.normalize(),
+                        },
+                    };
+                    spawn_projectile_writer.write(proj.clone());
+                }
+                Skill::RainOfArrows => {
+                    // This summons the spawner arrow first which then spawns more arrows
+                    let mut ground_target = transform.translation
+                        + transform.forward() * 10.0;
+
+                    use noise::NoiseFn;
+
+                    ground_target.y = terrain.perlin().get([
+                        ground_target.x as f64 * NOISE_SCALE_FACTOR,
+                        ground_target.z as f64 * NOISE_SCALE_FACTOR,
+                    ]) as f32
+                        * terrain.max_height_delta;
+
+                    let sky_target = Vec3::new(ground_target.x, ground_target.y + 20.0, ground_target.z) - transform.forward() * 5.0;
+
+                    let proj = SpawnProjectile {
+                        spawn_tick: server_tick.0,
+                        projectile_origin: transform.translation + Vec3::Y * 1.5,
+                        projectile_source: projectile_source.clone(),
+                        projectile_type: ProjectileAI::RainOfArrowsSpawner { ground_target,
+                            sky_target
+                        },
+                    };
+                    spawn_projectile_writer.write(proj.clone());
+                }
+
+                Skill::BasicBowAttack => {
+                    let aim_dir = transform.forward();
+                    let proj = SpawnProjectile {
+                        spawn_tick: server_tick.0,
+                        projectile_origin: transform.translation + aim_dir.normalize() * 1.5,
+                        projectile_source: projectile_source.clone(),
+                        projectile_type: ProjectileAI::BasicBowAttack { direction_vector: aim_dir.normalize() },
+                    };
+                    spawn_projectile_writer.write(proj.clone());
+                }
+
+                Skill::HomingArrows => {
+                    //let aim_dir = transform.forward();
+                    //let proj = SpawnProjectile {
+                        //spawn_tick: server_tick.0,
+                        //projectile_origin: transform.translation + aim_dir.normalize() * 1.5,
+                        //projectile_source: projectile_source.clone(),
+                        //projectile_type: ProjectileAI::Homing { target_entity: (), turn_rate_deg_per_sec: () }
+                    //};
+                    //spawn_projectile_writer.write(proj.clone());
+                }
+
+                Skill::Frostbolt => {
+                    let aim_dir = transform.forward() * 1.0 + Vec3::Y * 0.1;
+                    let proj = SpawnProjectile {
+                        spawn_tick: server_tick.0,
+                        projectile_origin: transform.translation + aim_dir.normalize() * 1.5,
+                        projectile_source: projectile_source.clone(),
+                        projectile_type: ProjectileAI::Frostbolt {
+                            target: aim_dir.normalize(),
+                        },
+                    };
+                    spawn_projectile_writer.write(proj.clone());
+                }
+
+
                 _ => {
                     warn!(?net_ent_id, ?skill.skill, "Received UnitFinishedSkillCast for unsupported skill");
                     break;
