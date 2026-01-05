@@ -1,8 +1,15 @@
 use bevy::prelude::*;
 use shared::{
-    CurrentTick, event::{NetEntId, PlayerId, UDPacketEvent, client::SpawnProjectile, server::CastSkillUpdate}, net_components::{ents::SendNetworkTranformUpdates, make_npc, ours::ControlledBy}, netlib::ServerNetworkingResources, physics::terrain::{NOISE_SCALE_FACTOR, TerrainParams}, projectile::{ProjectileAI, ProjectileSource}, skills::{Skill, animations::{
-        CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince,
-    }}
+    event::{client::SpawnProjectile, server::CastSkillUpdate, NetEntId, PlayerId, UDPacketEvent},
+    net_components::{ents::SendNetworkTranformUpdates, make_npc, ours::ControlledBy},
+    netlib::ServerNetworkingResources,
+    physics::terrain::{TerrainParams, NOISE_SCALE_FACTOR},
+    projectile::{ProjectileAI, ProjectileSource},
+    skills::{
+        animations::{CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince},
+        Skill,
+    },
+    CurrentTick,
 };
 
 use crate::{ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint};
@@ -234,7 +241,10 @@ fn on_unit_finish_cast(
                 }
 
                 Skill::Blink => {
-                    info!(?net_ent_id, "Blink skill cast complete - no projectiles to spawn");
+                    info!(
+                        ?net_ent_id,
+                        "Blink skill cast complete - no projectiles to spawn"
+                    );
                 }
 
                 Skill::WinterOrb => {
@@ -251,8 +261,7 @@ fn on_unit_finish_cast(
                 }
                 Skill::RainOfArrows => {
                     // This summons the spawner arrow first which then spawns more arrows
-                    let mut ground_target = transform.translation
-                        + transform.forward() * 10.0;
+                    let mut ground_target = transform.translation + transform.forward() * 10.0;
 
                     use noise::NoiseFn;
 
@@ -262,14 +271,17 @@ fn on_unit_finish_cast(
                     ]) as f32
                         * terrain.max_height_delta;
 
-                    let sky_target = Vec3::new(ground_target.x, ground_target.y + 20.0, ground_target.z) - transform.forward() * 5.0;
+                    let sky_target =
+                        Vec3::new(ground_target.x, ground_target.y + 20.0, ground_target.z)
+                            - transform.forward() * 5.0;
 
                     let proj = SpawnProjectile {
                         spawn_tick: server_tick.0,
                         projectile_origin: transform.translation + Vec3::Y * 1.5,
                         projectile_source: projectile_source.clone(),
-                        projectile_type: ProjectileAI::RainOfArrowsSpawner { ground_target,
-                            sky_target
+                        projectile_type: ProjectileAI::RainOfArrowsSpawner {
+                            ground_target,
+                            sky_target,
                         },
                     };
                     spawn_projectile_writer.write(proj.clone());
@@ -281,7 +293,9 @@ fn on_unit_finish_cast(
                         spawn_tick: server_tick.0,
                         projectile_origin: transform.translation + aim_dir.normalize() * 1.5,
                         projectile_source: projectile_source.clone(),
-                        projectile_type: ProjectileAI::BasicBowAttack { direction_vector: aim_dir.normalize() },
+                        projectile_type: ProjectileAI::BasicBowAttack {
+                            direction_vector: aim_dir.normalize(),
+                        },
                     };
                     spawn_projectile_writer.write(proj.clone());
                 }
@@ -289,10 +303,10 @@ fn on_unit_finish_cast(
                 Skill::HomingArrows => {
                     //let aim_dir = transform.forward();
                     //let proj = SpawnProjectile {
-                        //spawn_tick: server_tick.0,
-                        //projectile_origin: transform.translation + aim_dir.normalize() * 1.5,
-                        //projectile_source: projectile_source.clone(),
-                        //projectile_type: ProjectileAI::Homing { target_entity: (), turn_rate_deg_per_sec: () }
+                    //spawn_tick: server_tick.0,
+                    //projectile_origin: transform.translation + aim_dir.normalize() * 1.5,
+                    //projectile_source: projectile_source.clone(),
+                    //projectile_type: ProjectileAI::Homing { target_entity: (), turn_rate_deg_per_sec: () }
                     //};
                     //spawn_projectile_writer.write(proj.clone());
                 }
@@ -309,7 +323,6 @@ fn on_unit_finish_cast(
                     };
                     spawn_projectile_writer.write(proj.clone());
                 }
-
 
                 _ => {
                     warn!(?net_ent_id, ?skill.skill, "Received UnitFinishedSkillCast for unsupported skill");
