@@ -226,14 +226,14 @@ fn update_projectiles(
                 transform.rotation = Quat::from_rotation_arc(Vec3::Z, tangent);
             }
             ProjectileAI::Straight { target } => {
-                let direction = (*target - origin.origin);
+                let direction = *target - origin.origin;
                 let new_pos = origin.origin + direction * time_since_spawn as f32;
 
                 transform.translation = new_pos;
             }
             ProjectileAI::Homing {
                 target_entity,
-                turn_rate_deg_per_sec,
+                turn_rate_deg_per_sec: _,
             } => {
                 let Some((target_unit_transform, _)) = unit_targets
                     .iter()
