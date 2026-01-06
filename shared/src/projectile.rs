@@ -109,8 +109,10 @@ impl ProjectileAI {
 
 impl Plugin for ProjectilePlugin {
     fn build(&self, app: &mut App) {
-        app.add_message::<SpawnProjectile>()
-            .add_systems(Update, update_projectiles);
+        app.add_message::<SpawnProjectile>().add_systems(
+            Update,
+            (update_projectiles, despawn_projectile_after_duration),
+        );
     }
 }
 
@@ -139,6 +141,18 @@ impl SpawnProjectile {
     }
 }
 
+fn despawn_projectile_after_duration(
+    mut commands: Commands,
+    query: Query<(Entity, &ProjDespawn)>,
+    tick: Res<CurrentTick>,
+) {
+    for (ent, despawn) in &query {
+        if tick.0 .0 >= despawn.tick.0 {
+            commands.entity(ent).despawn();
+        }
+    }
+}
+
 fn update_projectiles(
     mut query: Query<(
         Entity,
@@ -147,8 +161,6 @@ fn update_projectiles(
         &ProjectileRealtime,
         &ProjectileAI,
         &ProjectileSource,
-        //&ProjSpawnedAt,
-        &ProjDespawn,
     )>,
     unit_targets: Query<(&Transform, &NetEntId), Without<ProjectileAI>>,
     tick: Res<CurrentTick>,
@@ -158,16 +170,11 @@ fn update_projectiles(
     mut projectile_spawner: MessageWriter<SpawnProjectile>,
 ) {
     let noise: noise::Perlin = terrain_info.perlin();
-    for (ent, mut transform, origin, real_spawn_time, projectile_ai, projectile_source, despawn) in
+    for (ent, mut transform, origin, real_spawn_time, projectile_ai, projectile_source) in
         &mut query
     {
         let time_since_spawn = time.elapsed_secs_f64() - real_spawn_time.spawn_real_time;
         let dt = time.delta_secs_f64();
-        if tick.0 .0 >= despawn.tick.0 {
-            // despawn
-            commands.entity(ent).despawn();
-            continue;
-        }
 
         match projectile_ai {
             ProjectileAI::Spark {
