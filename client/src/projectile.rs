@@ -3,13 +3,16 @@ use bevy::{
     prelude::*,
 };
 use shared::{
-    CurrentTick,
+    BASE_TICKS_PER_SECOND, CurrentTick,
     event::{UDPacketEvent, client::SpawnProjectile},
     net_components::ours::Dead,
     projectile::{ProjectileAI, ProjectileRealtime},
 };
 
-use crate::{animations::get_client_tick_from_server_tick, network::ServerTick};
+use crate::{
+    animations::get_client_tick_from_server_tick,
+    network::ServerTick,
+};
 
 pub struct ProjectilePlugin;
 
@@ -29,19 +32,39 @@ impl Plugin for ProjectilePlugin {
     }
 }
 
+fn spawn_projectiles_read(
+    mut efre: UDPacketEvent<SpawnProjectile>,
+    mut writer: MessageWriter<SpawnProjectile>,
+    time: Res<Time>,
+    tick: Res<CurrentTick>,
+    server_tick: Res<ServerTick>,
+) {
+    for packet in efre.read() {
+        let (_real_time, real_tick) =
+            get_client_tick_from_server_tick(&packet.event.spawn_tick, &time, &tick, &server_tick);
+
+        let adjusted_projectile = SpawnProjectile {
+            projectile_origin: packet.event.projectile_origin,
+            projectile_source: packet.event.projectile_source.clone(),
+            projectile_type: packet.event.projectile_type.clone(),
+            spawn_tick: real_tick,
+        };
+
+        writer.write(adjusted_projectile);
+    }
+}
+
 fn on_spawn_projectile(
     mut spawn_event_reader: MessageReader<SpawnProjectile>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     tick: Res<CurrentTick>,
-    server_tick: Res<ServerTick>,
     time: Res<Time>,
+    //interp_map: Res<ServerInterpMap>
 ) {
     for event in spawn_event_reader.read() {
         trace!(?event.projectile_type, ?event.projectile_origin, "Spawning projectile");
-        let (real_time, real_tick) =
-            get_client_tick_from_server_tick(&event.spawn_tick, &time, &tick, &server_tick);
 
         let mesh_handle = match event.projectile_type {
             ProjectileAI::Spark { .. } => meshes.add(Mesh::from(Tetrahedron {
@@ -54,15 +77,20 @@ fn on_spawn_projectile(
             })),
             ProjectileAI::HammerDin { .. } => meshes.add(Mesh::from(Sphere { radius: 1.0 })),
             _ => {
-                error!("Unknown projectile type for mesh!");
+                //error!("Unknown projectile type for mesh!");
                 meshes.add(Mesh::from(Sphere { radius: 0.5 }))
             }
         };
 
+        // calc time offset:
+        let real_time = time.elapsed_secs_f64()
+            - (tick.0.0.saturating_sub(event.spawn_tick.0) as f64
+                * (1.0 / BASE_TICKS_PER_SECOND as f64));
+
         let mut ec = commands.spawn((
-            event.base_bundle(&real_tick),
+            event.base_bundle(&event.spawn_tick),
             ProjectileRealtime {
-                spawn_real_time: real_time,
+                spawn_real_time: real_time, //spawn_real_time: real_time,
             },
             // Basic equilateral tetrahedron mesh
             Mesh3d(mesh_handle),
@@ -76,15 +104,6 @@ fn on_spawn_projectile(
         if let Some(collider) = event.collider_bundle() {
             ec.insert(collider);
         }
-    }
-}
-
-fn spawn_projectiles_read(
-    mut efre: UDPacketEvent<SpawnProjectile>,
-    mut writer: MessageWriter<SpawnProjectile>,
-) {
-    for packet in efre.read() {
-        writer.write(packet.event.clone());
     }
 }
 

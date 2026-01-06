@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use avian3d::prelude::{LinearVelocity, Rotation};
 use bevy::{prelude::*, time::common_conditions::on_timer};
+use dashmap::DashMap;
 use shared::{
-    Config,
+    BASE_TICKS_PER_SECOND, Config,
     event::{
         MyNetEntParentId, NetEntId, PlayerId, UDPacketEvent,
         client::{
@@ -26,6 +27,7 @@ use shared::{
     },
     physics::terrain::TerrainParams,
 };
+use std::sync::Arc;
 
 use crate::{
     assets::{FontAssets, ModelAssets},
@@ -157,6 +159,9 @@ impl Plugin for NetworkingPlugin {
             )
             .add_message::<SpawnUnit2>()
             .add_message::<SpawnMan>()
+            .insert_resource(ServerInterpMap {
+                ..Default::default()
+            })
             .insert_resource(ServerTick {
                 tick: Tick(0),
                 tick_offset: 0,
@@ -184,7 +189,6 @@ fn spawn_networked_unit_forward_local(
 pub struct NeedsClientConstruction;
 
 #[derive(Component)]
-#[component(storage = "SparseSet")]
 pub struct CurrentThirdPersonControlledUnit;
 
 // Given some unit
@@ -643,11 +647,23 @@ pub struct ServerTick {
     pub realtime: f64,
 }
 
+#[allow(dead_code)]
+pub struct InterpEntry {
+    pub server_tick: Tick,
+    pub client_realtime: f64,
+}
+
+#[derive(Resource, Default)]
+pub struct ServerInterpMap {
+    client_tick_to_server_tick: Arc<DashMap<Tick, InterpEntry>>,
+}
+
 fn receive_tick_just_happened(
     time: Res<Time>,
     mut server_tick: ResMut<ServerTick>,
     client_tick: Res<shared::CurrentTick>,
     mut tick_events: UDPacketEvent<shared::event::client::TickHappened>,
+    server_interp_map: Res<ServerInterpMap>,
 ) {
     for event in tick_events.read() {
         let tick = event.event.tick;
@@ -666,7 +682,23 @@ fn receive_tick_just_happened(
         }
         server_tick.tick.0 = tick.0.max(server_tick.tick.0);
         server_tick.realtime = time.elapsed_secs_f64();
-        server_tick.tick_offset = (server_tick.tick.0 as i64) - (client_tick.0.0 as i64)
+        server_tick.tick_offset = (server_tick.tick.0 as i64) - (client_tick.0.0 as i64);
+        // Set the server tick interp to our current time
+        let server_tick = InterpEntry {
+            server_tick: tick,
+            client_realtime: time.elapsed_secs_f64(),
+        };
+        server_interp_map
+            .client_tick_to_server_tick
+            .insert(client_tick.0, server_tick);
+
+        // remove entries older than 5 seconds
+        server_interp_map.client_tick_to_server_tick.remove(&Tick(
+            client_tick
+                .0
+                .0
+                .saturating_sub(BASE_TICKS_PER_SECOND as u64 * 5),
+        ));
     }
 }
 
