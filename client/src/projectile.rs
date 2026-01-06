@@ -55,8 +55,7 @@ fn on_spawn_projectile(
             ProjectileAI::HammerDin { .. } => meshes.add(Mesh::from(Sphere { radius: 1.0 })),
             _ => {
                 error!("Unknown projectile type for mesh!");
-                meshes.add(Mesh::from(Sphere { radius: 0.5 }));
-                continue;
+                meshes.add(Mesh::from(Sphere { radius: 0.5 }))
             }
         };
 
