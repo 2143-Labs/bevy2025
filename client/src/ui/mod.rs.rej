@@ -1,0 +1,16 @@
+diff a/client/src/ui/mod.rs b/client/src/ui/mod.rs	(rejected hunks)
+@@ -1,5 +1,6 @@
+ pub mod connecting_menu;
+ pub mod home_menu;
++pub mod inventory_ui;
+ pub mod multiplayer_menu;
+ pub mod paused_menu;
+ pub mod styles;
+@@ -9,6 +10,7 @@ use bevy::prelude::*;
+ use crate::game_state::{GameState, MenuState};
+ 
+ pub use connecting_menu::ConnectionTrigger;
++pub use inventory_ui::InventoryPlugin;
+ pub use text_input::FocusedInput;
+ 
+ pub struct UIPlugin;
