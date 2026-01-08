@@ -24,3 +24,8 @@ clap = { version = "4.5.4", features = ["derive", "env"] }
 inspector = ["dep:bevy-inspector-egui"]
 default = []
 
+
+[target.x86_64-pc-windows-gnu]
+linker = "C:\\msys2\\mingw64\\bin\\gcc.exe"
+ar = "C:\\msys2\\mingw64\\bin\\ar.exe"
+
