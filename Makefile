@@ -19,7 +19,7 @@ $(OPT_WASM): $(CARGO_WASM)
 
 # Bindgen only if optimized wasm is newer
 $(BINDGEN_WASM): $(OPT_WASM)
-	wasm-bindgen --out-name rots_example --out-dir web --target web $<
+	wasm-bindgen --out-name bevy2025 --out-dir web --target web $<
 
 serve:
 	python3 -m http.server --directory web 8080

@@ -41,14 +41,12 @@
           src = ./.;
           nativeBuildInputs = with pkgs; [ pkg-config ];
           buildInputs = with pkgs; [
-            binaryen
             lld
-            wasm-bindgen-cli
           ];
           cargoBuildOptions = x: x ++ [ "-p" "client" "--no-default-features" "--target" "wasm32-unknown-unknown" "--features" "web" ];
         };
       in
-      {
+      rec {
         # Default package is the client
         packages.default = clientPackage;
         packages.client = clientPackage;
@@ -84,21 +82,20 @@
           name = "bevy2025-wasm-opt-server";
           src = ./.;
           buildInputs = with pkgs; [
-            wasm-opt
             wasm-bindgen-cli
-            naersk-lib
-            coreutils
-            rsync
+            binaryen
           ];
           unpackPhase = "true"; # No need to unpack anything
           buildPhase = ''
             mkdir -p build
-            cp ${wasmPackageBase}/target/wasm32-unknown-unknown/release/client.wasm build/client.wasm
-            wasm-opt -Os --output build/opt.wasm build/client.wasm
-            wasm-bindgen --out-name bevy2025 --target web --out-dir build/ web build/opt.wasm
+            wasm-opt -Os --output opt.wasm ${packages.wasmBase}/bin/client.wasm
+            cp ${./web/index.html} build/index.html
+            echo "Running wasm-bindgen..."
+            wasm-bindgen --out-name bevy2025 --target web --out-dir build/ opt.wasm
+
             # Copy assets
             mkdir -p build/assets
-            rsync -a --exclude 'target' --exclude '.git' ${./assets}/ build/assets/
+            cp -r ${./client/assets}/* build/assets/
           '';
           installPhase = ''
             mkdir -p $out
