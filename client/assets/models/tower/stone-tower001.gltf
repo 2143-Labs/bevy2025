@@ -24,7 +24,7 @@
 		},
 		{
 			"extras":{
-				"collider":"TrimeshFromMesh"
+				"stone-tower-collider":"TrimeshFromMesh"
 			},
 			"mesh":1,
 			"name":"Tower"
@@ -34,57 +34,15 @@
 				"collider":"TrimeshFromMesh"
 			},
 			"mesh":2,
-			"name":"Cube"
-		}
-	],
-	"animations":[
-		{
-			"channels":[
-				{
-					"sampler":0,
-					"target":{
-						"node":1,
-						"path":"translation"
-					}
-				},
-				{
-					"sampler":1,
-					"target":{
-						"node":1,
-						"path":"rotation"
-					}
-				},
-				{
-					"sampler":2,
-					"target":{
-						"node":1,
-						"path":"scale"
-					}
-				}
-			],
-			"name":"CircleAction",
-			"samplers":[
-				{
-					"input":12,
-					"interpolation":"LINEAR",
-					"output":13
-				},
-				{
-					"input":12,
-					"interpolation":"LINEAR",
-					"output":14
-				},
-				{
-					"input":12,
-					"interpolation":"LINEAR",
-					"output":15
-				}
-			]
+			"name":"EntranceStairs"
 		}
 	],
 	"meshes":[
 		{
-			"name":"Circle.001",
+			"extras":{
+				"Entrance-Collider":"TrimeshFromMesh"
+			},
+			"name":"Entrance_Mesh",
 			"primitives":[
 				{
 					"attributes":{
@@ -98,9 +56,9 @@
 		},
 		{
 			"extras":{
-				"collider":"TrimeshFromMesh"
+				"Stone-Tower-Collider":"TrimeshFromMesh"
 			},
-			"name":"Circle.004",
+			"name":"Tower_Mesh",
 			"primitives":[
 				{
 					"attributes":{
@@ -113,7 +71,10 @@
 			]
 		},
 		{
-			"name":"Cube.001",
+			"extras":{
+				"EntranceStairs-Collider":"TrimeshFromMesh"
+			},
+			"name":"EntranceStairs_Mesh",
 			"primitives":[
 				{
 					"attributes":{
@@ -228,36 +189,6 @@
 			"componentType":5123,
 			"count":144,
 			"type":"SCALAR"
-		},
-		{
-			"bufferView":12,
-			"componentType":5126,
-			"count":1,
-			"max":[
-				1.2083333333333333
-			],
-			"min":[
-				1.2083333333333333
-			],
-			"type":"SCALAR"
-		},
-		{
-			"bufferView":13,
-			"componentType":5126,
-			"count":1,
-			"type":"VEC3"
-		},
-		{
-			"bufferView":14,
-			"componentType":5126,
-			"count":1,
-			"type":"VEC4"
-		},
-		{
-			"bufferView":15,
-			"componentType":5126,
-			"count":1,
-			"type":"VEC3"
 		}
 	],
 	"bufferViews":[
@@ -332,31 +263,11 @@
 			"byteLength":288,
 			"byteOffset":417188,
 			"target":34963
-		},
-		{
-			"buffer":0,
-			"byteLength":4,
-			"byteOffset":417476
-		},
-		{
-			"buffer":0,
-			"byteLength":12,
-			"byteOffset":417480
-		},
-		{
-			"buffer":0,
-			"byteLength":16,
-			"byteOffset":417492
-		},
-		{
-			"buffer":0,
-			"byteLength":12,
-			"byteOffset":417508
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":417520,
+			"byteLength":417476,
 			"uri":"stone-tower001.bin"
 		}
 	]
