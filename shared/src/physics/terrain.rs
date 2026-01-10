@@ -28,8 +28,8 @@ impl Default for TerrainParams {
         let seed = fastrand::u32(..);
         Self {
             seed,
-            plane_size: 100.0,
-            subdivisions: 200,
+            plane_size: 200.0,
+            subdivisions: 300,
             max_height_delta: 1.0,
         }
     }
