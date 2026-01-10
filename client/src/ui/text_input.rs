@@ -1,4 +1,6 @@
+#[cfg(feature = "clipboard")]
 use arboard::Clipboard;
+
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
 
 /// Text input component that handles user keyboard input
@@ -135,6 +137,7 @@ pub fn handle_text_input_keyboard(
         keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
 
     // Handle special key combinations first
+    #[cfg(feature = "clipboard")]
     if ctrl_pressed {
         if keyboard.just_pressed(KeyCode::KeyA) {
             // Ctrl+A - Select all

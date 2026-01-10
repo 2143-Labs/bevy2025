@@ -21,7 +21,7 @@ postcard = { version = "1.0.8", features = ["use-std", "alloc"] }
 bevy-inspector-egui = { version = "0.35.0", optional = true }
 clap = { version = "4.5.4", features = ["derive", "env"] }
 dashmap = "6.1.0"
-arboard = "3.6.1"
+arboard = { version = "3.6.1", optional = true }
 bevy-steamworks = { version = "0.15.0", optional = true }
 
 raw-window-handle = { version = "0.6.2", optional = true }
@@ -38,4 +38,5 @@ singleplayer = ["dep:server"]
 web = ["dep:wasm-bindgen", "dep:raw-window-handle", "dep:web-sys", "shared/web"]
 udp = ["shared/udp", "dep:message-io"]
 steam = ["dep:bevy-steamworks"]
-default = ["steam", "udp"]
+clipboard = ["dep:arboard"]
+default = ["steam", "udp", "clipboard"]
