@@ -253,8 +253,7 @@ fn update_projectiles(
                 let new_pos = origin.origin + direction * time_since_spawn as f32;
 
                 let xz = new_pos.xz();
-                let y = noise.sample_height(xz.x, xz.y) as f32
-                    * terrain_info.max_height_delta;
+                let y = noise.sample_height(xz.x, xz.y) as f32 * terrain_info.max_height_delta;
                 let new_pos = Vec3::new(xz.x, (y + 1.0).max(new_pos.y), xz.y);
                 transform.translation = new_pos;
             }
@@ -263,8 +262,7 @@ fn update_projectiles(
                 let new_pos = origin.origin + direction * time_since_spawn as f32;
 
                 let xz = new_pos.xz();
-                let y = noise.sample_height(xz.x, xz.y) as f32
-                    * terrain_info.max_height_delta;
+                let y = noise.sample_height(xz.x, xz.y) as f32 * terrain_info.max_height_delta;
                 let new_pos = Vec3::new(xz.x, (y + 1.0).max(new_pos.y), xz.y);
                 transform.translation = new_pos;
             }
