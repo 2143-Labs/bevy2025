@@ -1,5 +1,5 @@
-use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use arboard::Clipboard;
+use bevy::{input::keyboard::KeyboardInput, prelude::*};
 
 /// Text input component that handles user keyboard input
 #[derive(Component, Debug, Clone)]
@@ -30,10 +30,12 @@ impl TextInput {
         self
     }
 
-
     pub fn get_selection(&self) -> Option<(usize, usize)> {
         if let Some(start) = self.selection_start {
-            Some((start.min(self.cursor_position), start.max(self.cursor_position)))
+            Some((
+                start.min(self.cursor_position),
+                start.max(self.cursor_position),
+            ))
         } else {
             None
         }
@@ -129,7 +131,8 @@ pub fn handle_text_input_keyboard(
     };
 
     let mut changed = false;
-    let ctrl_pressed = keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
+    let ctrl_pressed =
+        keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
 
     // Handle special key combinations first
     if ctrl_pressed {

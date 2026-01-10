@@ -201,7 +201,7 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                                             4.0
                                         } else {
                                             2.0
-                                        })), 
+                                        })),
                                         ..default()
                                     },
                                     BackgroundColor(color.into()),
@@ -298,12 +298,15 @@ pub fn handle_color_buttons(
 
 /// Update color button hover effects
 pub fn update_color_button_hover(
-    mut color_query: Query<(&Interaction, &ColorButton, &mut BorderColor), (Changed<Interaction>, With<ColorButton>)>,
+    mut color_query: Query<
+        (&Interaction, &ColorButton, &mut BorderColor),
+        (Changed<Interaction>, With<ColorButton>),
+    >,
     config: Res<Config>,
 ) {
     for (interaction, color_button, mut border_color) in color_query.iter_mut() {
         let is_selected = (color_button.hue - config.player_color_hue).abs() < 1.0;
-        
+
         match interaction {
             Interaction::Hovered => {
                 if !is_selected {

@@ -1,5 +1,5 @@
-use bevy::prelude::*;
 use super::multiplayer_menu::ColorButton;
+use bevy::prelude::*;
 
 /// Standard button styling
 pub fn menu_button_bundle() -> (Node, BackgroundColor, BorderColor) {
