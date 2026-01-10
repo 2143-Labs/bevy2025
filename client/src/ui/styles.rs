@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use super::multiplayer_menu::ColorButton;
 
 /// Standard button styling
 pub fn menu_button_bundle() -> (Node, BackgroundColor, BorderColor) {
@@ -32,7 +33,7 @@ pub fn menu_button_text(text: impl Into<String>) -> (Text, TextFont, TextColor) 
 pub fn button_visual_feedback(
     mut interaction_query: Query<
         (&Interaction, &mut BackgroundColor, &mut BorderColor),
-        Changed<Interaction>,
+        (Changed<Interaction>, Without<ColorButton>),
     >,
 ) {
     for (interaction, mut bg_color, mut border_color) in interaction_query.iter_mut() {

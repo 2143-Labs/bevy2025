@@ -190,7 +190,7 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                                 let hue = (i as f32) * 45.0; // 0, 45, 90, 135, 180, 225, 270, 315
                                 let is_selected = (hue - selected_hue).abs() < 1.0;
 
-                                // Create HSL color directly for UI display
+                                // Create HSL color for UI display
                                 let color = Color::hsl(hue, 0.9, 0.5);
 
                                 colors.spawn((
@@ -201,10 +201,10 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                                             4.0
                                         } else {
                                             2.0
-                                        })),
+                                        })), 
                                         ..default()
                                     },
-                                    BackgroundColor(color),
+                                    BackgroundColor(color.into()),
                                     BorderColor::all(if is_selected {
                                         Color::WHITE
                                     } else {
@@ -275,7 +275,7 @@ pub fn despawn_multiplayer_menu(
 /// Handle color button interactions
 pub fn handle_color_buttons(
     color_query: Query<(&Interaction, &ColorButton), Changed<Interaction>>,
-    mut all_color_buttons: Query<(&mut BorderColor, &ColorButton)>,
+    mut all_color_buttons: Query<(&mut BorderColor, &mut Node, &ColorButton)>,
     mut config: ResMut<Config>,
 ) {
     for (interaction, color_button) in color_query.iter() {
@@ -283,14 +283,40 @@ pub fn handle_color_buttons(
             info!("Color selected: hue = {}", color_button.hue);
             config.player_color_hue = color_button.hue;
 
-            // Update border colors for all buttons
-            for (mut border, button) in all_color_buttons.iter_mut() {
+            // Update border colors and widths for all buttons
+            for (mut border, mut node, button) in all_color_buttons.iter_mut() {
                 if (button.hue - color_button.hue).abs() < 1.0 {
                     *border = BorderColor::all(Color::WHITE);
+                    node.border = UiRect::all(Val::Px(4.0));
                 } else {
                     *border = BorderColor::all(Color::srgb(0.4, 0.4, 0.4));
+                    node.border = UiRect::all(Val::Px(2.0));
                 }
             }
+        }
+    }
+}
+
+/// Update color button hover effects
+pub fn update_color_button_hover(
+    mut color_query: Query<(&Interaction, &ColorButton, &mut BorderColor), (Changed<Interaction>, With<ColorButton>)>,
+    config: Res<Config>,
+) {
+    for (interaction, color_button, mut border_color) in color_query.iter_mut() {
+        let is_selected = (color_button.hue - config.player_color_hue).abs() < 1.0;
+        
+        match interaction {
+            Interaction::Hovered => {
+                if !is_selected {
+                    *border_color = BorderColor::all(Color::srgb(0.7, 0.7, 0.7));
+                }
+            }
+            Interaction::None => {
+                if !is_selected {
+                    *border_color = BorderColor::all(Color::srgb(0.4, 0.4, 0.4));
+                }
+            }
+            _ => {}
         }
     }
 }

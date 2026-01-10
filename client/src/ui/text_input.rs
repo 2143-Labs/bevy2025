@@ -1,4 +1,5 @@
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
+use arboard::Clipboard;
 
 /// Text input component that handles user keyboard input
 #[derive(Component, Debug, Clone)]
@@ -7,6 +8,8 @@ pub struct TextInput {
     pub placeholder: String,
     pub max_length: usize,
     pub is_focused: bool,
+    pub cursor_position: usize,
+    pub selection_start: Option<usize>,
 }
 
 impl TextInput {
@@ -16,12 +19,52 @@ impl TextInput {
             placeholder: placeholder.into(),
             max_length,
             is_focused: false,
+            cursor_position: 0,
+            selection_start: None,
         }
     }
 
     pub fn with_value(mut self, value: impl Into<String>) -> Self {
         self.value = value.into();
+        self.cursor_position = self.value.len();
         self
+    }
+
+
+    pub fn get_selection(&self) -> Option<(usize, usize)> {
+        if let Some(start) = self.selection_start {
+            Some((start.min(self.cursor_position), start.max(self.cursor_position)))
+        } else {
+            None
+        }
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.selection_start = None;
+    }
+
+    pub fn select_all(&mut self) {
+        self.selection_start = Some(0);
+        self.cursor_position = self.value.len();
+    }
+
+    pub fn delete_selection(&mut self) -> bool {
+        if let Some((start, end)) = self.get_selection() {
+            self.value.drain(start..end);
+            self.cursor_position = start;
+            self.clear_selection();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn get_selected_text(&self) -> Option<String> {
+        if let Some((start, end)) = self.get_selection() {
+            Some(self.value[start..end].to_string())
+        } else {
+            None
+        }
     }
 }
 
@@ -86,16 +129,99 @@ pub fn handle_text_input_keyboard(
     };
 
     let mut changed = false;
+    let ctrl_pressed = keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
 
-    // Handle backspace
-    if keyboard.just_pressed(KeyCode::Backspace) && !input.value.is_empty() {
-        input.value.pop();
-        changed = true;
+    // Handle special key combinations first
+    if ctrl_pressed {
+        if keyboard.just_pressed(KeyCode::KeyA) {
+            // Ctrl+A - Select all
+            input.select_all();
+            changed = true;
+        } else if keyboard.just_pressed(KeyCode::KeyC) {
+            // Ctrl+C - Copy selection
+            if let Some(selected_text) = input.get_selected_text() {
+                if let Ok(mut clipboard) = Clipboard::new() {
+                    let _ = clipboard.set_text(selected_text);
+                }
+            }
+        } else if keyboard.just_pressed(KeyCode::KeyV) {
+            // Ctrl+V - Paste
+            if let Ok(mut clipboard) = Clipboard::new() {
+                if let Ok(clipboard_text) = clipboard.get_text() {
+                    // Delete selection if any
+                    input.delete_selection();
+
+                    // Insert clipboard text at cursor position
+                    let remaining_capacity = input.max_length.saturating_sub(input.value.len());
+                    let text_to_insert = if clipboard_text.len() > remaining_capacity {
+                        &clipboard_text[..remaining_capacity]
+                    } else {
+                        &clipboard_text
+                    };
+
+                    let cursor_pos = input.cursor_position;
+                    input.value.insert_str(cursor_pos, text_to_insert);
+                    input.cursor_position += text_to_insert.len();
+                    changed = true;
+                }
+            }
+        }
+    } else {
+        // Handle backspace
+        if keyboard.just_pressed(KeyCode::Backspace) {
+            if input.delete_selection() {
+                changed = true;
+            } else if input.cursor_position > 0 {
+                input.cursor_position -= 1;
+                let cursor_pos = input.cursor_position;
+                input.value.remove(cursor_pos);
+                changed = true;
+            }
+        }
+
+        // Handle delete
+        if keyboard.just_pressed(KeyCode::Delete) {
+            if input.delete_selection() {
+                changed = true;
+            } else if input.cursor_position < input.value.len() {
+                let cursor_pos = input.cursor_position;
+                input.value.remove(cursor_pos);
+                changed = true;
+            }
+        }
+
+        // Handle left arrow
+        if keyboard.just_pressed(KeyCode::ArrowLeft) {
+            input.clear_selection();
+            if input.cursor_position > 0 {
+                input.cursor_position -= 1;
+            }
+        }
+
+        // Handle right arrow
+        if keyboard.just_pressed(KeyCode::ArrowRight) {
+            input.clear_selection();
+            if input.cursor_position < input.value.len() {
+                input.cursor_position += 1;
+            }
+        }
+
+        // Handle home key
+        if keyboard.just_pressed(KeyCode::Home) {
+            input.clear_selection();
+            input.cursor_position = 0;
+        }
+
+        // Handle end key
+        if keyboard.just_pressed(KeyCode::End) {
+            input.clear_selection();
+            input.cursor_position = input.value.len();
+        }
     }
 
     // Handle keyboard events for text input
     for event in keyboard_events.read() {
-        if !event.state.is_pressed() {
+        if !event.state.is_pressed() || ctrl_pressed {
             continue;
         }
 
@@ -103,10 +229,19 @@ pub fn handle_text_input_keyboard(
         if let Some(text_char) = keycode_to_char(
             event.key_code,
             keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight),
-        ) && input.value.len() < input.max_length
-        {
-            input.value.push(text_char);
-            changed = true;
+        ) {
+            // Delete selection if any
+            if input.delete_selection() {
+                changed = true;
+            }
+
+            // Insert character at cursor position
+            if input.value.len() < input.max_length {
+                let cursor_pos = input.cursor_position;
+                input.value.insert(cursor_pos, text_char);
+                input.cursor_position += 1;
+                changed = true;
+            }
         }
     }
 
