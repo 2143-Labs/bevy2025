@@ -3,7 +3,7 @@ use shared::{
     event::{client::SpawnProjectile, server::CastSkillUpdate, NetEntId, PlayerId, UDPacketEvent},
     net_components::{ents::SendNetworkTranformUpdates, make_npc, ours::ControlledBy},
     netlib::ServerNetworkingResources,
-    physics::terrain::{TerrainParams, NOISE_SCALE_FACTOR},
+    physics::terrain::TerrainParams,
     projectile::{ProjectileAI, ProjectileSource},
     skills::{
         animations::{CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince},
@@ -244,10 +244,10 @@ fn on_unit_finish_cast(
                     let random_xy =
                         Vec2::new(rand::random_range(-5.0..5.0), rand::random_range(-5.0..5.0))
                             .normalize()
-                            * 5.0;
+                            * 2.0;
 
                     let transform = Transform::from_translation(
-                        transform.translation + Vec3::new(random_xy.x, 0.0, random_xy.y),
+                        transform.translation + Vec3::new(random_xy.x, -4.0, random_xy.y),
                     );
 
                     info!(

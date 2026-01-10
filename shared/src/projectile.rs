@@ -1,11 +1,9 @@
 use avian3d::prelude::{Collider, CollisionEventsEnabled, Sensor};
 use bevy::prelude::*;
 
-use noise::NoiseFn;
-
 use crate::{
     event::client::SpawnProjectile,
-    physics::terrain::{TerrainParams, NOISE_SCALE_FACTOR},
+    physics::terrain::TerrainParams,
     skills::{Skill, SkillSource},
     CurrentTick, BASE_TICKS_PER_SECOND,
 };

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use avian3d::prelude::{LinearVelocity, Rotation};
+use avian3d::prelude::{ColliderConstructor, LinearVelocity, RigidBody, Rotation};
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use dashmap::DashMap;
 use shared::{
@@ -154,7 +154,9 @@ impl Plugin for NetworkingPlugin {
             )
             .add_systems(
                 Update,
-                send_heartbeat
+                // do on_tower_sceneroot_complete less often because it requires all children to be
+                // loaded
+                (on_tower_sceneroot_complete, send_heartbeat)
                     .run_if(on_timer(Duration::from_millis(200)))
                     .run_if(in_state(NetworkGameState::ClientConnected)),
             )
@@ -431,12 +433,47 @@ fn on_special_unit_spawn_tower(
     mut commands: Commands,
     mut unit_query: Query<(Entity, &NetEntId, &Tower), With<NeedsClientConstruction>>,
     model_assets: Res<WorldAssets>,
+    //test
 ) {
     for (entity, _ent_id, _tower) in unit_query.iter_mut() {
+        info!(?entity, "Spawning tower entity");
         commands
             .entity(entity)
             .insert((SceneRoot(model_assets.stone_tower.clone()),))
             .remove::<NeedsClientConstruction>();
+        //info!("Tower spawned, checking children:");
+        //for child in children.iter_ancestors(entity) {
+        //info!("Child: {:?}", child);
+        //}
+        //world.commands().entity(entity).insert((
+        //RigidBody::Static,
+        //ColliderConstructor::TrimeshFromMesh
+        //));
+    }
+}
+
+fn on_tower_sceneroot_complete(
+    mut commands: Commands,
+    mesh_we_just_found: Query<(Entity, &ChildOf), Added<Mesh3d>>,
+    parent_of_mesh: Query<(Entity, &ChildOf), Without<Mesh3d>>,
+    all_tower_ents: Query<Entity, With<Tower>>,
+) {
+    for (entity, child_of) in mesh_we_just_found.iter() {
+        info!(
+            ?entity,
+            ?child_of,
+            "Checking tower sceneroot child mesh added"
+        );
+        if let Ok((par_par_ent, par_par_ent_child_of)) = parent_of_mesh.get(child_of.0) {
+            info!(?par_par_ent, ?par_par_ent_child_of, "Tower parent entity");
+            if let Ok((_hope_scene, hop_cof)) = parent_of_mesh.get(par_par_ent_child_of.0) {
+                if let Ok(_omp) = all_tower_ents.get(hop_cof.0) {
+                    commands
+                        .entity(entity)
+                        .insert((RigidBody::Static, ColliderConstructor::TrimeshFromMesh));
+                }
+            }
+        }
     }
 }
 

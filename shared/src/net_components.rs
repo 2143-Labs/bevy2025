@@ -211,7 +211,7 @@ pub fn make_man(transform: Transform, owner: ControlledBy) -> SpawnUnit2 {
         ents::CanAssumeControl.to_net_component(),
         transform.to_net_component(),
         CharacterControllerBundle::new(Collider::capsule(1.0, 2.0), Vec3::NEG_Y * 9.81)
-            .with_movement(45.0, 0.9, 4.0, std::f32::consts::PI * 0.20)
+            .with_movement(45.0, 0.9, 17.0, std::f32::consts::PI * 0.20)
             .to_net_component(),
         //avian3d::prelude::RigidBody::Dynamic.to_net_component(),
         //avian3d::prelude::Collider::sphere(3.0).to_net_component(),

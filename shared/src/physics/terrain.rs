@@ -42,6 +42,7 @@ type TerrainPerlinMap2d = fn(f32, f32, &Perlin) -> f32;
 /// function pointers are used for efficiency in sampling noise functions
 type TerrainPerlinMap3d = fn(f32, f32, f32, &Perlin) -> f32;
 
+#[allow(unused)]
 /// Terrain similar to Minecraft's use of Perlin noise with multiple octaves
 pub struct TerrainPerlin {
     /// 2d heightmap given x,z position output (-1.0 to 1.0)
