@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
       "WebFetch(domain:bevy.org)",
@@ -18,7 +19,15 @@
       "Bash(nul)",
       "Bash(cargo doc:*)",
       "Bash(cargo rustdoc:*)",
-      "Bash(cargo tree:*)"
+      "Bash(cargo tree:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo clean:*)",
+      "Bash(rustc --version)",
+      "Bash(rustup:*)",
+      "Bash(rustc:*)",
+      "Bash(cargo --version)",
+      "Bash(.targetdebugclient.exe)",
+      "Bash(./target/debug/client.exe)"
     ],
     "deny": [],
     "ask": []
