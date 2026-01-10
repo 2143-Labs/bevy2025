@@ -20,6 +20,10 @@
       .invisible {
         display: none;
       }
+      #loading {
+          font-family: Arial, sans-serif;
+          font-size: 24px;
+      }
     </style>
     <title>ROTS</title>
   </head>
@@ -29,7 +33,8 @@
     init()
   </script>
   <body>
-    <h1 id="loading">ROTS is loading</h1>
+    <p id="loading">ROTS is loading</p>
+    <canvas id="bevy-canvas" width="800" height="600"></canvas>
     <p id="server_ip" class="invisible">71.126.177.34</p>
     <p id="server_port" class="invisible">25555</p>
   </body>
