@@ -17,7 +17,7 @@ use shared::{
         },
     },
     net_components::{
-        ents::{Ball, CanAssumeControl, ItemDrop, Man, NPC, PlayerCamera},
+        ents::{Ball, CanAssumeControl, ItemDrop, Man, NPC, PlayerCamera, Tower},
         foreign::ComponentColor,
         ours::{PlayerColor, PlayerName},
     },
@@ -30,7 +30,7 @@ use shared::{
 use std::sync::Arc;
 
 use crate::{
-    assets::{FontAssets, ModelAssets},
+    assets::{FontAssets, ModelAssets, WorldAssets},
     camera::LocalCamera,
     game_state::{GameState, NetworkGameState, TerrainEntity},
     notification::Notification,
@@ -145,6 +145,7 @@ impl Plugin for NetworkingPlugin {
                     on_special_unit_spawn_man,
                     on_special_unit_spawn_npc,
                     on_special_unit_spawn_loot,
+                    on_special_unit_spawn_tower,
                     receive_heartbeat,
                     receive_tick_just_happened,
                     receive_challenge,
@@ -423,6 +424,19 @@ fn on_special_unit_spawn_remote_camera(
             },
             MyNetEntParentId(ent_id.0),
         ));
+    }
+}
+
+fn on_special_unit_spawn_tower(
+    mut commands: Commands,
+    mut unit_query: Query<(Entity, &NetEntId, &Tower), With<NeedsClientConstruction>>,
+    model_assets: Res<WorldAssets>,
+) {
+    for (entity, _ent_id, _tower) in unit_query.iter_mut() {
+        commands
+            .entity(entity)
+            .insert((SceneRoot(model_assets.stone_tower.clone()),))
+            .remove::<NeedsClientConstruction>();
     }
 }
 

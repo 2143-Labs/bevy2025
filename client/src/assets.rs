@@ -12,7 +12,8 @@ impl Plugin for AssetsPlugin {
                 .continue_to_state(GameState::MainMenu)
                 .load_collection::<ImageAssets>()
                 .load_collection::<FontAssets>()
-                .load_collection::<ModelAssets>(),
+                .load_collection::<ModelAssets>()
+                .load_collection::<WorldAssets>(),
         );
     }
 }
@@ -38,4 +39,11 @@ pub struct ModelAssets {
     // If you want to access specific scenes within the GLTF:
     #[asset(path = "models/g-toilet/scene.gltf#Scene0")]
     pub g_toilet_scene: Handle<Scene>,
+}
+
+#[derive(AssetCollection, Resource)]
+pub struct WorldAssets {
+    // If you want to access specific scenes within the GLTF:
+    #[asset(path = "models/tower/stone-tower001.gltf#Scene0")]
+    pub stone_tower: Handle<Scene>,
 }

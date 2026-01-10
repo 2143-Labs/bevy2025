@@ -241,6 +241,35 @@ fn on_unit_finish_cast(
                 }
 
                 Skill::Blink => {
+                    let random_xy =
+                        Vec2::new(rand::random_range(-5.0..5.0), rand::random_range(-5.0..5.0))
+                            .normalize()
+                            * 5.0;
+
+                    let transform = Transform::from_translation(
+                        transform.translation + Vec3::new(random_xy.x, 0.0, random_xy.y),
+                    );
+
+                    info!(
+                        ?net_ent_id,
+                        "Spawning test NPC at {:?}", transform.translation
+                    );
+                    use crate::ToNetComponent;
+                    use shared::net_components::ents::Tower;
+                    let npc = shared::event::client::SpawnUnit2::new_with_vec(vec![
+                        transform.to_net_component(),
+                        Tower.to_net_component(),
+                        //avian3d::prelude::RigidBody::Dynamic.to_net_component(),
+                        //avian3d::prelude::Collider::sphere(3.0).to_net_component(),
+                        //avian3d::prelude::Mass(70.0).to_net_component(),
+                    ]);
+
+                    npc.clone().spawn_entity(&mut commands);
+                    let event = shared::netlib::EventToClient::SpawnUnit2(npc);
+                    for client_endpoint in &connected_clients {
+                        sr.send_outgoing_event_next_tick(client_endpoint.0, &event);
+                    }
+
                     info!(
                         ?net_ent_id,
                         "Blink skill cast complete - no projectiles to spawn"

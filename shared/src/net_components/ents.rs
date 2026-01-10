@@ -34,6 +34,9 @@ pub struct ItemDrop {
     pub source: Option<NetEntId>,
 }
 
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct Tower;
+
 //include!(concat!(env!("OUT_DIR"), "/net_components_ents.rs"));
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -45,6 +48,7 @@ pub enum NetComponentEnts {
     Man(Man),
     NPC(NPC),
     ItemDrop(ItemDrop),
+    Tower(Tower),
 }
 
 impl NetComponentEnts {
@@ -69,6 +73,9 @@ impl NetComponentEnts {
                 entity.insert(c);
             }
             NetComponentEnts::NPC(c) => {
+                entity.insert(c);
+            }
+            NetComponentEnts::Tower(c) => {
                 entity.insert(c);
             }
         }
@@ -102,6 +109,10 @@ impl NetComponentEnts {
             ))
         } else if type_id == std::any::TypeId::of::<NPC>() {
             Some(NetComponentEnts::NPC(unsafe { ptr.deref::<NPC>() }.clone()))
+        } else if type_id == std::any::TypeId::of::<Tower>() {
+            Some(NetComponentEnts::Tower(
+                unsafe { ptr.deref::<Tower>() }.clone(),
+            ))
         } else {
             None
         }
@@ -147,5 +158,11 @@ impl ToNetComponent for ItemDrop {
 impl ToNetComponent for NPC {
     fn to_net_component(self) -> super::NetComponent {
         super::NetComponent::Ents(NetComponentEnts::NPC(self))
+    }
+}
+
+impl ToNetComponent for Tower {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ents(NetComponentEnts::Tower(self))
     }
 }
