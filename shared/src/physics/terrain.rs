@@ -177,7 +177,7 @@ fn standard_density(x: f32, y: f32, z: f32, perlin: &Perlin) -> f32 {
 
     let vec = Vec3::new(val_x as f32, val_y as f32, val_z as f32);
     let density = vec.length() / (3f32).sqrt(); // normalize to 0.0 to 1.0
-    // remap to -0.4 to 1.0
+                                                // remap to -0.4 to 1.0
     let mut density = density * (1.0 + CAVEY_NESS) - CAVEY_NESS;
 
     // more density as we go down in y
@@ -207,19 +207,17 @@ impl TerrainParams {
 impl TerrainPerlin {
     /// Given an xy, return "Offset" and "Squash" factors for terrain height
     fn sample_height_partial(&self, x: f32, z: f32) -> (f32, f32) {
-        let continentalness =
-            (self.transform_continentalness)(x, z, &self.perlin_continentalness);
+        let continentalness = (self.transform_continentalness)(x, z, &self.perlin_continentalness);
         let erosion = (self.transform_erosion)(x, z, &self.perlin_erosion);
-        let peaks_valleys =
-            (self.transform_peaks_valleys)(x, z, &self.perlin_peaks_valleys);
+        let peaks_valleys = (self.transform_peaks_valleys)(x, z, &self.perlin_peaks_valleys);
 
         // Combine factors to get final height
         let mut height = continentalness * erosion;
         //scale height so this doesn't go beyond -1.0 to 1.0 too much
         height *= 0.9;
         height += peaks_valleys * 0.2;
-        height *= 70.0;
-        height += 10.0;
+        height *= 10.0;
+        height += 5.0;
 
         (height, 0.0)
     }
