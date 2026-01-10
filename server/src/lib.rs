@@ -455,6 +455,7 @@ fn on_disconnect_packet(
     endpoint_mapping: Res<EndpointToPlayerId>,
 ) {
     for dp in disconnect_packets.read() {
+        info!("Received disconnect packet from {:?}", dp.endpoint);
         if let Some(player_id) = endpoint_mapping.map.get(&dp.endpoint) {
             on_disconnect.write(PlayerDisconnected {
                 id: *player_id,
@@ -532,6 +533,8 @@ fn on_player_disconnect(
                 });
             }
         }
+
+        info!("Player {:?} disconnected: {}", player.id, player.reason);
 
         for (c_ent, net_client, player_id) in &clients {
             sr.send_outgoing_event_next_tick_batch(net_client.0, &events);
