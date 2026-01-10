@@ -6,9 +6,7 @@ use std::time::Duration;
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
     event::{PlayerId, UDPacketEvent, client::RequestScoreboardResponse},
-    netlib::{
-        ClientNetworkingResources, MainServerEndpoint, NetworkingStats, send_outgoing_event_now,
-    },
+    netlib::{ClientNetworkingResources, FakePingSettings, MainServerEndpoint, NetworkingStats},
 };
 
 /// Marker for the paused menu root entity
@@ -126,13 +124,14 @@ pub fn spawn_scoreboard_menu(mut commands: Commands) {
 pub fn send_scoreboard_request_packet(
     sr: Res<ClientNetworkingResources>,
     mse: Res<MainServerEndpoint>,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
     // send packet
     let event = shared::event::server::RequestScoreboard {};
-    send_outgoing_event_now(
-        &sr,
+    sr.send_outgoing_event_now(
         mse.0,
         &shared::netlib::EventToServer::RequestScoreboard(event),
+        fake_ping.as_deref().cloned(),
     );
 }
 
@@ -257,8 +256,9 @@ pub fn update_scoreboard_menu(
                     // Ping text
                     entry_parent.spawn({
                         let (text, font, color) = menu_button_text(format!(
-                            "Ping: {} cl ms / {} sv ms",
-                            ping.server_challenged_ping_ms, ping.client_reported_ping_ms
+                            "Ping: {:.1} cl ms / {:.1} sv ms",
+                            ping.server_challenged_ping_microsec as f32 / 1000.0,
+                            ping.client_reported_ping_microsec as f32 / 1000.0
                         ));
                         (
                             Node {
@@ -271,7 +271,7 @@ pub fn update_scoreboard_menu(
                     });
                 });
 
-            info!(
+            trace!(
                 "Added scoreboard entry for player: {} with ping: {:?}",
                 player_name, ping
             );

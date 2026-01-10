@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use message_io::network::Endpoint;
+use crate::{
+    message_io::network::Endpoint,
+    netlib::{EndpointGeneral, WebSocketEndpoint},
+};
 use serde::{Deserialize, Serialize};
 
 pub mod client;
@@ -50,14 +53,26 @@ impl MyNetEntParentId {
 #[derive(Debug, Clone, Message)]
 pub struct EventFromEndpoint<E> {
     pub event: E,
-    pub endpoint: Endpoint,
+    pub endpoint: EndpointGeneral,
 }
 
 /// Event Reader with endpoint data.
 pub type UDPacketEvent<'w, 's, E> = MessageReader<'w, 's, EventFromEndpoint<E>>;
 
 impl<E> EventFromEndpoint<E> {
-    pub fn new(endpoint: Endpoint, e: E) -> Self {
+    pub fn new(endpoint: EndpointGeneral, e: E) -> Self {
         EventFromEndpoint { event: e, endpoint }
+    }
+    pub fn new_udp(endpoint: Endpoint, e: E) -> Self {
+        EventFromEndpoint {
+            event: e,
+            endpoint: EndpointGeneral::UDP(endpoint),
+        }
+    }
+    pub fn new_ws(endpoint: WebSocketEndpoint, e: E) -> Self {
+        EventFromEndpoint {
+            event: e,
+            endpoint: EndpointGeneral::WebSocket(endpoint),
+        }
     }
 }

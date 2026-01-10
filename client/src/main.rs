@@ -10,8 +10,8 @@ mod network;
 pub mod notification;
 mod physics;
 mod picking;
+mod projectile;
 mod remote_players;
-mod steamworks;
 mod terrain;
 mod ui;
 mod water;
@@ -19,10 +19,14 @@ mod water;
 #[cfg(feature = "web")]
 mod web;
 
+#[cfg(feature = "steam")]
+use bevy_steamworks::AppId;
+#[cfg(feature = "steam")]
+mod steamworks;
+
 use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
 
 use assets::AssetsPlugin;
-use bevy_steamworks::{AppId, FriendFlags};
 use camera::CameraPlugin;
 use clap::Parser;
 use debug::DebugPlugin;
@@ -43,6 +47,17 @@ struct ClapArgs {
     print_config: bool,
     #[clap(long)]
     autoconnect: Option<String>,
+    /// If set, will simulate a fake ping to the server with the given ms delay. See also
+    /// --fake-ping-inbound, --fake-ping-outbound, --fake-ping-jitter
+    #[clap(long, short = 'p')]
+    fake_ping: Option<u64>,
+    #[clap(long)]
+    fake_ping_inbound: Option<u64>,
+    #[clap(long)]
+    fake_ping_outbound: Option<u64>,
+    /// If set, will add jitter equal to `0..fake_ping` to the fake ping with the given ms max jitter
+    #[clap(long)]
+    fake_ping_jitter: Option<u64>,
 }
 
 fn main() {
@@ -65,8 +80,17 @@ fn main() {
 
     let mut app = App::new();
 
+    #[cfg(feature = "web")]
+    {
+        app.add_plugins(web::WebPlugin);
+    }
+
+    #[cfg(not(feature = "web"))]
+    {
+        app.add_plugins(DefaultPlugins);
+    }
+
     app.add_plugins((
-        DefaultPlugins,
         game_state::StatePlugin,
         AssetsPlugin,
         DebugPlugin,
@@ -90,15 +114,11 @@ fn main() {
         shared::character_controller::CharacterControllerPlugin,
         character_controller_client::ClientCharacterControllerPlugin,
         animations::CharacterAnimationPlugin,
+        projectile::ProjectilePlugin,
     ))
     .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue
     .insert_resource(args)
     .add_systems(Startup, check_all_clap_args);
-
-    #[cfg(feature = "web")]
-    {
-        app.add_plugins(web::WebPlugin);
-    }
 
     #[cfg(feature = "steam")]
     {
@@ -106,14 +126,14 @@ fn main() {
             .add_systems(Startup, |client: Res<bevy_steamworks::Client>| {
                 let app_owner = client.apps().app_owner();
                 info!("App Owner Steam ID: {:?}", app_owner);
-                for friend in client.friends().get_friends(FriendFlags::IMMEDIATE) {
-                    info!(
-                        "Friend: {} = {:?} {:?}",
-                        friend.name(),
-                        friend.id(),
-                        friend.state()
-                    );
-                }
+                //for friend in client.friends().get_friends(FriendFlags::IMMEDIATE) {
+                //info!(
+                //"Friend: {} = {:?} {:?}",
+                //friend.name(),
+                //friend.id(),
+                //friend.state()
+                //);
+                //}
             });
     }
 

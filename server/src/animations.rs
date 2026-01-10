@@ -1,10 +1,13 @@
 use bevy::prelude::*;
 use shared::{
     event::{client::SpawnProjectile, server::CastSkillUpdate, NetEntId, PlayerId, UDPacketEvent},
-    net_components::{ents::SendNetworkTranformUpdates, ours::ControlledBy},
-    netlib::{send_outgoing_event_next_tick, ServerNetworkingResources},
-    skills::animations::{
-        CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince,
+    net_components::{ents::SendNetworkTranformUpdates, make_npc, ours::ControlledBy},
+    netlib::ServerNetworkingResources,
+    physics::terrain::{TerrainParams, NOISE_SCALE_FACTOR},
+    projectile::{ProjectileAI, ProjectileSource},
+    skills::{
+        animations::{CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince},
+        Skill,
     },
     CurrentTick,
 };
@@ -88,13 +91,13 @@ fn on_unit_begin_skill_use(
                     }
                 }
                 // Stopping the current skill
-                info!(?player_id, ?ent_id, "Stopping skill casting early");
+                trace!(?player_id, ?ent_id, "Stopping skill casting early");
                 *existing_cast = new_using_skill;
                 commands.entity(entity).remove::<CastComplete>();
                 // send update to clients as update_entity
                 // TODO
             } else {
-                info!(?player_id, ?ent_id, "Beginning skill casting");
+                trace!(?player_id, ?ent_id, "Beginning skill casting");
                 commands.entity(entity).insert(new_using_skill);
                 commands.entity(entity).remove::<CastComplete>();
             }
@@ -126,7 +129,7 @@ fn on_unit_begin_skill_use(
                 // Don't send back to the original sender
                 continue;
             }
-            send_outgoing_event_next_tick(&sr, client_endpoint.0, &event_to_send);
+            sr.send_outgoing_event_next_tick(client_endpoint.0, &event_to_send);
         }
     }
 }
@@ -136,11 +139,11 @@ fn on_unit_finish_cast(
     query: Query<(&Transform, &NetEntId), With<UsingSkillSince>>,
     _time: Res<Time>,
     server_tick: Res<CurrentTick>,
-    _commands: Commands,
-    _meshes: ResMut<Assets<Mesh>>,
-    _materials: ResMut<Assets<StandardMaterial>>,
+    mut commands: Commands,
     connected_clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
     sr: Res<ServerNetworkingResources>,
+    mut spawn_projectile_writer: MessageWriter<SpawnProjectile>,
+    terrain: Res<TerrainParams>,
 ) {
     for UnitFinishedSkillCast {
         tick,
@@ -162,20 +165,26 @@ fn on_unit_finish_cast(
                 continue;
             }
 
+            let projectile_source = ProjectileSource {
+                source_entity: *ent_id,
+                skill: skill.skill.clone(),
+                skill_source: skill.source.clone(),
+            };
+
             match &skill.skill {
-                shared::skills::Skill::Spark => {
+                Skill::Spark => {
                     for _spark in 0..6 {
                         let mut path_targets: Vec<Vec3> = vec![];
                         let mut cur_pos = transform.translation;
                         for _target in 0..20 {
                             let mut next_target = Vec3::ZERO;
-                            while next_target.length_squared() < 5.0
-                                || next_target.length_squared() > 8.0
+                            while next_target.length_squared() < 25.0
+                                || next_target.length_squared() > 40.0
                             {
                                 next_target = Vec3::new(
-                                    rand::random_range(-5.0..5.0),
+                                    rand::random_range(-10.0..10.0),
                                     0.0,
-                                    rand::random_range(-5.0..5.0),
+                                    rand::random_range(-10.0..10.0),
                                 );
                             }
                             cur_pos += next_target;
@@ -185,44 +194,133 @@ fn on_unit_finish_cast(
                         let event = SpawnProjectile {
                             spawn_tick: server_tick.0,
                             projectile_origin: transform.translation,
-                            projectile_owner: Some(*net_ent_id),
-                            projectile_type: shared::skills::ProjectileAI::Spark {
+                            projectile_source: projectile_source.clone(),
+                            projectile_type: ProjectileAI::Spark {
                                 projectile_path_targets: path_targets,
                             },
                         };
 
-                        for client_endpoint in &connected_clients {
-                            send_outgoing_event_next_tick(
-                                &sr,
-                                client_endpoint.0,
-                                &shared::netlib::EventToClient::SpawnProjectile(event.clone()),
-                            );
-                        }
+                        spawn_projectile_writer.write(event.clone());
                     }
                 }
-                shared::skills::Skill::Hammerdin => {
+                Skill::Hammerdin => {
                     for hammer in 0..4 {
                         let proj = SpawnProjectile {
                             spawn_tick: server_tick.0,
                             projectile_origin: transform.translation,
-                            projectile_owner: Some(*net_ent_id),
-                            projectile_type: shared::skills::ProjectileAI::HammerDin {
+                            projectile_source: projectile_source.clone(),
+                            projectile_type: ProjectileAI::HammerDin {
                                 init_angle_radians: (hammer as f32) * std::f32::consts::PI / 2.0,
-                                center_point: transform.translation,
                                 speed: 1.0,
                                 spiral_width_modifier: 1.0,
                             },
                         };
 
-                        for client_endpoint in &connected_clients {
-                            send_outgoing_event_next_tick(
-                                &sr,
-                                client_endpoint.0,
-                                &shared::netlib::EventToClient::SpawnProjectile(proj.clone()),
-                            );
-                        }
+                        spawn_projectile_writer.write(proj.clone());
                     }
                 }
+                Skill::SummonTestNPC => {
+                    let random_xy = Vec3::new(
+                        rand::random_range(-5.0..5.0),
+                        0.0,
+                        rand::random_range(-5.0..5.0),
+                    );
+                    let transform = Transform::from_translation(
+                        transform.translation + Vec3::Y * 2.5 + random_xy,
+                    );
+                    info!(
+                        ?net_ent_id,
+                        "Spawning test NPC at {:?}", transform.translation
+                    );
+                    let npc = make_npc(transform);
+                    npc.clone().spawn_entity(&mut commands);
+                    let event = shared::netlib::EventToClient::SpawnUnit2(npc);
+                    for client_endpoint in &connected_clients {
+                        sr.send_outgoing_event_next_tick(client_endpoint.0, &event);
+                    }
+                }
+
+                Skill::Blink => {
+                    info!(
+                        ?net_ent_id,
+                        "Blink skill cast complete - no projectiles to spawn"
+                    );
+                }
+
+                Skill::WinterOrb => {
+                    let aim_dir = transform.forward() * 1.0 + Vec3::Y * 0.2;
+                    let proj = SpawnProjectile {
+                        spawn_tick: server_tick.0,
+                        projectile_origin: transform.translation + aim_dir.normalize() * 1.5,
+                        projectile_source: projectile_source.clone(),
+                        projectile_type: ProjectileAI::WinterOrbMain {
+                            target: aim_dir.normalize(),
+                        },
+                    };
+                    spawn_projectile_writer.write(proj.clone());
+                }
+                Skill::RainOfArrows => {
+                    // This summons the spawner arrow first which then spawns more arrows
+                    let mut ground_target = transform.translation + transform.forward() * 10.0;
+
+                    ground_target.y = terrain
+                        .perlin()
+                        .sample_height(ground_target.x, ground_target.z)
+                        * terrain.max_height_delta;
+
+                    let sky_target =
+                        Vec3::new(ground_target.x, ground_target.y + 20.0, ground_target.z)
+                            - transform.forward() * 5.0;
+
+                    let proj = SpawnProjectile {
+                        spawn_tick: server_tick.0,
+                        projectile_origin: transform.translation + Vec3::Y * 1.5,
+                        projectile_source: projectile_source.clone(),
+                        projectile_type: ProjectileAI::RainOfArrowsSpawner {
+                            ground_target,
+                            sky_target,
+                        },
+                    };
+                    spawn_projectile_writer.write(proj.clone());
+                }
+
+                Skill::BasicBowAttack => {
+                    let aim_dir = transform.forward();
+                    let proj = SpawnProjectile {
+                        spawn_tick: server_tick.0,
+                        projectile_origin: transform.translation + aim_dir.normalize() * 1.5,
+                        projectile_source: projectile_source.clone(),
+                        projectile_type: ProjectileAI::BasicBowAttack {
+                            direction_vector: aim_dir.normalize(),
+                        },
+                    };
+                    spawn_projectile_writer.write(proj.clone());
+                }
+
+                Skill::HomingArrows => {
+                    //let aim_dir = transform.forward();
+                    //let proj = SpawnProjectile {
+                    //spawn_tick: server_tick.0,
+                    //projectile_origin: transform.translation + aim_dir.normalize() * 1.5,
+                    //projectile_source: projectile_source.clone(),
+                    //projectile_type: ProjectileAI::Homing { target_entity: (), turn_rate_deg_per_sec: () }
+                    //};
+                    //spawn_projectile_writer.write(proj.clone());
+                }
+
+                Skill::Frostbolt => {
+                    let aim_dir = transform.forward() * 1.0 + Vec3::Y * 0.1;
+                    let proj = SpawnProjectile {
+                        spawn_tick: server_tick.0,
+                        projectile_origin: transform.translation + aim_dir.normalize() * 1.5,
+                        projectile_source: projectile_source.clone(),
+                        projectile_type: ProjectileAI::Frostbolt {
+                            target: aim_dir.normalize(),
+                        },
+                    };
+                    spawn_projectile_writer.write(proj.clone());
+                }
+
                 _ => {
                     warn!(?net_ent_id, ?skill.skill, "Received UnitFinishedSkillCast for unsupported skill");
                     break;

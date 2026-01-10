@@ -6,9 +6,9 @@ use crate::items::{Inventory, Item, ItemId, ItemInInventory, ItemPlacement, Skil
 use crate::net_components::PlayerConnectionInfo;
 use crate::netlib::{NetworkingResources, Tick};
 use crate::physics::terrain::TerrainParams;
-use crate::skills::ProjectileAI;
+use crate::projectile::{ProjectileAI, ProjectileSource};
 use crate::{event::EventFromEndpoint, net_components::NetComponent};
-use crate::{PlayerPing, ServerTPS};
+use crate::{PlayerPing, PlayerPingInteger, ServerTPS};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -35,6 +35,17 @@ pub struct UpdateUnit2 {
     pub changed_components: Vec<NetComponent>,
     pub new_component: Vec<NetComponent>,
     pub removed_components: Vec<String>,
+}
+
+impl Default for UpdateUnit2 {
+    fn default() -> Self {
+        Self {
+            net_ent_id: NetEntId::none(),
+            changed_components: Vec::new(),
+            new_component: Vec::new(),
+            removed_components: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
@@ -102,7 +113,7 @@ pub struct HeartbeatChallenge {
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct RequestScoreboardResponse {
     pub player_names: HashMap<PlayerId, String>,
-    pub player_pings: HashMap<PlayerId, PlayerPing<i16>>,
+    pub player_pings: HashMap<PlayerId, PlayerPing<PlayerPingInteger>>,
 }
 
 // TODO impl
@@ -110,7 +121,7 @@ pub struct RequestScoreboardResponse {
 pub struct SpawnProjectile {
     pub spawn_tick: Tick,
     pub projectile_origin: Vec3,
-    pub projectile_owner: Option<NetEntId>,
+    pub projectile_source: ProjectileSource,
     pub projectile_type: ProjectileAI,
 }
 

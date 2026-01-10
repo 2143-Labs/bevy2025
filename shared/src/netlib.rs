@@ -1,13 +1,14 @@
 use bevy::prelude::*;
-use message_io::{
-    network::{Endpoint, NetEvent, Transport},
-    node::{NodeEvent, NodeHandler},
-};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     collections::VecDeque,
     sync::{atomic::AtomicUsize, Arc, RwLock},
+};
+
+use crate::message_io::{
+    network::{Endpoint, NetEvent, Transport},
+    node::{NodeEvent, NodeHandler},
 };
 
 pub struct NetworkingStats {
@@ -124,12 +125,15 @@ use dashmap::DashMap;
 
 #[derive(Resource, Clone)]
 pub struct NetworkingResources<TI, TO> {
-    pub event_list_incoming: Arc<RwLock<Vec<(Endpoint, TI)>>>,
+    pub event_list_incoming_udp: Arc<RwLock<Vec<(Endpoint, TI)>>>,
+    pub event_list_incoming_websocket: Arc<RwLock<Vec<(WebSocketEndpoint, TI)>>>,
     // TODO make this hashmap instead
-    pub event_list_outgoing: Arc<DashMap<Endpoint, Vec<TO>>>,
+    pub event_list_outgoing_udp: Arc<DashMap<Endpoint, Vec<TO>>>,
+    pub event_list_outgoing_websocket: Arc<DashMap<WebSocketEndpoint, Vec<TO>>>,
     pub reliable_packet_ids_seen: Arc<RwLock<HashMap<PacketIdentifier, Tick>>>,
     pub networking_stats: Arc<NetworkingStats>,
-    pub handler: NodeHandler<()>,
+    pub handler: Option<NodeHandler<()>>,
+    pub con_str: Arc<(String, u16)>,
 }
 
 /// Networking resources held by the client
@@ -139,7 +143,16 @@ pub type ServerNetworkingResources = NetworkingResources<EventToServer, EventToC
 
 /// Exists only on the client, holds the main server endpoint to which we are connected
 #[derive(Resource, Clone)]
-pub struct MainServerEndpoint(pub Endpoint);
+pub struct MainServerEndpoint(pub EndpointGeneral);
+
+impl MainServerEndpoint {
+    pub fn as_websocket(&self) -> Option<WebSocketEndpoint> {
+        match &self.0 {
+            EndpointGeneral::WebSocket(ws_endpoint) => Some(*ws_endpoint),
+            EndpointGeneral::UDP(_) => None,
+        }
+    }
+}
 
 /// This type is only used for the inital connection, and then it is removed.
 #[derive(Resource, Debug)]
@@ -187,7 +200,7 @@ impl NetworkingEvent for EventToClient {}
 type PacketIdentifier = u32;
 type DuplicationIdentifier = u8;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub enum EventGroupingOwned<T> {
     Single(T),
     Batch(Vec<T>),
@@ -201,14 +214,119 @@ pub enum EventGroupingRef<'a, T> {
     Reliable(PacketIdentifier, DuplicationIdentifier, Tick, &'a [T]),
 }
 
-pub fn send_outgoing_event_now<TI, TO: NetworkingEvent>(
+impl<TI: NetworkingEvent, TO: NetworkingEvent> NetworkingResources<TI, TO> {
+    pub fn send_outgoing_event_now(
+        &self,
+        endpoint: EndpointGeneral,
+        event: &TO,
+        delay: Option<FakePingSettings>,
+    ) {
+        match endpoint {
+            EndpointGeneral::WebSocket(ws_endpoint) => {
+                // TODO make this faster- but queue for now
+                self.event_list_outgoing_websocket
+                    .entry(ws_endpoint)
+                    .or_default()
+                    .push(event.clone());
+            }
+            EndpointGeneral::UDP(udp_endpoint) => {
+                if let Some(delay) = delay {
+                    let resources = self.clone();
+                    let event = event.clone();
+                    std::thread::spawn(move || {
+                        let delay_ms = delay.get_delay_to_server();
+                        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                        send_outgoing_event_now_udp(&resources, udp_endpoint, &event);
+                    });
+                    return;
+                }
+                send_outgoing_event_now_udp(self, udp_endpoint, event)
+            }
+        }
+    }
+
+    pub fn send_outgoing_event_now_batch(
+        &self,
+        endpoint: EndpointGeneral,
+        events: &[TO],
+        delay: Option<FakePingSettings>,
+    ) {
+        match endpoint {
+            EndpointGeneral::WebSocket(ws_endpoint) => {
+                // TODO make this faster- but queue for now
+                self.event_list_outgoing_websocket
+                    .entry(ws_endpoint)
+                    .or_default()
+                    .extend_from_slice(events);
+            }
+            EndpointGeneral::UDP(udp_endpoint) => {
+                if let Some(delay) = delay {
+                    let resources = self.clone();
+                    let events = events.to_vec();
+                    std::thread::spawn(move || {
+                        let delay_ms = delay.get_delay_to_server();
+                        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                        send_outgoing_event_now_batch_udp(&resources, udp_endpoint, &events);
+                    });
+                    return;
+                }
+                send_outgoing_event_now_batch_udp(self, udp_endpoint, events)
+            }
+        }
+    }
+
+    pub fn send_outgoing_event_next_tick(&self, endpoint: EndpointGeneral, event: &TO) {
+        match endpoint {
+            EndpointGeneral::WebSocket(ws_endpoint) => {
+                self.event_list_outgoing_websocket
+                    .entry(ws_endpoint)
+                    .or_default()
+                    .push(event.clone());
+            }
+            EndpointGeneral::UDP(udp_endpoint) => {
+                send_outgoing_event_next_tick_udp(self, udp_endpoint, event)
+            }
+        }
+    }
+    pub fn send_outgoing_event_next_tick_batch(&self, endpoint: EndpointGeneral, events: &[TO]) {
+        match endpoint {
+            EndpointGeneral::WebSocket(ws_endpoint) => {
+                self.event_list_outgoing_websocket
+                    .entry(ws_endpoint)
+                    .or_default()
+                    .extend_from_slice(events);
+            }
+            EndpointGeneral::UDP(udp_endpoint) => {
+                send_outgoing_event_next_tick_batch_udp(self, udp_endpoint, events)
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
+pub struct WebSocketEndpoint {
+    pub socket_addr: std::net::SocketAddr,
+}
+
+#[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
+pub enum EndpointGeneral {
+    WebSocket(WebSocketEndpoint),
+    UDP(Endpoint),
+}
+
+fn send_outgoing_event_now_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     event: &TO,
 ) {
     trace!(?event, "Sending event");
     let event = postcard::to_stdvec(&EventGroupingRef::Single(event)).unwrap();
-    resources.handler.network().send(endpoint, &event);
+    resources
+        .handler
+        .as_ref()
+        .expect("must have udp handler")
+        .network()
+        .send(endpoint, &event);
 
     resources
         .networking_stats
@@ -220,7 +338,7 @@ pub fn send_outgoing_event_now<TI, TO: NetworkingEvent>(
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
-pub fn send_outgoing_event_now_batch<TI, TO: NetworkingEvent>(
+fn send_outgoing_event_now_batch_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     event: &[TO],
@@ -230,7 +348,12 @@ pub fn send_outgoing_event_now_batch<TI, TO: NetworkingEvent>(
     if data.len() > 6000 {
         warn!(data_len = data.len(), "Sending large batch event");
     }
-    resources.handler.network().send(endpoint, &data);
+    resources
+        .handler
+        .as_ref()
+        .expect("must have udp handler")
+        .network()
+        .send(endpoint, &data);
 
     resources
         .networking_stats
@@ -243,13 +366,14 @@ pub fn send_outgoing_event_now_batch<TI, TO: NetworkingEvent>(
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
-fn send_outgoing_event_reliable_internal_chunk<TI, TO: NetworkingEvent>(
+fn send_outgoing_event_reliable_internal_chunk_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     event: &[TO],
     tick: &Tick,
 ) {
     trace!(?event, "Sending doubled batch event");
+    let handler = resources.handler.as_ref().expect("must have udp handler");
 
     let packet_id: PacketIdentifier = rand::random();
     let dedup_id: DuplicationIdentifier = rand::random();
@@ -258,14 +382,14 @@ fn send_outgoing_event_reliable_internal_chunk<TI, TO: NetworkingEvent>(
     ))
     .unwrap();
     let data_len = data.len() * 2;
-    resources.handler.network().send(endpoint, &data);
+    handler.network().send(endpoint, &data);
 
     let dedup_id: DuplicationIdentifier = rand::random();
     let data = postcard::to_stdvec(&EventGroupingRef::Reliable(
         packet_id, dedup_id, *tick, event,
     ))
     .unwrap();
-    resources.handler.network().send(endpoint, &data);
+    handler.network().send(endpoint, &data);
 
     resources
         .networking_stats
@@ -282,7 +406,7 @@ fn send_outgoing_event_reliable_internal_chunk<TI, TO: NetworkingEvent>(
     }
 }
 
-pub fn send_outgoing_event_reliable_internal<TI, TO: NetworkingEvent>(
+fn send_outgoing_event_reliable_internal_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     mut event: &[TO],
@@ -315,7 +439,7 @@ pub fn send_outgoing_event_reliable_internal<TI, TO: NetworkingEvent>(
                 break 'send;
             }
         }
-        send_outgoing_event_reliable_internal_chunk(
+        send_outgoing_event_reliable_internal_chunk_udp(
             resources,
             endpoint,
             &event[..chunk_size],
@@ -328,79 +452,92 @@ pub fn send_outgoing_event_reliable_internal<TI, TO: NetworkingEvent>(
     }
 }
 
-pub fn send_outgoing_event_next_tick<TI, TO: NetworkingEvent>(
+fn send_outgoing_event_next_tick_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     event: &TO,
 ) {
     resources
-        .event_list_outgoing
+        .event_list_outgoing_udp
         .entry(endpoint)
-        .or_insert_with(Vec::new)
+        .or_default()
         .push(event.clone());
 }
 
-pub fn send_outgoing_event_next_tick_batch<TI, TO: NetworkingEvent>(
+fn send_outgoing_event_next_tick_batch_udp<TI, TO: NetworkingEvent>(
     resources: &NetworkingResources<TI, TO>,
     endpoint: Endpoint,
     events: &[TO],
 ) {
     resources
-        .event_list_outgoing
+        .event_list_outgoing_udp
         .entry(endpoint)
-        .or_insert_with(Vec::new)
+        .or_default()
         .extend_from_slice(events);
 }
 
-pub fn flush_outgoing_events<TI: NetworkingEvent, TO: NetworkingEvent>(
+#[derive(Resource, Clone, Copy, Debug)]
+pub struct FakePingSettings {
+    pub to_server_ms: u64,
+    pub from_server_ms: u64,
+    pub jitter_ms: u64,
+}
+
+pub fn flush_outgoing_events_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
     tick: Res<CurrentTick>,
     resources: Res<NetworkingResources<TI, TO>>,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
-    use rayon::prelude::*;
-    resources
-        .event_list_outgoing
-        .par_iter_mut()
-        .for_each(|mut entry| {
-            send_outgoing_event_reliable_internal(&resources, *entry.key(), entry.value(), &tick.0);
-            entry.value_mut().clear();
-        })
+    resources.event_list_outgoing_udp.retain(|&key, value| {
+        let value = std::mem::take(&mut *value);
+        let resources = resources.clone();
+        let tick = tick.0;
+        let fake_ping = fake_ping.as_deref().cloned();
+        std::thread::spawn(move || {
+            // simulate fake ping
+            // TODO refactor fake ping below too
+            if let Some(fake_ping) = fake_ping {
+                if fake_ping.to_server_ms > 0 {
+                    let delay = fake_ping.get_delay_to_server();
+
+                    std::thread::sleep(std::time::Duration::from_millis(delay));
+                }
+            }
+
+            // send actual event
+            send_outgoing_event_reliable_internal_udp(&resources, key, &value, &tick);
+        });
+
+        false
+    })
 }
 
 pub fn setup_incoming_server<TI: NetworkingEvent, TO: NetworkingEvent>(
     commands: Commands,
     config: Res<NetworkConnectionTarget>,
 ) {
-    setup_incoming_shared::<TI, TO>(commands, &config.ip, config.port, true);
+    // client does not need fake ping
+    setup_incoming_shared::<TI, TO>(commands, &config.ip, config.port, true, None);
 }
 
 pub fn setup_incoming_client<TI: NetworkingEvent, TO: NetworkingEvent>(
     commands: Commands,
     config: Res<NetworkConnectionTarget>,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
-    setup_incoming_shared::<TI, TO>(commands, &config.ip, config.port, false);
+    setup_incoming_shared::<TI, TO>(commands, &config.ip, config.port, false, fake_ping);
 }
 
-pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
+fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     mut commands: Commands,
     mut ip: &str,
     port: u16,
     is_listener: bool,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
     info!(is_listener, "Seting up networking!");
 
-    let (handler, listener) = message_io::node::split::<()>();
-
-    let res = NetworkingResources::<TI, TO> {
-        handler: handler.clone(),
-        event_list_incoming: Default::default(),
-        event_list_outgoing: Default::default(),
-        reliable_packet_ids_seen: Default::default(),
-        networking_stats: Arc::new(NetworkingStats::default()),
-    };
-
-    // insert the new endpoints and remove the connection data
-    commands.insert_resource(res.clone());
-    commands.remove_resource::<NetworkConnectionTarget>();
+    let (handler, listener) = crate::message_io::node::split::<()>();
 
     info!(
         "Setup networking resources for {}",
@@ -408,33 +545,65 @@ pub fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     );
 
     if ip == "localhost" {
-        ip = "127.0.0.1";
+        ip = "[::]";
     }
-    let con_str = (ip, port);
+    let con_str = (ip.to_string(), port);
     if is_listener {
-        let (_, addr) = handler.network().listen(Transport::Udp, con_str).unwrap();
-        info!(?addr, "Listening")
+        let (_, udp_addr) = handler
+            .network()
+            .listen(Transport::Udp, con_str.clone())
+            .unwrap();
+
+        info!(?udp_addr, "Listening")
     } else {
-        let (endpoint, addr) = handler.network().connect(Transport::Udp, con_str).unwrap();
-        commands.insert_resource(MainServerEndpoint(endpoint));
+        let (_endpoint, addr) = handler
+            .network()
+            .connect(Transport::Udp, con_str.clone())
+            .unwrap();
+
+        #[cfg(not(feature = "web"))]
+        commands.insert_resource(MainServerEndpoint(EndpointGeneral::UDP(_endpoint)));
+
         info!(?addr, "Connected");
     }
 
-    let res2 = res.clone();
-    std::thread::spawn(move || {
-        listener.for_each(|event| on_node_event_incoming(&res2, event));
-    });
+    let res = NetworkingResources::<TI, TO> {
+        handler: Some(handler.clone()),
+        event_list_incoming_udp: Default::default(),
+        event_list_outgoing_udp: Default::default(),
+        reliable_packet_ids_seen: Default::default(),
+        networking_stats: Arc::new(NetworkingStats::default()),
+        event_list_incoming_websocket: Default::default(),
+        event_list_outgoing_websocket: Default::default(),
+        con_str: Arc::new(con_str),
+    };
 
-    let res2 = res.clone();
-    std::thread::spawn(move || loop {
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        res2.networking_stats.flush_and_reset();
-    });
+    // insert the new endpoints and remove the connection data
+    commands.insert_resource(res.clone());
+    commands.remove_resource::<NetworkConnectionTarget>();
+
+    // web doesn't support threads
+    // server must support both ws and udp listeners
+    #[cfg(feature = "udp")]
+    {
+        let res2 = res.clone();
+        let fake_ping = fake_ping.as_deref().cloned();
+        std::thread::spawn(move || {
+            listener.for_each(|event| on_node_event_incoming(&res2, event, fake_ping.as_ref()));
+        });
+
+        let res2 = res.clone();
+        std::thread::spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            res2.networking_stats.flush_and_reset();
+        });
+    }
 }
 
-pub fn on_node_event_incoming<TI: NetworkingEvent, TO>(
+pub fn on_node_event_incoming<TI: NetworkingEvent, TO: NetworkingEvent>(
     res: &NetworkingResources<TI, TO>,
     event: NodeEvent<'_, ()>,
+    fake_ping: Option<&FakePingSettings>,
 ) {
     let net_event = match event {
         NodeEvent::Network(n) => n,
@@ -451,44 +620,114 @@ pub fn on_node_event_incoming<TI: NetworkingEvent, TO>(
             info!(?endpoint, ?listener, "Connection Accepted")
         }
         NetEvent::Message(endpoint, data) => {
-            let event: EventGroupingOwned<TI> = match postcard::from_bytes(data) {
-                Ok(e) => e,
-                Err(p) => {
-                    warn!(?endpoint, ?p, "Got invalid json from endpoint");
-                    return;
+            // TODO: Refactor fake ping here and above
+            if let Some(fake_ping) = fake_ping {
+                if fake_ping.from_server_ms > 0 {
+                    let delay = fake_ping.get_delay_from_server();
+                    std::thread::spawn({
+                        let res = res.clone();
+                        let data = data.to_vec();
+                        move || {
+                            std::thread::sleep(std::time::Duration::from_millis(delay));
+                            on_data_incoming(
+                                &res,
+                                endpoint,
+                                res.event_list_incoming_udp.clone(),
+                                &data,
+                            );
+                        }
+                    });
                 }
-            };
-            let data_len = data.len();
-            res.networking_stats
-                .total_bytes_received_this_second
-                .fetch_add(data_len, std::sync::atomic::Ordering::Relaxed);
-            res.networking_stats
-                .packets_received_this_second
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-            let mut list = res.event_list_incoming.write().unwrap();
-            match event {
-                EventGroupingOwned::Single(x) => {
-                    let pair = (endpoint, x);
-                    list.push(pair);
-                }
-                EventGroupingOwned::Batch(events) => {
-                    list.extend(events.into_iter().map(|x| (endpoint, x)));
-                }
-                EventGroupingOwned::Reliable(packet_id, _dedup_id, tick, events) => {
-                    let mut seen_map = res.reliable_packet_ids_seen.write().unwrap();
-
-                    if seen_map.get(&packet_id).is_some() {
-                        res.networking_stats
-                            .total_bytes_received_ignored_this_second
-                            .fetch_add(data_len, std::sync::atomic::Ordering::Relaxed);
-                    } else {
-                        seen_map.insert(packet_id, tick); // TODO store tick properly
-                        list.extend(events.into_iter().map(|x| (endpoint, x)));
-                    }
-                }
+            } else {
+                on_data_incoming(res, endpoint, res.event_list_incoming_udp.clone(), data);
             }
         }
         NetEvent::Disconnected(endpoint) => warn!(?endpoint, "Client disconnected"),
+    }
+}
+
+pub trait EndpointTrait: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
+    fn as_socket_addr(&self) -> std::net::SocketAddr;
+}
+
+impl EndpointTrait for WebSocketEndpoint {
+    fn as_socket_addr(&self) -> std::net::SocketAddr {
+        self.socket_addr
+    }
+}
+
+impl EndpointTrait for Endpoint {
+    fn as_socket_addr(&self) -> std::net::SocketAddr {
+        self.addr()
+    }
+}
+
+pub fn on_data_incoming<TI: NetworkingEvent, TO, K: EndpointTrait>(
+    resources: &NetworkingResources<TI, TO>,
+    endpoint: K,
+    data_buffer: Arc<RwLock<Vec<(K, TI)>>>,
+    data: &[u8],
+) {
+    let event: EventGroupingOwned<TI> = match postcard::from_bytes(data) {
+        Ok(e) => e,
+        Err(p) => {
+            warn!(?endpoint, ?p, "Got invalid json from endpoint");
+            return;
+        }
+    };
+    let data_len = data.len();
+    resources
+        .networking_stats
+        .total_bytes_received_this_second
+        .fetch_add(data_len, std::sync::atomic::Ordering::Relaxed);
+    resources
+        .networking_stats
+        .packets_received_this_second
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+    let mut list = data_buffer.write().unwrap();
+    match event {
+        EventGroupingOwned::Single(x) => {
+            let pair = (endpoint, x);
+            list.push(pair);
+        }
+        EventGroupingOwned::Batch(events) => {
+            list.extend(events.into_iter().map(|x| (endpoint, x)));
+        }
+        EventGroupingOwned::Reliable(packet_id, _dedup_id, tick, events) => {
+            let mut seen_map = resources.reliable_packet_ids_seen.write().unwrap();
+
+            if seen_map.get(&packet_id).is_some() {
+                resources
+                    .networking_stats
+                    .total_bytes_received_ignored_this_second
+                    .fetch_add(data_len, std::sync::atomic::Ordering::Relaxed);
+            } else {
+                seen_map.insert(packet_id, tick); // TODO store tick properly
+                list.extend(events.into_iter().map(|x| (endpoint, x)));
+            }
+        }
+    }
+}
+
+impl FakePingSettings {
+    pub fn get_delay_from_server(&self) -> u64 {
+        let jitter = if self.jitter_ms > 0 {
+            rand::random_range(0..self.jitter_ms)
+        } else {
+            0
+        };
+
+        self.from_server_ms + jitter
+    }
+
+    pub fn get_delay_to_server(&self) -> u64 {
+        let jitter = if self.jitter_ms > 0 {
+            rand::random_range(0..self.jitter_ms)
+        } else {
+            0
+        };
+
+        self.to_server_ms + jitter
     }
 }

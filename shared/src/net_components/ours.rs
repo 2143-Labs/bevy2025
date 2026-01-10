@@ -3,8 +3,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     character_controller::{
-        ControllerGravity, GroundNormal, Groundedness, JumpBuffer, JumpImpulse, MaxSlopeAngle,
-        MovementAcceleration, MovementAction, MovementDampingFactor,
+        CharacterController, ControllerGravity, GroundNormal, Groundedness, JumpBuffer,
+        JumpImpulse, MaxSlopeAngle, MovementAcceleration, MovementAction, MovementDampingFactor,
+        NPCController,
     },
     event::PlayerId,
     items::InventoryId,
@@ -75,6 +76,8 @@ pub enum NetComponentOurs {
     GroundNormal(GroundNormal),
     JumpBuffer(JumpBuffer),
     Dead(Dead),
+    CharacterController(CharacterController),
+    NPCController(NPCController),
 }
 
 impl NetComponentOurs {
@@ -126,6 +129,12 @@ impl NetComponentOurs {
                 entity.insert(c);
             }
             NetComponentOurs::Dead(c) => {
+                entity.insert(c);
+            }
+            NetComponentOurs::CharacterController(c) => {
+                entity.insert(c);
+            }
+            NetComponentOurs::NPCController(c) => {
                 entity.insert(c);
             }
         }
@@ -198,6 +207,14 @@ impl NetComponentOurs {
         } else if type_id == std::any::TypeId::of::<Dead>() {
             Some(NetComponentOurs::Dead(
                 unsafe { ptr.deref::<Dead>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<CharacterController>() {
+            Some(NetComponentOurs::CharacterController(
+                unsafe { ptr.deref::<CharacterController>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<NPCController>() {
+            Some(NetComponentOurs::NPCController(
+                unsafe { ptr.deref::<NPCController>() }.clone(),
             ))
         } else {
             None
@@ -298,6 +315,18 @@ impl ToNetComponent for HasInventory {
 impl ToNetComponent for Dead {
     fn to_net_component(self) -> super::NetComponent {
         super::NetComponent::Ours(NetComponentOurs::Dead(self))
+    }
+}
+
+impl ToNetComponent for CharacterController {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::CharacterController(self))
+    }
+}
+
+impl ToNetComponent for NPCController {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::NPCController(self))
     }
 }
 

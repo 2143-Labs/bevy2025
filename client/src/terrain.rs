@@ -6,15 +6,11 @@ use shared::physics::terrain::{
 
 use crate::{
     grass::{GrassMaterial, WindSettings, create_grass_bundles},
-    network::DespawnOnWorldData,
+    network::WorldEntity,
     water::{WaterMaterial, spawn_water_client},
 };
 
-use crate::game_state::{GameState, WorldEntity};
-
-/// Resource to track if world is currently spawned
-#[derive(Resource, Default)]
-struct WorldSpawned(bool);
+use crate::game_state::{GameState, TerrainEntity};
 
 #[derive(Message)]
 pub struct SetupTerrain;
@@ -23,16 +19,10 @@ pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(WorldSpawned(false))
-            .add_systems(OnEnter(GameState::Playing), setup_terrain_client)
-            .add_systems(OnEnter(GameState::MainMenu), despawn_terrain)
+        app.add_systems(OnExit(GameState::Playing), despawn_terrain)
             // Temporarily disabled to test if this is causing the red rectangle
             // .add_systems(Update, draw_boundary_debug)
             .add_message::<SetupTerrain>()
-            .add_systems(Startup, |mut setup_events: MessageWriter<SetupTerrain>| {
-                // this can also be sent by world net connect
-                setup_events.write(SetupTerrain);
-            })
             // .add_systems(Update, draw_boundary_debug)
             .add_systems(
                 Update,
@@ -72,15 +62,8 @@ fn setup_terrain_client(
     mut water_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, WaterMaterial>>>,
     mut grass_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, GrassMaterial>>>,
     wind: Res<WindSettings>,
-    mut world_spawned: ResMut<WorldSpawned>,
     terrain_params: Res<TerrainParams>,
 ) {
-    // Only spawn if not already spawned
-    if world_spawned.0 {
-        return;
-    }
-    world_spawned.0 = true;
-
     // Calculate water level: 30% between min and max terrain height
     // Terrain heights range from -max_height_delta to +max_height_delta
     let min_height = -terrain_params.max_height_delta;
@@ -102,7 +85,7 @@ fn setup_terrain_client(
     // Create grass bundles before spawning terrain
     // Very dense grass with height-based variation
     // Using mesh merging + LOD, we can handle extremely high density!
-    let grass_bundles = create_grass_bundles(
+    let _grass_bundles = create_grass_bundles(
         &mut meshes,
         &mut materials,
         &mut grass_materials,
@@ -123,13 +106,13 @@ fn setup_terrain_client(
         RigidBody::Static,
         Collider::trimesh_from_mesh(&terrain_mesh).unwrap(),
         Terrain,
+        TerrainEntity,
         WorldEntity,
-        DespawnOnWorldData,
-        Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
-            for bundle in grass_bundles {
-                parent.spawn(bundle);
-            }
-        })),
+        //Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
+        //for bundle in _grass_bundles {
+        ////parent.spawn(bundle);
+        //}
+        //})),
     ));
 
     // Spawn water at calculated level
@@ -143,7 +126,7 @@ fn setup_terrain_client(
 
     let ents = spawn_boundary_walls(&mut commands, &terrain_params);
     for e in ents {
-        commands.entity(e).insert((WorldEntity, DespawnOnWorldData));
+        commands.entity(e).insert((TerrainEntity, WorldEntity));
     }
 
     // Add directional light (sun)
@@ -155,19 +138,12 @@ fn setup_terrain_client(
             ..default()
         },
         Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.7, 0.3, 0.0)),
-        WorldEntity,
+        TerrainEntity,
     ));
 }
 
 /// Despawn all terrain and world entities when leaving Playing state
-fn despawn_terrain(
-    mut commands: Commands,
-    world_entity_query: Query<Entity, With<WorldEntity>>,
-    mut world_spawned: ResMut<WorldSpawned>,
-) {
-    // Reset flag
-    world_spawned.0 = false;
-
+fn despawn_terrain(mut commands: Commands, world_entity_query: Query<Entity, With<TerrainEntity>>) {
     // Despawn all world entities (terrain, walls, light, grass, water, balls, etc.)
     for entity in world_entity_query.iter() {
         commands.entity(entity).despawn();

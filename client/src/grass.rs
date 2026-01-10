@@ -12,7 +12,7 @@ use bevy::{
 use noise::{NoiseFn, Perlin};
 use shared::net_components::ents::Ball;
 
-use crate::{camera::LocalCamera, game_state::WorldEntity, network::DespawnOnWorldData};
+use crate::{camera::LocalCamera, game_state::TerrainEntity, network::WorldEntity};
 
 /// Marker for grass entities
 #[derive(Component)]
@@ -63,14 +63,6 @@ pub struct GrassMaterial {
     /// Wind data: direction.x, direction.y, strength, time
     #[uniform(100)]
     pub wind_data: Vec4,
-
-    /// Ball positions for interaction (up to 8 balls, w component is radius)
-    #[uniform(101)]
-    pub ball_positions: [Vec4; 8],
-
-    /// Number of active balls
-    #[uniform(102)]
-    pub ball_count: u32,
 }
 
 impl MaterialExtension for GrassMaterial {
@@ -110,7 +102,7 @@ fn update_ball_interactions(
     all_balls: Query<&Transform, With<Ball>>,
     // TODO make this change if you change camera?
     camera_query: Query<&Transform, (With<Camera>, With<LocalCamera>)>,
-    mut grass_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, GrassMaterial>>>,
+    _grass_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, GrassMaterial>>>,
 ) {
     // Initialize timer on first run
     let timer = update_timer.get_or_insert_with(BallInteractionTimer::default);
@@ -124,7 +116,8 @@ fn update_ball_interactions(
     // Get camera position to prioritize nearest balls
     let camera_pos = camera_query
         .iter()
-        .find_map(|t| Some(t.translation))
+        .map(|t| t.translation)
+        .next()
         .unwrap_or(Vec3::ZERO);
 
     // Collect balls sorted by distance to camera (prioritize nearest 8)
@@ -146,19 +139,19 @@ fn update_ball_interactions(
     ball_data.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
     // Take closest 8 balls
-    let mut ball_positions = [Vec4::ZERO; 8];
-    let mut count = 0u32;
+    //let ball_positions = [Vec4::ZERO; 8];
+    //let count = 0u32;
 
-    for (i, (_, ball_vec)) in ball_data.iter().take(8).enumerate() {
-        ball_positions[i] = *ball_vec;
-        count += 1;
-    }
+    //for (i, (_, ball_vec)) in ball_data.iter().take(8).enumerate() {
+    //ball_positions[i] = *ball_vec;
+    //count += 1;
+    //}
 
-    // Update all grass materials with ball data (now only 1 shared material!)
-    for (_, material) in grass_materials.iter_mut() {
-        material.extension.ball_positions = ball_positions;
-        material.extension.ball_count = count;
-    }
+    //// Update all grass materials with ball data (now only 1 shared material!)
+    //for (_, material) in grass_materials.iter_mut() {
+    //material.extension.ball_positions = ball_positions;
+    //material.extension.ball_count = count;
+    //}
 }
 
 /// Create a grass blade mesh using a bezier curve
@@ -251,8 +244,8 @@ type GrassChunkBundle = (
     Transform,
     Visibility,
     OcclusionCulling,
+    TerrainEntity,
     WorldEntity,
-    DespawnOnWorldData,
 );
 
 /// Create grass chunk bundles for terrain
@@ -282,8 +275,6 @@ pub fn create_grass_bundles(
         },
         extension: GrassMaterial {
             wind_data: Vec4::new(wind.direction.x, wind.direction.y, wind.strength, wind.time),
-            ball_positions: [Vec4::ZERO; 8],
-            ball_count: 0,
         },
     });
 
@@ -437,8 +428,8 @@ pub fn create_grass_bundles(
                     Transform::default(),
                     Visibility::default(),
                     OcclusionCulling, // Enable Bevy's built-in occlusion culling
+                    TerrainEntity,
                     WorldEntity,
-                    DespawnOnWorldData,
                 ));
             }
         }

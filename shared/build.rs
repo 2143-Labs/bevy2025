@@ -32,14 +32,30 @@ fn generate_code_for_event_queue(req: &GenerateRequest) -> String {
             world: &mut World,
         ) {
             let sr = world.resource::<NetworkingResources<#incoming_typename, crate::netlib:: #outgoing_typename>>().clone();
-            let mut new_events = sr.event_list_incoming.write().unwrap();
+
+            let mut new_events = sr.event_list_incoming_udp.write().unwrap();
             let new_events = std::mem::replace(new_events.as_mut(), vec![]);
+
             for (endpoint, event) in new_events {
                 trace!(?event, "Received event from endpoint {:?}", endpoint);
                 match event {
                     #(
                         #incoming_typename :: #all_types (data) => {
-                            world.write_message(EventFromEndpoint::new(endpoint, data));
+                            world.write_message(EventFromEndpoint::new_udp(endpoint, data));
+                        }
+                    ),*
+                }
+            }
+
+            let mut new_events2 = sr.event_list_incoming_websocket.write().unwrap();
+            let new_events2 = std::mem::replace(new_events2.as_mut(), vec![]);
+
+            for (ws_endpoint, event) in new_events2 {
+                trace!(?event, "Received event from endpoint {:?}", ws_endpoint);
+                match event {
+                    #(
+                        #incoming_typename :: #all_types (data) => {
+                            world.write_message(EventFromEndpoint::new_ws(ws_endpoint, data));
                         }
                     ),*
                 }

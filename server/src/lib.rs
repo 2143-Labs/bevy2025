@@ -1,12 +1,7 @@
-use std::{
-    collections::HashMap,
-    sync::{atomic::AtomicI16, Arc},
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use avian3d::prelude::{Gravity, LinearVelocity, Rotation};
 use bevy::{app::ScheduleRunnerPlugin, platform::collections::HashSet, prelude::*};
-use message_io::network::Endpoint;
 use rand::Rng;
 use shared::{
     event::{
@@ -24,12 +19,11 @@ use shared::{
         ToNetComponent,
     },
     netlib::{
-        send_outgoing_event_next_tick, send_outgoing_event_next_tick_batch,
-        send_outgoing_event_now, EventToClient, EventToServer, NetworkConnectionTarget,
+        EndpointGeneral, EventToClient, EventToServer, NetworkConnectionTarget,
         ServerNetworkingResources, Tick,
     },
     physics::terrain::TerrainParams,
-    Config, ConfigPlugin, CurrentTick, PlayerPing,
+    Config, ConfigPlugin, CurrentTick, PlayerPing, PlayerPingAtomic, PlayerPingInteger,
 };
 
 /// How often to run the system
@@ -38,7 +32,7 @@ const HEARTBEAT_MILLIS: u64 = 200;
 const HEARTBEAT_TIMEOUT: u64 = 2000;
 /// How long do you have to connect, as a multipler of the heartbeart timeout.
 /// If the timeout is 1000 ms, then `5` would mean you have `5000ms` to connect.
-const HEARTBEAT_CONNECTION_GRACE_PERIOD: u64 = 5;
+const HEARTBEAT_CONNECTION_GRACE_PERIOD: u64 = 15;
 
 #[derive(States, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 enum ServerState {
@@ -52,17 +46,17 @@ use dashmap::DashMap;
 
 #[derive(Resource, Default)]
 struct HeartbeatList {
-    heartbeats: DashMap<PlayerId, Arc<AtomicI16>>,
-    pings: DashMap<PlayerId, PlayerPing<AtomicI16>>,
+    heartbeats: DashMap<PlayerId, Arc<PlayerPingAtomic>>,
+    pings: DashMap<PlayerId, PlayerPing<PlayerPingAtomic>>,
 }
 
 #[derive(Resource, Default)]
 struct EndpointToPlayerId {
-    map: DashMap<Endpoint, PlayerId>,
+    map: DashMap<EndpointGeneral, PlayerId>,
 }
 
 #[derive(Debug, Component)]
-struct PlayerEndpoint(Endpoint);
+struct PlayerEndpoint(EndpointGeneral);
 
 //#[derive(Resource, Debug)]
 //struct ServerSettings {
@@ -73,12 +67,26 @@ struct PlayerEndpoint(Endpoint);
 //pub mod chat;
 //pub mod game_manager;
 pub mod animations;
+pub mod axum;
+pub mod projectile;
 pub mod spawns;
 pub mod terrain;
+pub mod websocket;
 
-pub fn main_multiplayer_server() {
+#[derive(Resource, Clone)]
+pub struct TokioRuntimeResource(pub Arc<tokio::runtime::Runtime>);
+impl std::ops::Deref for TokioRuntimeResource {
+    type Target = tokio::runtime::Runtime;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+pub fn main_multiplayer_server(tokio_runtime: Arc<tokio::runtime::Runtime>) {
     do_app(|app| {
         app.add_systems(Startup, add_network_connection_info_from_config);
+        app.insert_resource(TokioRuntimeResource(tokio_runtime));
+        app.add_plugins(axum::AxumServerPlugin);
     });
 }
 
@@ -117,6 +125,8 @@ fn do_app(f: impl FnOnce(&mut App)) {
             shared::TickPlugin,
             shared::event::server::NetworkEventPlugin,
             shared::character_controller::CharacterControllerPlugin,
+            websocket::WebsocketPlugin,
+            projectile::ProjectilePlugin,
             //StatusPlugin,
         ))
         .init_state::<ServerState>()
@@ -164,7 +174,7 @@ fn do_app(f: impl FnOnce(&mut App)) {
             FixedPostUpdate,
             (
                 shared::increment_ticks,
-                shared::netlib::flush_outgoing_events::<EventToServer, EventToClient>,
+                shared::netlib::flush_outgoing_events_udp::<EventToServer, EventToClient>,
                 add_tick_just_happened_packet,
             )
                 .chain()
@@ -197,7 +207,7 @@ fn add_tick_just_happened_packet(
         let event = EventToClient::TickHappened(shared::event::client::TickHappened {
             tick: current_tick.0,
         });
-        send_outgoing_event_next_tick(&sr, net_client.0, &event);
+        sr.send_outgoing_event_next_tick(net_client.0, &event);
     }
 }
 
@@ -291,8 +301,7 @@ fn on_player_connect(
                 });
 
                 // Tell all connected clients about your new player and camera
-                send_outgoing_event_next_tick_batch(
-                    &sr,
+                sr.send_outgoing_event_next_tick_batch(
                     c_net_client.0,
                     &[
                         // their camera
@@ -370,13 +379,15 @@ fn on_player_connect(
         let heartbeat_mapping = world.resource::<HeartbeatList>();
         heartbeat_mapping.heartbeats.insert(
             new_player_id,
-            Arc::new(AtomicI16::new(-(hb_grace_period as i16))),
+            Arc::new(PlayerPingAtomic::new(
+                -(hb_grace_period as PlayerPingInteger),
+            )),
         );
         heartbeat_mapping.pings.insert(
             new_player_id,
             PlayerPing {
-                server_challenged_ping_ms: AtomicI16::new(-1),
-                client_reported_ping_ms: AtomicI16::new(-1),
+                server_challenged_ping_microsec: PlayerPingAtomic::new(-1),
+                client_reported_ping_microsec: PlayerPingAtomic::new(-1),
             },
         );
 
@@ -395,11 +406,12 @@ fn on_player_connect(
 
         // send initial world data
         info!(
+            who = ?player.endpoint,
             "Player connected - sending {} existing units",
             world_data.units.len()
         );
         let event = EventToClient::WorldData2(world_data);
-        send_outgoing_event_next_tick(&sr, player.endpoint, &event);
+        sr.send_outgoing_event_next_tick(player.endpoint, &event);
 
         // send remaining world data in batches
         let events = large_unit_list_to_send
@@ -407,7 +419,7 @@ fn on_player_connect(
             .map(|u| EventToClient::SpawnUnit2(u.clone()))
             .collect::<Vec<_>>();
 
-        send_outgoing_event_next_tick_batch(&sr, player.endpoint, &events);
+        sr.send_outgoing_event_next_tick_batch(player.endpoint, &events);
     }
 }
 
@@ -422,7 +434,7 @@ fn check_heartbeats(
 
         let beats = beats_missed.fetch_add(1, std::sync::atomic::Ordering::Acquire);
         trace!(?player_id, ?beats, "hb");
-        if beats >= (HEARTBEAT_TIMEOUT / HEARTBEAT_MILLIS) as i16 {
+        if beats >= (HEARTBEAT_TIMEOUT / HEARTBEAT_MILLIS) as PlayerPingInteger {
             warn!("Missed {beats} beats, disconnecting {player_id:?}");
             return Some(PlayerDisconnected {
                 id: *player_id,
@@ -461,7 +473,7 @@ fn send_ping_challenge(
         server_time: time.elapsed_secs_f64(),
     });
     for net_client in &clients {
-        send_outgoing_event_now(&sr, net_client.0, &event);
+        sr.send_outgoing_event_now(net_client.0, &event, None);
     }
 }
 
@@ -476,14 +488,14 @@ fn on_receive_ping_challenge(
         if let Some(player_id) = endpoint_mapping.map.get(&hb.endpoint) {
             let ping = time.elapsed_secs_f64() - hb.event.server_time;
             let ping = ping / 2.0;
-            let ping = (ping * 1000.0) as i16; // in ms
+            let ping = (ping * 1_000_000.0) as PlayerPingInteger; // in us
             if let Some(player_ping) = heartbeat_mapping.pings.get(&*player_id) {
                 player_ping
-                    .server_challenged_ping_ms
+                    .server_challenged_ping_microsec
                     .store(ping, std::sync::atomic::Ordering::Release);
 
-                player_ping.client_reported_ping_ms.store(
-                    hb.event.local_latency_ms as i16,
+                player_ping.client_reported_ping_microsec.store(
+                    hb.event.local_latency_microsecs as PlayerPingInteger,
                     std::sync::atomic::Ordering::Release,
                 );
 
@@ -522,7 +534,7 @@ fn on_player_disconnect(
         }
 
         for (c_ent, net_client, player_id) in &clients {
-            send_outgoing_event_next_tick_batch(&sr, net_client.0, &events);
+            sr.send_outgoing_event_next_tick_batch(net_client.0, &events);
             if player_id == &player.id {
                 commands
                     .entity(c_ent)
@@ -565,7 +577,7 @@ fn on_unit_despawn(
     }
 
     for net_client in &clients {
-        send_outgoing_event_next_tick_batch(&sr, net_client.0, &events);
+        sr.send_outgoing_event_next_tick_batch(net_client.0, &events);
     }
 }
 
@@ -587,7 +599,7 @@ fn on_player_heartbeat(
                     server_time: time.elapsed_secs_f64(),
                     server_tick: tick.0,
                 });
-                send_outgoing_event_now(&sr, hb.endpoint, &event);
+                sr.send_outgoing_event_now(hb.endpoint, &event, None);
             }
         }
     }
@@ -614,7 +626,7 @@ fn on_player_scoreboard_request(
     }
     for req in pd.read() {
         let event = EventToClient::RequestScoreboardResponse(scoreboard_data.clone());
-        send_outgoing_event_now(&sr, req.endpoint, &event);
+        sr.send_outgoing_event_now(req.endpoint, &event, None);
     }
 }
 
@@ -706,7 +718,7 @@ fn broadcast_movement_updates(
             events_to_send.len()
         );
         for c_net_client in &clients {
-            send_outgoing_event_next_tick_batch(&sr, c_net_client.0, &events_to_send);
+            sr.send_outgoing_event_next_tick_batch(c_net_client.0, &events_to_send);
         }
     }
 }

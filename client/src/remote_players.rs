@@ -1,6 +1,7 @@
-use avian3d::prelude::{LinearVelocity, Rotation};
+use avian3d::prelude::{AngularVelocity, LinearVelocity, RigidBody, Rotation};
 use bevy::{camera::visibility::NoFrustumCulling, prelude::*};
 use shared::{
+    character_controller::{CharacterController, NPCController},
     event::{
         MyNetEntParentId, NetEntId, UDPacketEvent,
         client::{DespawnUnit2, PlayerDisconnected, UpdateUnit2},
@@ -77,10 +78,51 @@ fn handle_update_unit(
             Without<CurrentThirdPersonControlledUnit>,
         ),
     >,
+
+    mut remote_unit4: Query<
+        (&NetEntId, &mut AngularVelocity),
+        (
+            With<shared::net_components::ents::SendNetworkTranformUpdates>,
+            Without<CurrentThirdPersonControlledUnit>,
+        ),
+    >,
+
     // TODO should we add a tag here to restrict to only certain entities?
     mut new_component_units: Query<(Entity, &NetEntId)>,
 ) {
     for update in update_events.read() {
+        if update.event.new_component.len() != 0 {
+            info!(
+                "Received UpdateUnit2 for NetEntId {:?}: {} changed, {} new, {} removed components",
+                update.event.net_ent_id,
+                update.event.changed_components.len(),
+                update.event.new_component.len(),
+                update.event.removed_components.len(),
+            );
+        }
+        'anu: for (ent, net_id) in &mut new_component_units {
+            if net_id == &update.event.net_ent_id {
+                // Add any new components
+                let mut ec = commands.entity(ent);
+                for component in &update.event.removed_components {
+                    warn!("Removing component {:?} from entity {:?}", component, ent);
+                    match &**component {
+                        //TODO fill rest as needed
+                        "NPCController" => ec.remove::<NPCController>(),
+                        "CharacterController" => ec.remove::<CharacterController>(),
+                        "RigidBody" => ec.remove::<RigidBody>(),
+                        _ => continue,
+                    };
+                }
+
+                for component in &update.event.new_component {
+                    warn!("Adding new component {:?} to entity {:?}", component, ent);
+                    component.clone().insert_components(&mut ec);
+                }
+                break 'anu;
+            }
+        }
+
         // Find the entity with this NetEntId
         'a1: for (net_id, mut transform) in &mut remote_unit {
             if net_id == &update.event.net_ent_id {
@@ -128,14 +170,19 @@ fn handle_update_unit(
             }
         }
 
-        'anu: for (ent, net_id) in &mut new_component_units {
+        'a4: for (net_id, mut angular_velocity) in &mut remote_unit4 {
             if net_id == &update.event.net_ent_id {
-                // Add any new components
-                for component in &update.event.new_component {
-                    let mut ec = commands.entity(ent);
-                    component.clone().insert_components(&mut ec);
+                // Update the angular velocity from components
+                for component in &update.event.changed_components {
+                    if let NetComponent::Foreign(foreign) = component
+                        && let shared::net_components::foreign::NetComponentForeign::AngularVelocity(
+                            av,
+                        ) = foreign
+                    {
+                        *angular_velocity = *av;
+                    }
                 }
-                break 'anu;
+                break 'a4;
             }
         }
     }

@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use avian3d::prelude::{LinearVelocity, Rotation};
 use bevy::{prelude::*, time::common_conditions::on_timer};
+use dashmap::DashMap;
 use shared::{
-    Config,
+    BASE_TICKS_PER_SECOND, Config,
     event::{
         MyNetEntParentId, NetEntId, PlayerId, UDPacketEvent,
         client::{
@@ -16,22 +17,22 @@ use shared::{
         },
     },
     net_components::{
-        ents::{Ball, CanAssumeControl, ItemDrop, Man, PlayerCamera},
+        ents::{Ball, CanAssumeControl, ItemDrop, Man, NPC, PlayerCamera},
         foreign::ComponentColor,
         ours::{PlayerColor, PlayerName},
     },
     netlib::{
-        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, Tick,
-        send_outgoing_event_next_tick, send_outgoing_event_now, send_outgoing_event_now_batch,
-        setup_incoming_client,
+        ClientNetworkingResources, EventToClient, EventToServer, FakePingSettings,
+        MainServerEndpoint, Tick, setup_incoming_client,
     },
     physics::terrain::TerrainParams,
 };
+use std::sync::Arc;
 
 use crate::{
     assets::{FontAssets, ModelAssets},
     camera::LocalCamera,
-    game_state::{GameState, NetworkGameState, WorldEntity},
+    game_state::{GameState, NetworkGameState, TerrainEntity},
     notification::Notification,
     remote_players::{ApplyNoFrustumCulling, NameLabel, RemotePlayerCamera, RemotePlayerModel},
     terrain::SetupTerrain,
@@ -39,8 +40,10 @@ use crate::{
 
 pub mod inventory;
 
+/// This component marks all entities that are part of the world and should be cleaned up when
+/// going to menu and such.
 #[derive(Component)]
-pub struct DespawnOnWorldData;
+pub struct WorldEntity;
 
 /// Temporary storage for camera NetEntId until camera is spawned
 #[derive(Resource)]
@@ -113,7 +116,7 @@ impl Plugin for NetworkingPlugin {
             )
             .add_systems(
                 FixedPostUpdate,
-                (shared::netlib::flush_outgoing_events::<EventToClient, EventToServer>).run_if(
+                (shared::netlib::flush_outgoing_events_udp::<EventToClient, EventToServer>).run_if(
                     in_state(NetworkGameState::ClientSendRequestPacket)
                         .or(in_state(NetworkGameState::ClientConnected)),
                 ),
@@ -140,6 +143,7 @@ impl Plugin for NetworkingPlugin {
                     on_special_unit_spawn_remote_camera,
                     on_special_unit_spawn_ball,
                     on_special_unit_spawn_man,
+                    on_special_unit_spawn_npc,
                     on_special_unit_spawn_loot,
                     receive_heartbeat,
                     receive_tick_just_happened,
@@ -153,8 +157,12 @@ impl Plugin for NetworkingPlugin {
                     .run_if(on_timer(Duration::from_millis(200)))
                     .run_if(in_state(NetworkGameState::ClientConnected)),
             )
+            .add_systems(Startup, insert_fake_ping_settings)
             .add_message::<SpawnUnit2>()
             .add_message::<SpawnMan>()
+            .insert_resource(ServerInterpMap {
+                ..Default::default()
+            })
             .insert_resource(ServerTick {
                 tick: Tick(0),
                 tick_offset: 0,
@@ -162,6 +170,28 @@ impl Plugin for NetworkingPlugin {
             })
             .insert_resource(LocalLatencyMeasurement { latency: -1.0 });
     }
+}
+
+fn insert_fake_ping_settings(mut commands: Commands, args: Res<crate::ClapArgs>) {
+    let to_server_ms = args.fake_ping_outbound.or(args.fake_ping).unwrap_or(0);
+    let from_server_ms = args.fake_ping_inbound.or(args.fake_ping).unwrap_or(0);
+    let jitter_ms = args.fake_ping_jitter.unwrap_or(0);
+
+    // Disable fake ping if all values are zero
+    if to_server_ms + from_server_ms + jitter_ms == 0 {
+        return;
+    }
+
+    info!(
+        "Enabling fake ping settings: to_server_ms={}, from_server_ms={}, jitter_ms={}",
+        to_server_ms, from_server_ms, jitter_ms
+    );
+
+    commands.insert_resource(shared::netlib::FakePingSettings {
+        to_server_ms,
+        from_server_ms,
+        jitter_ms,
+    });
 }
 
 fn spawn_networked_unit_forward_local(
@@ -182,7 +212,6 @@ fn spawn_networked_unit_forward_local(
 pub struct NeedsClientConstruction;
 
 #[derive(Component)]
-#[component(storage = "SparseSet")]
 pub struct CurrentThirdPersonControlledUnit;
 
 // Given some unit
@@ -190,8 +219,6 @@ fn on_general_spawn_network_unit(
     mut unit_spawns: MessageReader<SpawnUnit2>,
     mut commands: Commands,
 ) {
-    use crate::game_state::WorldEntity;
-
     for spawn in unit_spawns.read() {
         // Spawn ball with physics
         let entity = spawn.clone().spawn_entity(&mut commands);
@@ -255,6 +282,33 @@ fn on_special_unit_spawn_loot(
                 })),
                 Mesh3d(meshes.add(Mesh::from(Cuboid {
                     half_size: Vec3::splat(0.5),
+                }))),
+            ))
+            .remove::<NeedsClientConstruction>();
+    }
+}
+
+fn on_special_unit_spawn_npc(
+    mut commands: Commands,
+    mut unit_query: Query<(Entity, &NetEntId, &NPC), With<NeedsClientConstruction>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for (entity, _ent_id, _man) in unit_query.iter_mut() {
+        // TODO add ball-specific client setup here
+        commands
+            .entity(entity)
+            .insert((
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: Color::linear_rgb(0.8, 0.2, 0.2),
+                    metallic: 0.4,
+                    perceptual_roughness: 0.4,
+
+                    ..default()
+                })),
+                Mesh3d(meshes.add(Mesh::from(Capsule3d {
+                    radius: 1.0,
+                    half_length: 1.0,
                 }))),
             ))
             .remove::<NeedsClientConstruction>();
@@ -394,17 +448,17 @@ fn send_connect_packet(
         color_hue: config.player_color_hue,
     });
     notif.write(Notification(format!(
-        "Connecting server={} name={name:?}",
-        mse.0.addr(),
+        "Connecting server={:?} name={name:?}",
+        mse.0,
     )));
-    send_outgoing_event_now(&sr, mse.0, &event);
-    info!("Sent connection packet to {}", mse.0);
+    sr.send_outgoing_event_now(mse.0, &event, None);
+    info!("Sent connection packet to {:?}", mse.0);
 }
 
 fn send_disconnect_packet(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoint>) {
     let event = EventToServer::IWantToDisconnect(IWantToDisconnect {});
-    send_outgoing_event_now(&sr, mse.0, &event);
-    info!("Sent disconnect packet to {}", mse.0);
+    sr.send_outgoing_event_now(mse.0, &event, None);
+    info!("Sent disconnect packet to {:?}", mse.0);
 }
 
 #[derive(Component)]
@@ -526,7 +580,7 @@ fn receive_world_data(
     mut game_state: ResMut<NextState<NetworkGameState>>,
     asset_server: ResMut<AssetServer>,
     mut terrain_data: ResMut<TerrainParams>,
-    ents_to_despawn: Query<Entity, Or<(With<DespawnOnWorldData>, With<WorldEntity>)>>,
+    ents_to_despawn: Query<Entity, Or<(With<WorldEntity>, With<TerrainEntity>)>>,
     mut msg_terrain_events: MessageWriter<SetupTerrain>,
     mut next_control_state: ResMut<NextState<crate::game_state::InputControlState>>,
 ) {
@@ -584,11 +638,12 @@ fn send_heartbeat(
     sr: Res<ClientNetworkingResources>,
     mse: Res<MainServerEndpoint>,
     time: Res<Time>,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
     let event = EventToServer::Heartbeat(Heartbeat {
         client_started_time: time.elapsed_secs_f64(),
     });
-    send_outgoing_event_now(&sr, mse.0, &event);
+    sr.send_outgoing_event_now(mse.0, &event, fake_ping.as_deref().cloned());
 }
 
 #[derive(Resource)]
@@ -616,11 +671,23 @@ pub struct ServerTick {
     pub realtime: f64,
 }
 
+#[allow(dead_code)]
+pub struct InterpEntry {
+    pub server_tick: Tick,
+    pub client_realtime: f64,
+}
+
+#[derive(Resource, Default)]
+pub struct ServerInterpMap {
+    client_tick_to_server_tick: Arc<DashMap<Tick, InterpEntry>>,
+}
+
 fn receive_tick_just_happened(
     time: Res<Time>,
     mut server_tick: ResMut<ServerTick>,
     client_tick: Res<shared::CurrentTick>,
     mut tick_events: UDPacketEvent<shared::event::client::TickHappened>,
+    server_interp_map: Res<ServerInterpMap>,
 ) {
     for event in tick_events.read() {
         let tick = event.event.tick;
@@ -639,7 +706,23 @@ fn receive_tick_just_happened(
         }
         server_tick.tick.0 = tick.0.max(server_tick.tick.0);
         server_tick.realtime = time.elapsed_secs_f64();
-        server_tick.tick_offset = (server_tick.tick.0 as i64) - (client_tick.0.0 as i64)
+        server_tick.tick_offset = (server_tick.tick.0 as i64) - (client_tick.0.0 as i64);
+        // Set the server tick interp to our current time
+        let server_tick = InterpEntry {
+            server_tick: tick,
+            client_realtime: time.elapsed_secs_f64(),
+        };
+        server_interp_map
+            .client_tick_to_server_tick
+            .insert(client_tick.0, server_tick);
+
+        // remove entries older than 5 seconds
+        server_interp_map.client_tick_to_server_tick.remove(&Tick(
+            client_tick
+                .0
+                .0
+                .saturating_sub(BASE_TICKS_PER_SECOND as u64 * 5),
+        ));
     }
 }
 
@@ -648,13 +731,14 @@ fn receive_challenge(
     local: Res<LocalLatencyMeasurement>,
     sr: Res<ClientNetworkingResources>,
     mse: Res<MainServerEndpoint>,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
     for event in heartbeat_challenges.read() {
         let event = EventToServer::HeartbeatChallengeResponse(HeartbeatChallengeResponse {
             server_time: event.event.server_time,
-            local_latency_ms: local.latency * 1000.0,
+            local_latency_microsecs: local.latency * 1_000_000.0,
         });
-        send_outgoing_event_now(&sr, mse.0, &event);
+        sr.send_outgoing_event_now(mse.0, &event, fake_ping.as_deref().cloned());
     }
 }
 
@@ -695,6 +779,7 @@ fn send_movement_camera(
         (&Transform, &NetEntId),
         (With<LocalCamera>, With<PlayerCamera>, Changed<Transform>),
     >,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
     if let Ok((transform, ent_id)) = our_transform.single() {
         let mut events = vec![];
@@ -705,7 +790,7 @@ fn send_movement_camera(
             transform: *transform,
         }));
 
-        send_outgoing_event_now_batch(&sr, mse.0, &events);
+        sr.send_outgoing_event_now_batch(mse.0, &events, fake_ping.as_deref().cloned());
     }
 }
 
@@ -716,6 +801,7 @@ fn send_movement_unit(
         (&Transform, &LinearVelocity, &Rotation, &NetEntId),
         (With<CurrentThirdPersonControlledUnit>, Changed<Transform>),
     >,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
     if let Ok((transform, velo, rotation, ent_id)) = our_transform.single() {
         let mut events = vec![];
@@ -726,7 +812,7 @@ fn send_movement_unit(
             transform: *transform,
         }));
 
-        send_outgoing_event_now_batch(&sr, mse.0, &events);
+        sr.send_outgoing_event_now_batch(mse.0, &events, fake_ping.as_deref().cloned());
     }
 }
 
@@ -804,7 +890,7 @@ fn our_client_wants_to_spawn_man(
     for thing in ev_sa.read() {
         let event = EventToServer::SpawnMan(thing.clone());
         info!("Sending spawn man event to server");
-        send_outgoing_event_next_tick(&sr, mse.0, &event);
+        sr.send_outgoing_event_next_tick(mse.0, &event);
     }
 }
 

@@ -4,10 +4,7 @@ use avian3d::{math::*, prelude::*};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    event::NetEntId,
-    net_components::{NetComponent, ToNetComponent},
-};
+use crate::{event::NetEntId, net_components::ours::Dead};
 
 pub struct CharacterControllerPlugin;
 
@@ -19,7 +16,7 @@ impl Plugin for CharacterControllerPlugin {
                 Update,
                 (
                     apply_gravity,
-                    unit_change_movement,
+                    (unit_change_movement, ai_thunk),
                     update_grounded,
                     rotation,
                     movement,
@@ -68,6 +65,9 @@ pub struct UnitChangedMovement {
 /// A marker component indicating that an entity is using a character controller.
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct CharacterController;
+
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct NPCController;
 
 /// A marker component indicating that an entity is on the ground.
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
@@ -121,10 +121,15 @@ pub struct CharacterControllerBundle {
     movement_action: MovementAction,
 }
 
-impl ToNetComponent for CharacterControllerBundle {
-    fn to_net_component(self) -> NetComponent {
-        NetComponent::CharacterControllerBundle(Box::new(self))
-    }
+#[derive(Bundle, Serialize, Deserialize, Clone, Debug)]
+pub struct NPCControllerBundle {
+    npc_controller: NPCController,
+    body: RigidBody,
+    collider: Collider,
+    ground_caster: ShapeCaster,
+    gravity: ControllerGravity,
+    movement: MovementBundle,
+    movement_action: MovementAction,
 }
 
 /// A bundle that contains components for character movement.
@@ -202,6 +207,37 @@ impl CharacterControllerBundle {
     }
 }
 
+impl NPCControllerBundle {
+    pub fn new(collider: Collider, gravity: Vector) -> Self {
+        // Create shape caster as a slightly smaller version of collider
+        let mut caster_shape = collider.clone();
+        caster_shape.set_scale(Vector::ONE * 1.05, 10);
+        //base the fields on a CharacterControllerBundle
+        let base_char = CharacterControllerBundle::new(collider.clone(), gravity);
+
+        Self {
+            npc_controller: NPCController,
+            body: base_char.body,
+            collider: base_char.collider,
+            ground_caster: base_char.ground_caster,
+            gravity: base_char.gravity,
+            movement: base_char.movement,
+            movement_action: base_char.movement_action,
+        }
+    }
+
+    pub fn with_movement(
+        mut self,
+        acceleration: Scalar,
+        damping: Scalar,
+        jump_impulse: Scalar,
+        max_slope_angle: Scalar,
+    ) -> Self {
+        self.movement = MovementBundle::new(acceleration, damping, jump_impulse, max_slope_angle);
+        self
+    }
+}
+
 /// Updates the [`Grounded`] status for character controllers.
 fn update_grounded(
     //mut commands: Commands,
@@ -214,7 +250,7 @@ fn update_grounded(
             &Rotation,
             Option<&MaxSlopeAngle>,
         ),
-        With<CharacterController>,
+        Or<(With<CharacterController>, With<NPCController>)>,
     >,
 ) {
     for (mut groundedness, mut ground_normal, _entity, hits, rotation, max_slope_angle) in
@@ -259,18 +295,22 @@ fn update_grounded(
 fn unit_change_movement(
     mut reader: MessageReader<UnitChangedMovement>,
     // TODO make this smaller?
-    mut query: Query<(&mut MovementAction, &NetEntId)>,
+    mut query: Query<(&mut MovementAction, &NetEntId, Has<Dead>)>,
 ) {
     for event in reader.read() {
-        for (mut movement_action, net_ent_id) in &mut query {
+        for (mut movement_action, net_ent_id, dead) in &mut query {
             if net_ent_id == &event.net_ent_id {
-                *movement_action = event.movement_action.clone();
+                if dead {
+                    *movement_action = MovementAction::default();
+                } else {
+                    *movement_action = event.movement_action.clone();
+                }
             }
         }
     }
 }
 
-fn rotation(mut controllers: Query<(&mut Rotation, &MovementAction)>) {
+fn rotation(mut controllers: Query<(&mut Rotation, &MovementAction), Without<Dead>>) {
     for (mut transform, movement_action) in &mut controllers {
         //rotate us around the Y axis based on camera yaw
         *transform = Rotation(Quat::from_rotation_y(movement_action.camera_yaw as Scalar));
@@ -280,15 +320,18 @@ fn rotation(mut controllers: Query<(&mut Rotation, &MovementAction)>) {
 /// Responds to [`MovementAction`] events and moves character controllers accordingly.
 fn movement(
     time: Res<Time>,
-    mut controllers: Query<(
-        &MovementAcceleration,
-        &MovementAction,
-        &JumpImpulse,
-        &mut LinearVelocity,
-        &Groundedness,
-        &GroundNormal,
-        &mut JumpBuffer,
-    )>,
+    mut controllers: Query<
+        (
+            &MovementAcceleration,
+            &MovementAction,
+            &JumpImpulse,
+            &mut LinearVelocity,
+            &Groundedness,
+            &GroundNormal,
+            &mut JumpBuffer,
+        ),
+        Without<Dead>,
+    >,
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
@@ -361,7 +404,7 @@ fn movement(
 /// Applies [`ControllerGravity`] to character controllers.
 fn apply_gravity(
     time: Res<Time>,
-    mut controllers: Query<(&ControllerGravity, &mut LinearVelocity)>,
+    mut controllers: Query<(&ControllerGravity, &mut LinearVelocity), Without<Dead>>,
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
@@ -375,7 +418,7 @@ fn apply_gravity(
 /// Slows down movement in the X direction.
 fn apply_movement_damping(
     time: Res<Time>,
-    mut query: Query<(&MovementDampingFactor, &mut LinearVelocity)>,
+    mut query: Query<(&MovementDampingFactor, &mut LinearVelocity), Without<Dead>>,
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
@@ -408,7 +451,11 @@ fn kinematic_controller_collisions(
     collider_rbs: Query<&ColliderOf, Without<Sensor>>,
     mut character_controllers: Query<
         (&mut Position, &mut LinearVelocity, Option<&MaxSlopeAngle>),
-        (With<RigidBody>, With<CharacterController>),
+        (
+            With<RigidBody>,
+            Or<(With<CharacterController>, With<NPCController>)>,
+            Without<Dead>,
+        ),
     >,
     time: Res<Time>,
     mut debug_ball_writer: MessageWriter<SpawnDebugBall>,
@@ -590,5 +637,27 @@ fn kinematic_controller_collisions(
                 }
             }
         }
+    }
+}
+
+/// -------- below this line is AI controllers ---------
+fn ai_thunk(
+    query_ai: Query<(&Transform, &mut MovementAction), (With<NPCController>, Without<Dead>)>,
+    time: Res<Time>,
+) {
+    for (transform, mut movement_action) in query_ai {
+        //make the NPCs move in a circle
+        let t = time.elapsed_secs_f64().adjust_precision();
+        let radius = 5.0;
+        let speed = 0.5;
+        let x = radius * (speed * t).cos();
+        let z = radius * (speed * t).sin();
+        let target_pos = Vec3::new(x, transform.translation.y, z);
+        let direction = (target_pos - transform.translation).normalize_or_zero();
+
+        movement_action.move_input_dir = Vector2::new(direction.x, direction.z);
+        movement_action.camera_yaw = speed * t + PI / 2.0;
+        movement_action.move_speed_modifier = 1.0;
+        movement_action.is_jumping = false;
     }
 }

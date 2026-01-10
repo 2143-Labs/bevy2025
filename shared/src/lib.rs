@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, VecDeque},
     env::current_dir,
     fs::OpenOptions,
-    sync::atomic::AtomicI16,
+    sync::atomic::AtomicI32,
 };
 
 use bevy::prelude::*;
@@ -19,10 +19,16 @@ pub mod net_components;
 pub mod netlib;
 pub mod physics;
 pub mod player_input;
+pub mod projectile;
 pub mod skills;
 pub mod stats;
 
-pub const BASE_TICKS_PER_SECOND: u16 = 128;
+#[cfg(not(feature = "udp"))]
+pub mod message_io;
+#[cfg(feature = "udp")]
+pub use message_io;
+
+pub const BASE_TICKS_PER_SECOND: u16 = 60;
 
 #[derive(
     Reflect, Hash, Eq, PartialEq, Clone, Deserialize, Serialize, Debug, Ord, PartialOrd, Copy,
@@ -268,7 +274,14 @@ impl Config {
     }
 
     pub fn load_from_main_dir() -> Self {
-        let mut path = current_dir().unwrap();
+        let Ok(mut path) = current_dir() else {
+            // we are in the web build TODO
+            return Self {
+                ip: "127.0.0.1".to_string(),
+                port: 25555,
+                ..Self::default()
+            };
+        };
         path.push("config.yaml");
 
         info!("Loading config from {path:?}");
@@ -392,33 +405,40 @@ pub fn increment_ticks(
     }
 }
 
+pub type PlayerPingAtomic = AtomicI32;
+pub type PlayerPingInteger = i32;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Ping information about a player, in milliseconds, but generic over the type used to store the
 /// ping value. Usually used with either i16 or AtomicI16: use [`Self::to_integer`] to convert from
 /// one to the other.
 pub struct PlayerPing<V> {
-    pub server_challenged_ping_ms: V,
-    pub client_reported_ping_ms: V,
+    pub server_challenged_ping_microsec: V,
+    pub client_reported_ping_microsec: V,
 }
 
-impl PlayerPing<AtomicI16> {
-    pub fn to_integer(&self) -> PlayerPing<i16> {
+impl PlayerPing<PlayerPingAtomic> {
+    pub fn to_integer(&self) -> PlayerPing<PlayerPingInteger> {
         PlayerPing {
-            server_challenged_ping_ms: self
-                .server_challenged_ping_ms
+            server_challenged_ping_microsec: self
+                .server_challenged_ping_microsec
                 .load(std::sync::atomic::Ordering::Relaxed),
-            client_reported_ping_ms: self
-                .client_reported_ping_ms
+            client_reported_ping_microsec: self
+                .client_reported_ping_microsec
                 .load(std::sync::atomic::Ordering::Relaxed),
         }
     }
 }
 
-impl PlayerPing<i16> {
-    pub fn to_atomic(&self) -> PlayerPing<AtomicI16> {
+impl PlayerPing<PlayerPingInteger> {
+    pub fn to_atomic(&self) -> PlayerPing<PlayerPingAtomic> {
         PlayerPing {
-            server_challenged_ping_ms: AtomicI16::new(self.server_challenged_ping_ms),
-            client_reported_ping_ms: AtomicI16::new(self.client_reported_ping_ms),
+            server_challenged_ping_microsec: PlayerPingAtomic::new(
+                self.server_challenged_ping_microsec,
+            ),
+            client_reported_ping_microsec: PlayerPingAtomic::new(
+                self.client_reported_ping_microsec,
+            ),
         }
     }
 }

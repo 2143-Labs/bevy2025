@@ -229,31 +229,31 @@ fn render_entity_tree(
     });
 
     // Render children if expanded
-    if is_expanded && has_children {
-        if let Some(child_list) = children {
-            ui.indent(entity, |ui| {
-                for &child_entity in child_list {
-                    // Find child data
-                    if let Some((_, child_name, child_visible, child_children, _)) = all_entities
-                        .iter()
-                        .find(|(e, _, _, _, _)| *e == child_entity)
-                    {
-                        if let Some(child_name_str) = child_name {
-                            render_entity_tree(
-                                ui,
-                                child_entity,
-                                child_name_str,
-                                *child_visible,
-                                child_children,
-                                all_entities,
-                                tree_state,
-                                changes,
-                            );
-                        }
-                    }
+    if is_expanded
+        && has_children
+        && let Some(child_list) = children
+    {
+        ui.indent(entity, |ui| {
+            for &child_entity in child_list {
+                // Find child data
+                if let Some((_, child_name, child_visible, child_children, _)) = all_entities
+                    .iter()
+                    .find(|(e, _, _, _, _)| *e == child_entity)
+                    && let Some(child_name_str) = child_name
+                {
+                    render_entity_tree(
+                        ui,
+                        child_entity,
+                        child_name_str,
+                        *child_visible,
+                        child_children,
+                        all_entities,
+                        tree_state,
+                        changes,
+                    );
                 }
-            });
-        }
+            }
+        });
     }
 }
 

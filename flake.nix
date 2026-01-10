@@ -80,6 +80,9 @@
             cargo-deny
             cargo-outdated
             nixpkgs-fmt
+            # lld is specifically required by the wasm compiler for web builds (tracing-wasm)
+            lld
+            binaryen
           ] ++ buildInputsAll;
           RUST_SRC_PATH = rustPlatform.rustLibSrc;
           LD_LIBRARY_PATH = lib.makeLibraryPath buildInputsAll;

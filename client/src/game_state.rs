@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 /// Marker component for all world/gameplay entities that should be despawned when returning to MainMenu
 #[derive(Component)]
-pub struct WorldEntity;
+pub struct TerrainEntity;
 
 /// High-level game state for menu vs gameplay
 #[derive(States, Reflect, PartialEq, Eq, Debug, Clone, Hash, Default)]
@@ -77,7 +77,7 @@ impl Plugin for StatePlugin {
 }
 
 /// Despawn all world entities when entering MainMenu
-fn despawn_world(mut commands: Commands, world_entities: Query<Entity, With<WorldEntity>>) {
+fn despawn_world(mut commands: Commands, world_entities: Query<Entity, With<TerrainEntity>>) {
     info!("Entering MainMenu, despawning world entities");
     for entity in world_entities.iter() {
         commands.entity(entity).despawn();

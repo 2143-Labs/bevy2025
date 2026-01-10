@@ -1,0 +1,41 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      body {
+        background: linear-gradient(
+          135deg,
+          white 0%,
+          white 49%,
+          black 49%,
+          black 51%,
+          white 51%,
+          white 100%
+        ) repeat;
+        background-size: 20px 20px;
+      }
+      canvas {
+        background-color: white;
+      }
+      .invisible {
+        display: none;
+      }
+      #loading {
+          font-family: Arial, sans-serif;
+          font-size: 24px;
+      }
+    </style>
+    <title>ROTS</title>
+  </head>
+  <script type="module">
+    //document.getElementById("game_ip").innerHTML = window.location.hostname;
+    import init from './rots_example.js'
+    init()
+  </script>
+  <body>
+    <p id="loading">ROTS is loading</p>
+    <canvas id="bevy-canvas" width="800" height="600"></canvas>
+    <p id="server_ip" class="invisible">71.126.177.34</p>
+    <p id="server_port" class="invisible">25555</p>
+  </body>
+</html>
