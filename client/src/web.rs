@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
+use web_sys::HtmlParagraphElement;
 use web_sys::js_sys::Reflect;
 
 use shared::netlib::ClientNetworkingResources;
@@ -14,13 +15,6 @@ use crate::game_state::NetworkGameState;
 
 impl Plugin for WebPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(NetworkGameState::ClientSendRequestPacket), setup);
-        //while in ClientConencting, run
-        app.add_systems(
-            Update,
-            while_connecting.run_if(in_state(NetworkGameState::ClientConnecting)),
-        );
-
         // get our default location
         let window = web_sys::window().unwrap();
         let document = window.document().unwrap();
@@ -42,6 +36,25 @@ impl Plugin for WebPlugin {
             .parse()
             .expect("server_ip element text content is not a valid IpAddr");
 
+        let loading_element = document
+            .get_element_by_id("loading")
+            .expect("No loading_status element in html")
+            // p tag
+            .dyn_into::<HtmlParagraphElement>()
+            .expect("loading element is not a paragraph element");
+
+        loading_element.set_text_content(Some(""));
+
+        app.add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                canvas: Some("#bevy-canvas".into()),
+                fit_canvas_to_parent: true,
+                ..default()
+            }),
+            ..default()
+        }));
+        //app.add_plugins(DefaultPlugins);
+
         app.insert_resource(MainServerEndpoint(
             shared::netlib::EndpointGeneral::WebSocket(shared::netlib::WebSocketEndpoint {
                 socket_addr: (ip_addr, port).into(),
@@ -49,6 +62,14 @@ impl Plugin for WebPlugin {
         ));
 
         info!("Connecting to server at {}:{}", ip_str, port);
+
+        app.add_systems(OnEnter(NetworkGameState::ClientSendRequestPacket), setup);
+        //while in ClientConencting, run
+        app.add_systems(
+            Update,
+            while_connecting.run_if(in_state(NetworkGameState::ClientConnecting)),
+        );
+
         use crate::Config;
         app.add_systems(Startup, move |mut config: ResMut<Config>| {
             config.ip = ip_str.clone();
