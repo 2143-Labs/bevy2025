@@ -99,18 +99,25 @@ pub fn spawn_skills_menu(
             let (text, font, color) = menu_button_text(skill_name);
             parent
                 .spawn((
-                    ImageNode {
-                        image: skill_icon,
+                    Node{
+                        height: Val::Px(64.0),
+                        width: Val::Px(64.0),
                         ..default()
                     },
-                    bg_color,
                     border_color,
                     Interaction::default(),
                     SkillButton {
                         skill: equipped_skill.clone(),
                     },
-                ));
-                // .with_children(|button| {
+                ))
+                .with_children(|button| {
+                    button.spawn(
+                    ImageNode {
+                        image: skill_icon,
+                        ..default()
+                    });
+                });
+                    // bg_color,
                 //     button.spawn((text, font, color));
                 // });
         });

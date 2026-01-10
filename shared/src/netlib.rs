@@ -561,7 +561,7 @@ fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
             .connect(Transport::Udp, con_str.clone())
             .unwrap();
 
-        #[cfg(not(feature = "web"))]
+        // #[cfg(not(feature = "web"))]
         commands.insert_resource(MainServerEndpoint(EndpointGeneral::UDP(_endpoint)));
 
         info!(?addr, "Connected");
