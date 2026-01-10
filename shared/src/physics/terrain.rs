@@ -28,8 +28,8 @@ impl Default for TerrainParams {
         let seed = fastrand::u32(..);
         Self {
             seed,
-            plane_size: 1000.0,
-            subdivisions: 500,
+            plane_size: 100.0,
+            subdivisions: 200,
             max_height_delta: 1.0,
         }
     }
@@ -129,7 +129,7 @@ const STANDARD_EROSION_SPLINE: Spline = Spline {
     ],
 };
 
-const STANDARD_PEAKS_VALLEYS_INPUT_SCALE: f32 = 1.0;
+const STANDARD_PEAKS_VALLEYS_INPUT_SCALE: f32 = 0.05;
 const STANDARD_PEAKS_VALLEYS_SPLINE: Spline = Spline {
     points: &[
         (-1.0, -1.0),
@@ -214,8 +214,8 @@ impl TerrainPerlin {
         // Combine factors to get final height
         let mut height = continentalness * erosion;
         //scale height so this doesn't go beyond -1.0 to 1.0 too much
-        height *= 0.9;
-        height += peaks_valleys * 0.2;
+        height *= 0.7;
+        height += peaks_valleys * 0.3;
         height *= 10.0;
         height += 5.0;
 
