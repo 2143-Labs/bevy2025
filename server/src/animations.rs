@@ -263,13 +263,7 @@ fn on_unit_finish_cast(
                     // This summons the spawner arrow first which then spawns more arrows
                     let mut ground_target = transform.translation + transform.forward() * 10.0;
 
-                    use noise::NoiseFn;
-
-                    ground_target.y = terrain.perlin().get([
-                        ground_target.x as f64 * NOISE_SCALE_FACTOR,
-                        ground_target.z as f64 * NOISE_SCALE_FACTOR,
-                    ]) as f32
-                        * terrain.max_height_delta;
+                    ground_target.y = terrain.perlin().sample_height( ground_target.x, ground_target.z) * terrain.max_height_delta;
 
                     let sky_target =
                         Vec3::new(ground_target.x, ground_target.y + 20.0, ground_target.z)

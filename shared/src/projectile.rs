@@ -169,7 +169,7 @@ fn update_projectiles(
     terrain_info: Res<TerrainParams>,
     mut projectile_spawner: MessageWriter<SpawnProjectile>,
 ) {
-    let noise: noise::Perlin = terrain_info.perlin();
+    let noise = terrain_info.perlin();
     for (ent, mut transform, origin, real_spawn_time, projectile_ai, projectile_source) in
         &mut query
     {
@@ -195,12 +195,8 @@ fn update_projectiles(
                 let end_pos = projectile_path_targets[cur_path_index + 1];
                 let mut new_pos = start_pos.lerp(end_pos, pct_through_current_path as f32);
                 let xz = new_pos.xz();
-                // TODO REFACTOR PAIR TER1
-                let y = noise.get([
-                    xz.x as f64 * NOISE_SCALE_FACTOR,
-                    xz.y as f64 * NOISE_SCALE_FACTOR,
-                ]) as f32
-                    * terrain_info.max_height_delta;
+
+                let y = noise.sample_height(xz.x, xz.y) as f32 * terrain_info.max_height_delta;
                 new_pos.y = y + 1.0;
 
                 transform.translation = new_pos;
@@ -220,12 +216,7 @@ fn update_projectiles(
                 let new_x = origin.origin.x + radius * angle.cos();
                 let new_z = origin.origin.z + radius * angle.sin();
                 let xz = Vec2::new(new_x, new_z);
-                // TODO REFACTOR PAIR TER1
-                let y = noise.get([
-                    xz.x as f64 * NOISE_SCALE_FACTOR,
-                    xz.y as f64 * NOISE_SCALE_FACTOR,
-                ]) as f32
-                    * terrain_info.max_height_delta;
+                let y = noise.sample_height(xz.x, xz.y) as f32 * terrain_info.max_height_delta;
                 let new_pos = Vec3::new(new_x, y + 1.0, new_z);
 
                 transform.translation = new_pos;
@@ -262,10 +253,7 @@ fn update_projectiles(
                 let new_pos = origin.origin + direction * time_since_spawn as f32;
 
                 let xz = new_pos.xz();
-                let y = noise.get([
-                    xz.x as f64 * NOISE_SCALE_FACTOR,
-                    xz.y as f64 * NOISE_SCALE_FACTOR,
-                ]) as f32
+                let y = noise.sample_height(xz.x, xz.y) as f32
                     * terrain_info.max_height_delta;
                 let new_pos = Vec3::new(xz.x, (y + 1.0).max(new_pos.y), xz.y);
                 transform.translation = new_pos;
@@ -275,10 +263,7 @@ fn update_projectiles(
                 let new_pos = origin.origin + direction * time_since_spawn as f32;
 
                 let xz = new_pos.xz();
-                let y = noise.get([
-                    xz.x as f64 * NOISE_SCALE_FACTOR,
-                    xz.y as f64 * NOISE_SCALE_FACTOR,
-                ]) as f32
+                let y = noise.sample_height(xz.x, xz.y) as f32
                     * terrain_info.max_height_delta;
                 let new_pos = Vec3::new(xz.x, (y + 1.0).max(new_pos.y), xz.y);
                 transform.translation = new_pos;
@@ -324,10 +309,7 @@ fn update_projectiles(
                                 ground_target.x + rand_offset_x,
                                 ground_target.z + rand_offset_z,
                             );
-                            let y = noise.get([
-                                target_xz.x as f64 * NOISE_SCALE_FACTOR,
-                                target_xz.y as f64 * NOISE_SCALE_FACTOR,
-                            ]) as f32
+                            let y = noise.sample_height(target_xz.x, target_xz.y) as f32
                                 * terrain_info.max_height_delta;
 
                             let ground_target = Vec3::new(target_xz.x, y, target_xz.y);

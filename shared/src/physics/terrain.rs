@@ -35,9 +35,32 @@ impl Default for TerrainParams {
     }
 }
 
+pub const NOISE_SCALE_FACTOR: f64 = 0.05;
+
+pub struct TerrainPerlin {
+    perlin_a: Perlin,
+    perlin_b: Perlin,
+    perlin_c: Perlin,
+}
+
 impl TerrainParams {
-    pub fn perlin(&self) -> Perlin {
-        Perlin::new(self.seed)
+    pub fn perlin(&self) -> TerrainPerlin {
+        TerrainPerlin {
+            perlin_a: Perlin::new(self.seed),
+            perlin_b: Perlin::new(self.seed.wrapping_add(1)),
+            perlin_c: Perlin::new(self.seed.wrapping_add(1)),
+        }
+    }
+}
+
+impl TerrainPerlin {
+    pub fn sample_height(&self, x: f32, z: f32) -> f32 {
+        let noise_x = x as f64 * NOISE_SCALE_FACTOR;
+        let noise_z = z as f64 * NOISE_SCALE_FACTOR;
+        let remap_x = self.perlin_a.get([noise_x, noise_z]);
+        let remap_z = self.perlin_b.get([noise_x, noise_z]);
+        let final_noise = self.perlin_c.get([remap_x, remap_z]);
+        final_noise as f32
     }
 }
 
@@ -99,8 +122,6 @@ pub fn spawn_boundary_walls(commands: &mut Commands, params: &TerrainParams) -> 
     [e1, e2, e3, e4]
 }
 
-pub const NOISE_SCALE_FACTOR: f64 = 0.05;
-
 /// Generate procedural terrain mesh using Perlin noise
 pub fn generate_terrain_mesh(params: &TerrainParams) -> Mesh {
     let noise = params.perlin();
@@ -126,10 +147,7 @@ pub fn generate_terrain_mesh(params: &TerrainParams) -> Mesh {
             let z_pos = z as f32 * step - half_size;
 
             // Generate height using Perlin noise
-            // TODO REFACTOR PAIR TER1
-            let noise_x = x_pos as f64 * NOISE_SCALE_FACTOR; // Scale factor for noise frequency
-            let noise_z = z_pos as f64 * NOISE_SCALE_FACTOR;
-            let height = noise.get([noise_x as f64, noise_z as f64]) as f32 * height_scale;
+            let height = noise.sample_height(x_pos, z_pos) as f32 * height_scale;
 
             positions.push([x_pos, height, z_pos]);
             normals.push([0.0, 1.0, 0.0]); // Will recalculate proper normals
