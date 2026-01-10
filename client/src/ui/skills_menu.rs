@@ -1,10 +1,8 @@
 use crate::{
-    game_state::OverlayMenuState,
-    network::CurrentThirdPersonControlledUnit,
-    ui::{
+    assets::get_skill_icon, game_state::OverlayMenuState, network::CurrentThirdPersonControlledUnit, ui::{
         skills_menu::binds::SkillBindOverlayState,
         styles::{menu_button_bundle, menu_button_text},
-    },
+    }
 };
 
 use bevy::prelude::*;
@@ -45,18 +43,17 @@ pub fn spawn_skills_menu(
     mut commands: Commands,
     current_char: Query<&HasInventory, With<CurrentThirdPersonControlledUnit>>,
     inventory_map: Res<InventoryItemCache>,
+    images: Res<crate::assets::ImageAssets>,
 ) {
     info!("Spawning skills menu");
     // spawn outer container
     let mut skills_menu_ent = commands.spawn((
         SkillsMenu,
         Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            flex_direction: FlexDirection::Column,
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
-            row_gap: Val::Px(30.0),
+            display: Display::Grid,
+            padding: UiRect::all(px(3)),
+            width: Val::Percent(80.0),
+            height: Val::Percent(80.0),
             ..default()
         },
     ));
@@ -80,6 +77,7 @@ pub fn spawn_skills_menu(
 
     //spawn a button for each skill
     for equipped_skill in &skills {
+        let skill_icon = get_skill_icon(&equipped_skill.skill, &images);
         let skill_name = match equipped_skill.source {
             SkillSource::Item(item_id) => {
                 if let Some(item) = inventory_map.get_item(&item_id) {
@@ -101,17 +99,20 @@ pub fn spawn_skills_menu(
             let (text, font, color) = menu_button_text(skill_name);
             parent
                 .spawn((
-                    node,
+                    ImageNode {
+                        image: skill_icon,
+                        ..default()
+                    },
                     bg_color,
                     border_color,
                     Interaction::default(),
                     SkillButton {
                         skill: equipped_skill.clone(),
                     },
-                ))
-                .with_children(|button| {
-                    button.spawn((text, font, color));
-                });
+                ));
+                // .with_children(|button| {
+                //     button.spawn((text, font, color));
+                // });
         });
     }
 }
