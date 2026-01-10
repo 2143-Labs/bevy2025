@@ -37,12 +37,23 @@
           buildInputs = buildInputsAll;
           cargoBuildOptions = x: x ++ [ "-p" "client" ];
         };
+        wasmPackageBase = naersk-lib.buildPackage {
+          src = ./.;
+          nativeBuildInputs = with pkgs; [ pkg-config ];
+          buildInputs = with pkgs; [
+            binaryen
+            lld
+            wasm-bindgen-cli
+          ];
+          cargoBuildOptions = x: x ++ [ "-p" "client" "--no-default-features" "--target" "wasm32-unknown-unknown" "--features" "web" ];
+        };
       in
       {
         # Default package is the client
         packages.default = clientPackage;
         packages.client = clientPackage;
         packages.server = serverPackage;
+        packages.wasmBase = wasmPackageBase;
         packages.container = pkgs.dockerTools.buildLayeredImage {
           name = "bevy2025";
           tag = "latest";
@@ -64,6 +75,35 @@
               "org.opencontainers.image.description" = "Bevy 2025 game server";
             };
           };
+        };
+
+        # Derivation where `wasm-opt -Os --output opt.wasm target/wasm32-unknown-unknown/release/client.wasm` has been run on the wasmBase
+        # Then, we call `wasm-bindgen --out-name bevy2025` to generate the web folder, which we copy to out
+        # Finally, copy the client assets folder to out
+        packages.wasmOptAsServer = pkgs.stdenv.mkDerivation {
+          name = "bevy2025-wasm-opt-server";
+          src = ./.;
+          buildInputs = with pkgs; [
+            wasm-opt
+            wasm-bindgen-cli
+            naersk-lib
+            coreutils
+            rsync
+          ];
+          unpackPhase = "true"; # No need to unpack anything
+          buildPhase = ''
+            mkdir -p build
+            cp ${wasmPackageBase}/target/wasm32-unknown-unknown/release/client.wasm build/client.wasm
+            wasm-opt -Os --output build/opt.wasm build/client.wasm
+            wasm-bindgen --out-name bevy2025 --target web --out-dir build/ web build/opt.wasm
+            # Copy assets
+            mkdir -p build/assets
+            rsync -a --exclude 'target' --exclude '.git' ${./assets}/ build/assets/
+          '';
+          installPhase = ''
+            mkdir -p $out
+            cp -r build/* $out/
+          '';
         };
         devShells.default = with pkgs; mkShell {
           buildInputs = [
