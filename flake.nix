@@ -102,6 +102,21 @@
             cp -r build/* $out/
           '';
         };
+
+        packages.staticWebserver = pkgs.dockerTools.buildLayeredImage {
+          name = "bevy2025-static-webserver";
+          tag = "latest";
+          contents = [
+            pkgs.cacert
+            pkgs.python3
+            packages.wasmOptAsServer
+          ];
+          config = {
+            ExposedPorts = { "8000/tcp" = { }; };
+            EntryPoint = [ "${pkgs.python3}/bin/python3" "-m" "http.server" "8000" "--directory" "${packages.wasmOptAsServer}" ];
+          };
+        };
+
         devShells.default = with pkgs; mkShell {
           buildInputs = [
             rust-analyzer
