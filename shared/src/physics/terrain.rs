@@ -213,7 +213,7 @@ impl TerrainPerlin {
         let peaks_valleys = (self.transform_peaks_valleys)(x, z, &self.perlin_peaks_valleys);
 
         // Combine factors to get final height
-        let mut height = continentalness * erosion;
+        let mut height = (continentalness + erosion) / 2.0;
         //scale height so this doesn't go beyond -1.0 to 1.0 too much
         height *= 0.7;
         height += peaks_valleys * 0.3;
