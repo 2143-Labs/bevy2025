@@ -9,10 +9,7 @@ use shared::{
     projectile::{ProjectileAI, ProjectileRealtime},
 };
 
-use crate::{
-    animations::get_client_tick_from_server_tick,
-    network::ServerTick,
-};
+use crate::{animations::get_client_tick_from_server_tick, network::ServerTick};
 
 pub struct ProjectilePlugin;
 

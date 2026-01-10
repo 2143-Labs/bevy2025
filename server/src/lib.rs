@@ -473,7 +473,7 @@ fn send_ping_challenge(
         server_time: time.elapsed_secs_f64(),
     });
     for net_client in &clients {
-        sr.send_outgoing_event_now(net_client.0, &event);
+        sr.send_outgoing_event_now(net_client.0, &event, None);
     }
 }
 
@@ -599,7 +599,7 @@ fn on_player_heartbeat(
                     server_time: time.elapsed_secs_f64(),
                     server_tick: tick.0,
                 });
-                sr.send_outgoing_event_now(hb.endpoint, &event);
+                sr.send_outgoing_event_now(hb.endpoint, &event, None);
             }
         }
     }
@@ -626,7 +626,7 @@ fn on_player_scoreboard_request(
     }
     for req in pd.read() {
         let event = EventToClient::RequestScoreboardResponse(scoreboard_data.clone());
-        sr.send_outgoing_event_now(req.endpoint, &event);
+        sr.send_outgoing_event_now(req.endpoint, &event, None);
     }
 }
 

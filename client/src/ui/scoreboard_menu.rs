@@ -6,7 +6,7 @@ use std::time::Duration;
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use shared::{
     event::{PlayerId, UDPacketEvent, client::RequestScoreboardResponse},
-    netlib::{ClientNetworkingResources, MainServerEndpoint, NetworkingStats},
+    netlib::{ClientNetworkingResources, FakePingSettings, MainServerEndpoint, NetworkingStats},
 };
 
 /// Marker for the paused menu root entity
@@ -124,12 +124,14 @@ pub fn spawn_scoreboard_menu(mut commands: Commands) {
 pub fn send_scoreboard_request_packet(
     sr: Res<ClientNetworkingResources>,
     mse: Res<MainServerEndpoint>,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
     // send packet
     let event = shared::event::server::RequestScoreboard {};
     sr.send_outgoing_event_now(
         mse.0,
         &shared::netlib::EventToServer::RequestScoreboard(event),
+        fake_ping.as_deref().cloned(),
     );
 }
 

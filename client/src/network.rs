@@ -22,8 +22,8 @@ use shared::{
         ours::{PlayerColor, PlayerName},
     },
     netlib::{
-        ClientNetworkingResources, EventToClient, EventToServer, MainServerEndpoint, Tick,
-        setup_incoming_client,
+        ClientNetworkingResources, EventToClient, EventToServer, FakePingSettings,
+        MainServerEndpoint, Tick, setup_incoming_client,
     },
     physics::terrain::TerrainParams,
 };
@@ -157,6 +157,7 @@ impl Plugin for NetworkingPlugin {
                     .run_if(on_timer(Duration::from_millis(200)))
                     .run_if(in_state(NetworkGameState::ClientConnected)),
             )
+            .add_systems(Startup, insert_fake_ping_settings)
             .add_message::<SpawnUnit2>()
             .add_message::<SpawnMan>()
             .insert_resource(ServerInterpMap {
@@ -169,6 +170,28 @@ impl Plugin for NetworkingPlugin {
             })
             .insert_resource(LocalLatencyMeasurement { latency: -1.0 });
     }
+}
+
+fn insert_fake_ping_settings(mut commands: Commands, args: Res<crate::ClapArgs>) {
+    let to_server_ms = args.fake_ping_outbound.or(args.fake_ping).unwrap_or(0);
+    let from_server_ms = args.fake_ping_inbound.or(args.fake_ping).unwrap_or(0);
+    let jitter_ms = args.fake_ping_jitter.unwrap_or(0);
+
+    // Disable fake ping if all values are zero
+    if to_server_ms + from_server_ms + jitter_ms == 0 {
+        return;
+    }
+
+    info!(
+        "Enabling fake ping settings: to_server_ms={}, from_server_ms={}, jitter_ms={}",
+        to_server_ms, from_server_ms, jitter_ms
+    );
+
+    commands.insert_resource(shared::netlib::FakePingSettings {
+        to_server_ms,
+        from_server_ms,
+        jitter_ms,
+    });
 }
 
 fn spawn_networked_unit_forward_local(
@@ -428,13 +451,13 @@ fn send_connect_packet(
         "Connecting server={:?} name={name:?}",
         mse.0,
     )));
-    sr.send_outgoing_event_now(mse.0, &event);
+    sr.send_outgoing_event_now(mse.0, &event, None);
     info!("Sent connection packet to {:?}", mse.0);
 }
 
 fn send_disconnect_packet(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoint>) {
     let event = EventToServer::IWantToDisconnect(IWantToDisconnect {});
-    sr.send_outgoing_event_now(mse.0, &event);
+    sr.send_outgoing_event_now(mse.0, &event, None);
     info!("Sent disconnect packet to {:?}", mse.0);
 }
 
@@ -615,11 +638,12 @@ fn send_heartbeat(
     sr: Res<ClientNetworkingResources>,
     mse: Res<MainServerEndpoint>,
     time: Res<Time>,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
     let event = EventToServer::Heartbeat(Heartbeat {
         client_started_time: time.elapsed_secs_f64(),
     });
-    sr.send_outgoing_event_now(mse.0, &event);
+    sr.send_outgoing_event_now(mse.0, &event, fake_ping.as_deref().cloned());
 }
 
 #[derive(Resource)]
@@ -707,13 +731,14 @@ fn receive_challenge(
     local: Res<LocalLatencyMeasurement>,
     sr: Res<ClientNetworkingResources>,
     mse: Res<MainServerEndpoint>,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
     for event in heartbeat_challenges.read() {
         let event = EventToServer::HeartbeatChallengeResponse(HeartbeatChallengeResponse {
             server_time: event.event.server_time,
             local_latency_microsecs: local.latency * 1_000_000.0,
         });
-        sr.send_outgoing_event_now(mse.0, &event);
+        sr.send_outgoing_event_now(mse.0, &event, fake_ping.as_deref().cloned());
     }
 }
 
@@ -754,6 +779,7 @@ fn send_movement_camera(
         (&Transform, &NetEntId),
         (With<LocalCamera>, With<PlayerCamera>, Changed<Transform>),
     >,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
     if let Ok((transform, ent_id)) = our_transform.single() {
         let mut events = vec![];
@@ -764,7 +790,7 @@ fn send_movement_camera(
             transform: *transform,
         }));
 
-        sr.send_outgoing_event_now_batch(mse.0, &events);
+        sr.send_outgoing_event_now_batch(mse.0, &events, fake_ping.as_deref().cloned());
     }
 }
 
@@ -775,6 +801,7 @@ fn send_movement_unit(
         (&Transform, &LinearVelocity, &Rotation, &NetEntId),
         (With<CurrentThirdPersonControlledUnit>, Changed<Transform>),
     >,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
     if let Ok((transform, velo, rotation, ent_id)) = our_transform.single() {
         let mut events = vec![];
@@ -785,7 +812,7 @@ fn send_movement_unit(
             transform: *transform,
         }));
 
-        sr.send_outgoing_event_now_batch(mse.0, &events);
+        sr.send_outgoing_event_now_batch(mse.0, &events, fake_ping.as_deref().cloned());
     }
 }
 

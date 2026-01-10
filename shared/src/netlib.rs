@@ -214,8 +214,13 @@ pub enum EventGroupingRef<'a, T> {
     Reliable(PacketIdentifier, DuplicationIdentifier, Tick, &'a [T]),
 }
 
-impl<TI, TO: NetworkingEvent> NetworkingResources<TI, TO> {
-    pub fn send_outgoing_event_now(&self, endpoint: EndpointGeneral, event: &TO) {
+impl<TI: NetworkingEvent, TO: NetworkingEvent> NetworkingResources<TI, TO> {
+    pub fn send_outgoing_event_now(
+        &self,
+        endpoint: EndpointGeneral,
+        event: &TO,
+        delay: Option<FakePingSettings>,
+    ) {
         match endpoint {
             EndpointGeneral::WebSocket(ws_endpoint) => {
                 // TODO make this faster- but queue for now
@@ -225,12 +230,27 @@ impl<TI, TO: NetworkingEvent> NetworkingResources<TI, TO> {
                     .push(event.clone());
             }
             EndpointGeneral::UDP(udp_endpoint) => {
+                if let Some(delay) = delay {
+                    let resources = self.clone();
+                    let event = event.clone();
+                    std::thread::spawn(move || {
+                        let delay_ms = delay.get_delay_to_server();
+                        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                        send_outgoing_event_now_udp(&resources, udp_endpoint, &event);
+                    });
+                    return;
+                }
                 send_outgoing_event_now_udp(self, udp_endpoint, event)
             }
         }
     }
 
-    pub fn send_outgoing_event_now_batch(&self, endpoint: EndpointGeneral, events: &[TO]) {
+    pub fn send_outgoing_event_now_batch(
+        &self,
+        endpoint: EndpointGeneral,
+        events: &[TO],
+        delay: Option<FakePingSettings>,
+    ) {
         match endpoint {
             EndpointGeneral::WebSocket(ws_endpoint) => {
                 // TODO make this faster- but queue for now
@@ -240,6 +260,16 @@ impl<TI, TO: NetworkingEvent> NetworkingResources<TI, TO> {
                     .extend_from_slice(events);
             }
             EndpointGeneral::UDP(udp_endpoint) => {
+                if let Some(delay) = delay {
+                    let resources = self.clone();
+                    let events = events.to_vec();
+                    std::thread::spawn(move || {
+                        let delay_ms = delay.get_delay_to_server();
+                        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                        send_outgoing_event_now_batch_udp(&resources, udp_endpoint, &events);
+                    });
+                    return;
+                }
                 send_outgoing_event_now_batch_udp(self, udp_endpoint, events)
             }
         }
@@ -446,15 +476,35 @@ fn send_outgoing_event_next_tick_batch_udp<TI, TO: NetworkingEvent>(
         .extend_from_slice(events);
 }
 
+#[derive(Resource, Clone, Copy, Debug)]
+pub struct FakePingSettings {
+    pub to_server_ms: u64,
+    pub from_server_ms: u64,
+    pub jitter_ms: u64,
+}
+
 pub fn flush_outgoing_events_udp<TI: NetworkingEvent, TO: NetworkingEvent>(
     tick: Res<CurrentTick>,
     resources: Res<NetworkingResources<TI, TO>>,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
     resources.event_list_outgoing_udp.retain(|&key, value| {
         let value = std::mem::take(&mut *value);
         let resources = resources.clone();
         let tick = tick.0;
+        let fake_ping = fake_ping.as_deref().cloned();
         std::thread::spawn(move || {
+            // simulate fake ping
+            // TODO refactor fake ping below too
+            if let Some(fake_ping) = fake_ping {
+                if fake_ping.to_server_ms > 0 {
+                    let delay = fake_ping.get_delay_to_server();
+
+                    std::thread::sleep(std::time::Duration::from_millis(delay));
+                }
+            }
+
+            // send actual event
             send_outgoing_event_reliable_internal_udp(&resources, key, &value, &tick);
         });
 
@@ -466,14 +516,16 @@ pub fn setup_incoming_server<TI: NetworkingEvent, TO: NetworkingEvent>(
     commands: Commands,
     config: Res<NetworkConnectionTarget>,
 ) {
-    setup_incoming_shared::<TI, TO>(commands, &config.ip, config.port, true);
+    // client does not need fake ping
+    setup_incoming_shared::<TI, TO>(commands, &config.ip, config.port, true, None);
 }
 
 pub fn setup_incoming_client<TI: NetworkingEvent, TO: NetworkingEvent>(
     commands: Commands,
     config: Res<NetworkConnectionTarget>,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
-    setup_incoming_shared::<TI, TO>(commands, &config.ip, config.port, false);
+    setup_incoming_shared::<TI, TO>(commands, &config.ip, config.port, false, fake_ping);
 }
 
 fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
@@ -481,6 +533,7 @@ fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     mut ip: &str,
     port: u16,
     is_listener: bool,
+    fake_ping: Option<Res<FakePingSettings>>,
 ) {
     info!(is_listener, "Seting up networking!");
 
@@ -534,8 +587,9 @@ fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     #[cfg(feature = "udp")]
     {
         let res2 = res.clone();
+        let fake_ping = fake_ping.as_deref().cloned();
         std::thread::spawn(move || {
-            listener.for_each(|event| on_node_event_incoming(&res2, event));
+            listener.for_each(|event| on_node_event_incoming(&res2, event, fake_ping.as_ref()));
         });
 
         let res2 = res.clone();
@@ -546,9 +600,10 @@ fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     }
 }
 
-pub fn on_node_event_incoming<TI: NetworkingEvent, TO>(
+pub fn on_node_event_incoming<TI: NetworkingEvent, TO: NetworkingEvent>(
     res: &NetworkingResources<TI, TO>,
     event: NodeEvent<'_, ()>,
+    fake_ping: Option<&FakePingSettings>,
 ) {
     let net_event = match event {
         NodeEvent::Network(n) => n,
@@ -565,7 +620,27 @@ pub fn on_node_event_incoming<TI: NetworkingEvent, TO>(
             info!(?endpoint, ?listener, "Connection Accepted")
         }
         NetEvent::Message(endpoint, data) => {
-            on_data_incoming(res, endpoint, res.event_list_incoming_udp.clone(), data);
+            // TODO: Refactor fake ping here and above
+            if let Some(fake_ping) = fake_ping {
+                if fake_ping.from_server_ms > 0 {
+                    let delay = fake_ping.get_delay_from_server();
+                    std::thread::spawn({
+                        let res = res.clone();
+                        let data = data.to_vec();
+                        move || {
+                            std::thread::sleep(std::time::Duration::from_millis(delay));
+                            on_data_incoming(
+                                &res,
+                                endpoint,
+                                res.event_list_incoming_udp.clone(),
+                                &data,
+                            );
+                        }
+                    });
+                }
+            } else {
+                on_data_incoming(res, endpoint, res.event_list_incoming_udp.clone(), data);
+            }
         }
         NetEvent::Disconnected(endpoint) => warn!(?endpoint, "Client disconnected"),
     }
@@ -632,5 +707,27 @@ pub fn on_data_incoming<TI: NetworkingEvent, TO, K: EndpointTrait>(
                 list.extend(events.into_iter().map(|x| (endpoint, x)));
             }
         }
+    }
+}
+
+impl FakePingSettings {
+    pub fn get_delay_from_server(&self) -> u64 {
+        let jitter = if self.jitter_ms > 0 {
+            rand::random_range(0..self.jitter_ms)
+        } else {
+            0
+        };
+
+        self.from_server_ms + jitter
+    }
+
+    pub fn get_delay_to_server(&self) -> u64 {
+        let jitter = if self.jitter_ms > 0 {
+            rand::random_range(0..self.jitter_ms)
+        } else {
+            0
+        };
+
+        self.to_server_ms + jitter
     }
 }

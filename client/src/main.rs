@@ -47,6 +47,17 @@ struct ClapArgs {
     print_config: bool,
     #[clap(long)]
     autoconnect: Option<String>,
+    /// If set, will simulate a fake ping to the server with the given ms delay. See also
+    /// --fake-ping-inbound, --fake-ping-outbound, --fake-ping-jitter
+    #[clap(long, short = 'p')]
+    fake_ping: Option<u64>,
+    #[clap(long)]
+    fake_ping_inbound: Option<u64>,
+    #[clap(long)]
+    fake_ping_outbound: Option<u64>,
+    /// If set, will add jitter equal to `0..fake_ping` to the fake ping with the given ms max jitter
+    #[clap(long)]
+    fake_ping_jitter: Option<u64>,
 }
 
 fn main() {
