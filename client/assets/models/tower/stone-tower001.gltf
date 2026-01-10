@@ -125,35 +125,35 @@
 		{
 			"bufferView":4,
 			"componentType":5126,
-			"count":10692,
+			"count":79818,
 			"max":[
-				7.599999904632568,
-				128.0108184814453,
-				7.599999904632568
+				8.232748985290527,
+				128.55209350585938,
+				8.258976936340332
 			],
 			"min":[
-				-7.599999904632568,
-				0,
-				-7.599999904632568
+				-8.185997009277344,
+				-0.5258792638778687,
+				-8.226213455200195
 			],
 			"type":"VEC3"
 		},
 		{
 			"bufferView":5,
 			"componentType":5126,
-			"count":10692,
+			"count":79818,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":6,
 			"componentType":5126,
-			"count":10692,
+			"count":79818,
 			"type":"VEC2"
 		},
 		{
 			"bufferView":7,
-			"componentType":5123,
-			"count":29880,
+			"componentType":5125,
+			"count":147360,
 			"type":"SCALAR"
 		},
 		{
@@ -218,56 +218,56 @@
 		},
 		{
 			"buffer":0,
-			"byteLength":128304,
+			"byteLength":957816,
 			"byteOffset":13172,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":128304,
-			"byteOffset":141476,
+			"byteLength":957816,
+			"byteOffset":970988,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":85536,
-			"byteOffset":269780,
+			"byteLength":638544,
+			"byteOffset":1928804,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":59760,
-			"byteOffset":355316,
+			"byteLength":589440,
+			"byteOffset":2567348,
 			"target":34963
 		},
 		{
 			"buffer":0,
 			"byteLength":792,
-			"byteOffset":415076,
+			"byteOffset":3156788,
 			"target":34962
 		},
 		{
 			"buffer":0,
 			"byteLength":792,
-			"byteOffset":415868,
+			"byteOffset":3157580,
 			"target":34962
 		},
 		{
 			"buffer":0,
 			"byteLength":528,
-			"byteOffset":416660,
+			"byteOffset":3158372,
 			"target":34962
 		},
 		{
 			"buffer":0,
 			"byteLength":288,
-			"byteOffset":417188,
+			"byteOffset":3158900,
 			"target":34963
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":417476,
+			"byteLength":3159188,
 			"uri":"stone-tower001.bin"
 		}
 	]
