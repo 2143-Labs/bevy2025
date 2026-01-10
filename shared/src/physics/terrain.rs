@@ -59,7 +59,7 @@ impl TerrainPerlin {
         let noise_z = z as f64 * NOISE_SCALE_FACTOR;
         let remap_x = self.perlin_a.get([noise_x, noise_z]);
         let remap_z = self.perlin_b.get([noise_x, noise_z]);
-        let final_noise = self.perlin_c.get([remap_x * 450.0, remap_z * 450.0]);
+        let final_noise = self.perlin_c.get([remap_x * 45.0, remap_z * 45.0]);
         final_noise as f32
     }
 }
