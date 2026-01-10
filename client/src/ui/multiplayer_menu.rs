@@ -280,7 +280,6 @@ pub fn handle_color_buttons(
 ) {
     for (interaction, color_button) in color_query.iter() {
         if *interaction == Interaction::Pressed {
-            info!("Color selected: hue = {}", color_button.hue);
             config.player_color_hue = color_button.hue;
 
             // Update border colors and widths for all buttons
