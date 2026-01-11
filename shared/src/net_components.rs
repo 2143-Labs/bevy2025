@@ -211,6 +211,7 @@ pub fn make_man(transform: Transform, owner: ControlledBy, controller: &str) -> 
         avian3d::prelude::TransformInterpolation.to_net_component(),
         ents::CanAssumeControl.to_net_component(),
         transform.to_net_component(),
+        BasePermanantStats::default().to_net_component(),
         //avian3d::prelude::RigidBody::Dynamic.to_net_component(),
         //avian3d::prelude::Collider::sphere(3.0).to_net_component(),
         //avian3d::prelude::Mass(70.0).to_net_component(),

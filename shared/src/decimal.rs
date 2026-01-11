@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 pub struct Decimal(u64, u16, bool);
 
 impl Decimal {
+    pub fn zero() -> Self {
+        Decimal(0, 0, false)
+    }
     pub fn new(f: f64) -> Self {
         let negative = f < 0.0;
         let abs_f = f.abs();
