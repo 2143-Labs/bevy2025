@@ -64,6 +64,10 @@ impl Plugin for NetworkingPlugin {
                     |mut state: ResMut<NextState<NetworkGameState>>| {
                         state.set(NetworkGameState::ClientSendRequestPacket)
                     },
+                    |mut commands: Commands| {
+                        commands
+                        .insert_resource(LastHeartbeatReceived { time: 99.0e100 })
+                    }
                 ),
             )
             .add_systems(
@@ -159,6 +163,11 @@ impl Plugin for NetworkingPlugin {
                 (on_tower_sceneroot_complete, send_heartbeat)
                     .run_if(on_timer(Duration::from_millis(200)))
                     .run_if(in_state(NetworkGameState::ClientConnected)),
+            )
+            .add_systems(
+                Update,
+                check_if_we_are_timed_out.run_if(in_state(NetworkGameState::ClientConnected))
+                .run_if(on_timer(Duration::from_secs(5))),
             )
             .add_systems(Startup, insert_fake_ping_settings)
             .add_message::<SpawnUnit2>()
@@ -702,15 +711,35 @@ struct LocalLatencyMeasurement {
     pub latency: f64,
 }
 
+#[derive(Resource)]
+struct LastHeartbeatReceived {
+    pub time: f64,
+}
+
 fn receive_heartbeat(
     mut heartbeat_events: UDPacketEvent<HeartbeatResponse>,
     time: Res<Time>,
     mut latency_res: ResMut<LocalLatencyMeasurement>,
+    mut last_heartbeat: ResMut<LastHeartbeatReceived>,
 ) {
     for event in heartbeat_events.read() {
         let cur_client_time = time.elapsed_secs_f64();
         let latency = 0.5 * (cur_client_time - event.event.client_started_time);
         latency_res.latency = latency;
+        last_heartbeat.time = cur_client_time;
+    }
+}
+
+fn check_if_we_are_timed_out(
+    time: Res<Time>,
+    last_heartbeat: Res<LastHeartbeatReceived>,
+    mut notif: MessageWriter<Notification>,
+    mut state: ResMut<NextState<NetworkGameState>>,
+) {
+    let cur_time = time.elapsed_secs_f64();
+    if cur_time - last_heartbeat.time > 10.0 {
+        notif.write(Notification("Disconnected: Timeout".to_string()));
+        state.set(NetworkGameState::Quit);
     }
 }
 

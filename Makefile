@@ -3,7 +3,7 @@ CARGO_WASM := target/wasm32-unknown-unknown/release/client.wasm
 # Optimized wasm
 OPT_WASM := target/optimized.wasm
 # Final bindgen output
-BINDGEN_WASM := web/rots_example_bg.wasm
+BINDGEN_WASM := web/bevy2025_bg.wasm
 
 .PHONY: all build serve assets print_size clean
 
@@ -38,5 +38,5 @@ print_size: $(BINDGEN_WASM)
 	@ls -lh $(BINDGEN_WASM)
 
 clean:
-	rm -f $(OPT_WASM) $(BINDGEN_WASM) web/rots_example.js
+	rm -f $(OPT_WASM) $(BINDGEN_WASM) web/bevy2025.js
 	@echo "Cleaned generated wasm files (cargo clean not run)"
