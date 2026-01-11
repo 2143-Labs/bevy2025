@@ -155,7 +155,11 @@ fn on_man_spawn(
         let inventory = shared::items::goblin_drops();
         //TODO add to server inventory
 
-        let mut unit = make_man(transform, ControlledBy::single(*player_id_of_spawner));
+        let mut unit = make_man(
+            transform,
+            ControlledBy::single(*player_id_of_spawner),
+            &spawn.controller_type,
+        );
         unit.components.push(
             HasInventory {
                 inventory_id: inventory.id,

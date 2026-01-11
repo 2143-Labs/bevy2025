@@ -2,10 +2,13 @@ use avian3d::prelude::*;
 use bevy::prelude::*;
 use shared::Config;
 use shared::event::server::SpawnMan;
+use shared::net_components::ours::Dead;
 
 use crate::camera::LocalCamera;
 use crate::game_state::GameState;
+use crate::game_state::InputControlState;
 use crate::game_state::OverlayMenuState;
+use crate::network::CurrentThirdPersonControlledUnit;
 
 pub struct PhysicsPlugin;
 
@@ -16,7 +19,12 @@ impl Plugin for PhysicsPlugin {
                 Update,
                 spawn_man_on_use1
                     .run_if(in_state(GameState::Playing))
-                    .run_if(in_state(OverlayMenuState::Hidden)),
+                    .run_if(in_state(OverlayMenuState::Hidden))
+                    .run_if(in_state(InputControlState::Freecam)),
+            )
+            .add_systems(
+                Update,
+                move_to_freecam_on_unit_dead.run_if(in_state(GameState::Playing)),
             )
             .insert_resource(Gravity(Vec3::new(0.0, -9.81, 0.0)));
     }
@@ -44,18 +52,43 @@ fn spawn_man_on_use1(
     camera_query: Query<(&Camera, &Transform), With<LocalCamera>>,
     mut spawn_man_writer: MessageWriter<SpawnMan>,
 ) {
-    if !config.just_pressed(&keyboard, &mouse, shared::GameAction::Special1) {
+    let just_pressed_special1 =
+        config.just_pressed(&keyboard, &mouse, shared::GameAction::Special1);
+    let just_pressed_special2 =
+        config.just_pressed(&keyboard, &mouse, shared::GameAction::Special2);
+    if !just_pressed_special1 && !just_pressed_special2 {
         return;
     }
 
     // Find the active camera and spawn
-    if let Some((_, transform)) = camera_query.iter().find(|(cam, _)| cam.is_active) {
-        // Calculate spawn position 5 units ahead of camera
-        let forward = transform.forward();
-        let spawn_pos = transform.translation + *forward * 5.0;
+    let Some((_, transform)) = camera_query.iter().find(|(cam, _)| cam.is_active) else {
+        return;
+    };
 
-        spawn_man_writer.write(SpawnMan {
-            position: spawn_pos,
-        });
+    // Calculate spawn position 5 units ahead of camera
+    let forward = transform.forward();
+    let spawn_pos = transform.translation + *forward * 5.0;
+
+    let controller_type = match (just_pressed_special1, just_pressed_special2) {
+        (_, true) => "TypeE".to_string(),
+        _ => "TypeQ".to_string(),
+    };
+
+    spawn_man_writer.write(SpawnMan {
+        position: spawn_pos,
+        controller_type,
+    });
+}
+
+fn move_to_freecam_on_unit_dead(
+    mut commands: Commands,
+    dead_cur_unit: Query<(Entity, &CurrentThirdPersonControlledUnit), With<Dead>>,
+    mut new_cam_state: ResMut<NextState<InputControlState>>,
+) {
+    for (cur_ent, _is_third) in dead_cur_unit {
+        commands
+            .entity(cur_ent)
+            .remove::<CurrentThirdPersonControlledUnit>();
+        new_cam_state.set(InputControlState::Freecam);
     }
 }
