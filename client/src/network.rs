@@ -65,9 +65,8 @@ impl Plugin for NetworkingPlugin {
                         state.set(NetworkGameState::ClientSendRequestPacket)
                     },
                     |mut commands: Commands| {
-                        commands
-                        .insert_resource(LastHeartbeatReceived { time: 99.0e100 })
-                    }
+                        commands.insert_resource(LastHeartbeatReceived { time: 99.0e100 })
+                    },
                 ),
             )
             .add_systems(
@@ -166,8 +165,9 @@ impl Plugin for NetworkingPlugin {
             )
             .add_systems(
                 Update,
-                check_if_we_are_timed_out.run_if(in_state(NetworkGameState::ClientConnected))
-                .run_if(on_timer(Duration::from_secs(5))),
+                check_if_we_are_timed_out
+                    .run_if(in_state(NetworkGameState::ClientConnected))
+                    .run_if(on_timer(Duration::from_secs(5))),
             )
             .add_systems(Startup, insert_fake_ping_settings)
             .add_message::<SpawnUnit2>()
