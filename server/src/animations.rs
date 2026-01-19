@@ -240,7 +240,7 @@ fn on_unit_finish_cast(
                     }
                 }
 
-                Skill::Blink => {
+                Skill::SummonTower => {
                     let random_xy =
                         Vec2::new(rand::random_range(-5.0..5.0), rand::random_range(-5.0..5.0))
                             .normalize()

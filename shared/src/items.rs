@@ -62,17 +62,11 @@ impl<T: AsRef<Item> + std::fmt::Debug> Inventory<T> {
         let mut skills = vec![];
 
         for inv_item in &self.items {
-            let Some(_equip_slot) = inv_item
+            if !inv_item
                 .item
                 .as_ref()
-                .data
-                .item_misc
-                .iter()
-                .find_map(|misc| match misc {
-                    ItemMiscModifiers::Equipped(i) => Some(i),
-                    _ => None,
-                })
-            else {
+                .is_equipped()
+            {
                 // not equipped, skip this item
                 continue;
             };
@@ -368,6 +362,15 @@ pub struct ItemData {
 pub struct Item {
     pub item_id: ItemId,
     pub data: ItemData,
+}
+
+impl Item {
+    pub fn is_equipped(&self) -> bool {
+        self.data.item_misc.iter().any(|misc| match misc {
+            ItemMiscModifiers::Equipped(_) => true,
+            _ => false,
+        })
+    }
 }
 
 impl HasMods for Item {

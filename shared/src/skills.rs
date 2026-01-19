@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{items::ItemId, BASE_TICKS_PER_SECOND};
+use crate::{decimal::Decimal, items::ItemId, BASE_TICKS_PER_SECOND};
 
 pub mod animations;
 
@@ -18,11 +18,10 @@ pub enum Skill {
 
     WinterOrb,
 
-    Blink,
-
     TownPortal,
 
     SummonTestNPC,
+    SummonTower,
 
     /// Heal Targeted ally
     Heal,
@@ -47,8 +46,8 @@ pub fn all_skills() -> Vec<Skill> {
         Skill::Frostbolt,
         Skill::IceNova,
         Skill::WinterOrb,
-        Skill::Blink,
         Skill::TownPortal,
+        Skill::SummonTower,
         Skill::SummonTestNPC,
         Skill::Heal,
         Skill::Revive,
@@ -122,6 +121,21 @@ impl Skill {
             Skill::HomingArrows => ticks_from_secs(0.2),
             Skill::SummonTestNPC => ticks_from_secs(0.1),
             _ => ticks_from_secs(0.1),
+        }
+    }
+
+    pub fn base_damage(&self) -> Decimal {
+        match self {
+            Skill::Spark => Decimal::newi(10),
+            Skill::Frostbolt => Decimal::newi(15),
+            Skill::IceNova => Decimal::newi(20),
+            Skill::WinterOrb => Decimal::newi(25),
+            Skill::Hammerdin => Decimal::newi(30),
+            Skill::BasicBowAttack => Decimal::newi(12),
+            Skill::RainOfArrows => Decimal::newi(8),
+            Skill::HomingArrows => Decimal::newi(5),
+            _ => Decimal::newi(0),
+
         }
     }
 }

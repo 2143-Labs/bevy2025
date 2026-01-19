@@ -11,6 +11,13 @@ impl Decimal {
     pub fn zero() -> Self {
         Decimal(0, 0, false)
     }
+
+    pub fn newi(i: i64) -> Self {
+        let negative = i < 0;
+        let abs_f = i.abs();
+        Decimal(abs_f as u64, 0, negative)
+    }
+
     pub fn new(f: f64) -> Self {
         let negative = f < 0.0;
         let abs_f = f.abs();

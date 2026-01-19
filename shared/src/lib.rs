@@ -23,6 +23,7 @@ pub mod projectile;
 pub mod skills;
 pub mod stats;
 pub mod stats2;
+pub mod damage_calc;
 
 #[cfg(not(feature = "udp"))]
 pub mod message_io;
