@@ -26,16 +26,18 @@ bevy-steamworks = { version = "0.16.0", optional = true }
 
 raw-window-handle = { version = "0.6.2", optional = true }
 wasm-bindgen = { version = "0.2.108", optional = true }
+# transitive dependency feature flag required for web: getrandom/wasm_js
+getrandom = { version = "0.3.4", optional = true }
 web-sys = { version = "0.3.85", optional = true, features = [
 "Window", "Document", "HtmlCanvasElement", "HtmlParagraphElement", "console",
 "MessageEvent", "WebSocket", "PresentationConnection", "Blob", "ReadableStream", "ReadableStreamDefaultReader"
 ] }
-wasm-bindgen-futures = "0.4.58"
+wasm-bindgen-futures = {version = "0.4.58", optional = true }
 
 [features]
 inspector = ["dep:bevy-inspector-egui"]
 singleplayer = ["dep:server"]
-web = ["dep:wasm-bindgen", "dep:raw-window-handle", "dep:web-sys", "shared/web"]
+web = ["dep:wasm-bindgen", "dep:raw-window-handle", "dep:web-sys", "shared/web", "dep:getrandom", "dep:wasm-bindgen-futures", "getrandom/wasm_js"]
 udp = ["shared/udp", "dep:message-io"]
 steam = ["dep:bevy-steamworks"]
 clipboard = ["dep:arboard"]
