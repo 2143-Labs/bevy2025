@@ -19,12 +19,8 @@ pub struct PermanantStats {
     pub brawn: Decimal,
 }
 
-/// Every player will have a base permanat stat component, which plus items + buffs creates
-/// [FinalPermanantStats]
-#[derive(Component, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct BasePermanantStats(pub PermanantStats);
 
-#[derive(Component, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Component, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct FinalPermanantStats(pub PermanantStats);
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

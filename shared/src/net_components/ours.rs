@@ -10,7 +10,7 @@ use crate::{
     event::PlayerId,
     items::InventoryId,
     net_components::ToNetComponent,
-    netlib::Tick,
+    netlib::Tick, stats2::PermanantStats,
 };
 
 //include!(concat!(env!("OUT_DIR"), "/net_components_ours.rs"));
@@ -51,6 +51,13 @@ pub struct Dead {
     pub died_on_tick: Tick,
 }
 
+/// Every player will have a base permanat stat component, which plus items + buffs creates
+/// [FinalPermanantStats]
+#[derive(Serialize, Deserialize, Component, Debug, PartialEq, Clone, Default)]
+pub struct BasePermanantStats {
+    pub stats: PermanantStats,
+}
+
 ///// This struct represents all the possible things a unit might be trying to do this tick.
 //#[derive(Serialize, Deserialize, Component, Debug, PartialEq, Clone)]
 //pub enum ControlIntent {
@@ -78,6 +85,7 @@ pub enum NetComponentOurs {
     Dead(Dead),
     CharacterController(CharacterController),
     NPCController(NPCController),
+    BasePermanantStats(BasePermanantStats),
 }
 
 impl NetComponentOurs {
@@ -135,6 +143,9 @@ impl NetComponentOurs {
                 entity.insert(c);
             }
             NetComponentOurs::NPCController(c) => {
+                entity.insert(c);
+            }
+            NetComponentOurs::BasePermanantStats(c) => {
                 entity.insert(c);
             }
         }
@@ -215,6 +226,10 @@ impl NetComponentOurs {
         } else if type_id == std::any::TypeId::of::<NPCController>() {
             Some(NetComponentOurs::NPCController(
                 unsafe { ptr.deref::<NPCController>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<BasePermanantStats>() {
+            Some(NetComponentOurs::BasePermanantStats(
+                unsafe { ptr.deref::<BasePermanantStats>() }.clone(),
             ))
         } else {
             None
@@ -327,6 +342,12 @@ impl ToNetComponent for CharacterController {
 impl ToNetComponent for NPCController {
     fn to_net_component(self) -> super::NetComponent {
         super::NetComponent::Ours(NetComponentOurs::NPCController(self))
+    }
+}
+
+impl ToNetComponent for BasePermanantStats {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ours(NetComponentOurs::BasePermanantStats(self))
     }
 }
 

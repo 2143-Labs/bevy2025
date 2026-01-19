@@ -97,11 +97,11 @@ impl NetComponent {
             Some(NetComponent::PlayerId(
                 unsafe { ptr.deref::<PlayerId>() }.clone(),
             ))
-        } else if let Some(foreign) = foreign::NetComponentForeign::from_type_id_ptr(type_id, ptr) {
+        } else if let Some(foreign) = unsafe { foreign::NetComponentForeign::from_type_id_ptr(type_id, ptr) } {
             Some(NetComponent::Foreign(foreign))
-        } else if let Some(ours) = ours::NetComponentOurs::from_type_id_ptr(type_id, ptr) {
+        } else if let Some(ours) = unsafe { ours::NetComponentOurs::from_type_id_ptr(type_id, ptr) } {
             Some(NetComponent::Ours(ours))
-        } else if let Some(ents) = ents::NetComponentEnts::from_type_id_ptr(type_id, ptr) {
+        } else if let Some(ents) = unsafe { ents::NetComponentEnts::from_type_id_ptr(type_id, ptr) } {
             Some(NetComponent::Ents(ents))
         // This won't happen because Bundles get expanded into their components on insert usually
         } else if type_id == TypeId::of::<CharacterControllerBundle>() {
@@ -211,7 +211,7 @@ pub fn make_man(transform: Transform, owner: ControlledBy, controller: &str) -> 
         avian3d::prelude::TransformInterpolation.to_net_component(),
         ents::CanAssumeControl.to_net_component(),
         transform.to_net_component(),
-        BasePermanantStats::default().to_net_component(),
+        ours::BasePermanantStats::default().to_net_component(),
         //avian3d::prelude::RigidBody::Dynamic.to_net_component(),
         //avian3d::prelude::Collider::sphere(3.0).to_net_component(),
         //avian3d::prelude::Mass(70.0).to_net_component(),
