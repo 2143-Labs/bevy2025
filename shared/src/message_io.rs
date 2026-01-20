@@ -41,8 +41,8 @@ pub mod network {
 }
 
 pub mod node {
-    use super::network::{Endpoint, NetEvent, Transport};
     use super::REGISTERED_ENDPOINTS;
+    use super::network::{Endpoint, NetEvent, Transport};
     use core::net::SocketAddr;
 
     #[derive(Clone, Debug)]

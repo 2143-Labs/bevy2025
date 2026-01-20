@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{items::ItemId, BASE_TICKS_PER_SECOND};
+use crate::{BASE_TICKS_PER_SECOND, items::ItemId};
 
 pub mod animations;
 

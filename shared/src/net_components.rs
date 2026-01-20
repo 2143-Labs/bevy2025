@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     character_controller::{CharacterControllerBundle, NPCControllerBundle},
     decimal::Decimal,
-    event::{client::SpawnUnit2, NetEntId, PlayerId},
+    event::{NetEntId, PlayerId, client::SpawnUnit2},
     net_components::ours::ControlledBy,
 };
 

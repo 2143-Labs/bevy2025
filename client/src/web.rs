@@ -63,6 +63,12 @@ impl Plugin for WebPlugin {
 
         info!("Connecting to server at {}:{}", ip_str, port);
 
+        // TODO use this to query for active servers
+        commands.insert_resource(crate::login::LoginServerResource {
+            player_id: PlayerId(random::random_range(0..=u64::MAX)),
+            temp_auth_token: "yippee".to_string(),
+        });
+
         app.add_systems(OnEnter(NetworkGameState::ClientSendRequestPacket), setup);
         //while in ClientConencting, run
         app.add_systems(

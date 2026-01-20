@@ -178,7 +178,7 @@ fn standard_density(x: f32, y: f32, z: f32, perlin: &Perlin) -> f32 {
 
     let vec = Vec3::new(val_x as f32, val_y as f32, val_z as f32);
     let density = vec.length() / (3f32).sqrt(); // normalize to 0.0 to 1.0
-                                                // remap to -0.4 to 1.0
+    // remap to -0.4 to 1.0
     let mut density = density * (1.0 + CAVEY_NESS) - CAVEY_NESS;
 
     // more density as we go down in y

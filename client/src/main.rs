@@ -6,6 +6,7 @@ mod character_controller_client;
 mod debug;
 pub mod game_state;
 mod grass;
+mod login;
 mod network;
 pub mod notification;
 mod physics;
@@ -15,7 +16,6 @@ mod remote_players;
 mod terrain;
 mod ui;
 mod water;
-mod login;
 
 #[cfg(feature = "web")]
 mod web;
@@ -109,7 +109,10 @@ fn main_client(runtime: std::sync::Arc<tokio::runtime::Runtime>) {
 
     #[cfg(feature = "steam")]
     {
-        app.add_plugins((steamworks::SteamworksPlugin::new(AppId(440), runtime.clone()),));
+        app.add_plugins((steamworks::SteamworksPlugin::new(
+            AppId(440),
+            runtime.clone(),
+        ),));
     }
 
     app.add_plugins((

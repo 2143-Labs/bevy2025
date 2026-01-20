@@ -18,11 +18,7 @@ impl Decimal {
 
     pub fn to_f64(&self) -> f64 {
         let value = self.0 as f64 + (self.1 as f64 / 1_000_000.0);
-        if self.2 {
-            -value
-        } else {
-            value
-        }
+        if self.2 { -value } else { value }
     }
 
     pub fn to_f32(&self) -> f32 {

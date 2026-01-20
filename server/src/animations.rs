@@ -1,15 +1,15 @@
 use bevy::prelude::*;
 use shared::{
-    event::{client::SpawnProjectile, server::CastSkillUpdate, NetEntId, PlayerId, UDPacketEvent},
+    CurrentTick,
+    event::{NetEntId, PlayerId, UDPacketEvent, client::SpawnProjectile, server::CastSkillUpdate},
     net_components::{ents::SendNetworkTranformUpdates, make_npc, ours::ControlledBy},
     netlib::ServerNetworkingResources,
     physics::terrain::TerrainParams,
     projectile::{ProjectileAI, ProjectileSource},
     skills::{
-        animations::{CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince},
         Skill,
+        animations::{CastComplete, SharedAnimationPlugin, UnitFinishedSkillCast, UsingSkillSince},
     },
-    CurrentTick,
 };
 
 use crate::{ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint};
@@ -151,7 +151,7 @@ fn on_unit_finish_cast(
         skill,
     } in cast_event_reader.read()
     {
-        if tick.0 > 2 + server_tick.0 .0 {
+        if tick.0 > 2 + server_tick.0.0 {
             error!(
                 ?net_ent_id,
                 ?tick,

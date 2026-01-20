@@ -1,7 +1,7 @@
 use avian3d::prelude::*;
 use bevy::prelude::*;
 use shared::physics::{
-    terrain::{generate_terrain_mesh, spawn_boundary_walls, Terrain, TerrainParams},
+    terrain::{Terrain, TerrainParams, generate_terrain_mesh, spawn_boundary_walls},
     water::spawn_water_shared,
 };
 

@@ -2,10 +2,10 @@ use avian3d::prelude::{Collider, CollisionEventsEnabled, Sensor};
 use bevy::prelude::*;
 
 use crate::{
+    BASE_TICKS_PER_SECOND, CurrentTick,
     event::client::SpawnProjectile,
     physics::terrain::TerrainParams,
     skills::{Skill, SkillSource},
-    CurrentTick, BASE_TICKS_PER_SECOND,
 };
 use serde::{Deserialize, Serialize};
 
@@ -145,7 +145,7 @@ fn despawn_projectile_after_duration(
     tick: Res<CurrentTick>,
 ) {
     for (ent, despawn) in &query {
-        if tick.0 .0 >= despawn.tick.0 {
+        if tick.0.0 >= despawn.tick.0 {
             commands.entity(ent).despawn();
         }
     }

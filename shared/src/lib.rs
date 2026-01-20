@@ -28,7 +28,6 @@ pub mod message_io;
 #[cfg(feature = "udp")]
 pub use message_io;
 
-
 #[cfg(feature = "udp")]
 pub mod tokio_udp {
     use bevy::prelude::Resource;
@@ -390,7 +389,7 @@ pub fn increment_ticks(
         last_completed_increment.latest_tick_times.pop_front();
     }
 
-    if current_tick.0 .0.is_multiple_of(100) {
+    if current_tick.0.0.is_multiple_of(100) {
         let mut ticks_in_order = last_completed_increment
             .latest_tick_times
             .iter()
