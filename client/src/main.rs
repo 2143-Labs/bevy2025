@@ -119,7 +119,10 @@ fn main_client(runtime: Option<std::sync::Arc<Runtime>>) {
 
     #[cfg(feature = "steam")]
     {
-        app.add_plugins((steamworks::SteamworksPlugin::new(AppId(440), runtime.unwrap().clone()),));
+        app.add_plugins((steamworks::SteamworksPlugin::new(
+            AppId(440),
+            runtime.unwrap().clone(),
+        ),));
     }
 
     app.add_plugins((
