@@ -238,7 +238,7 @@ fn on_player_connect(
     let terrain = world.resource::<TerrainParams>().clone();
     let _config = world.resource::<Config>().clone();
     for player in new_players.read() {
-        info!("Got packet");
+        info!("Got player connect packet");
         // Generate their name
         let name = player
             .event
@@ -329,10 +329,17 @@ fn on_player_connect(
         let units_to_spawn =
             world.try_query_filtered::<(Entity, &NetEntId), Without<ConnectedPlayer>>();
 
+        // We are going to construct a list of all entities with a NetEntId. Each entity begins
+        // with a SpawnUnit2 call with an with an empty component list. We don't know what other
+        // dynamic components each unit would have, so we inspect each entity's components' typeId
+        // against the NetComponent::from_type_id_ptr function.
+        //
+        // If we find a component that can be serialized as a NetComponent, we add it to the list
+        // of components for the SpawnUnit2 call.
         if let Some(mut units_spawns_thing) = units_to_spawn {
             for (unit_ent, unit_net_ent_id) in units_spawns_thing.iter(world) {
                 let component_info = world.inspect_entity(unit_ent).unwrap();
-                info!(
+                debug!(
                     "Preparing to send existing unit {:?} to new player",
                     unit_net_ent_id
                 );
@@ -362,7 +369,7 @@ fn on_player_connect(
                             *component_ptr,
                         )
                     } {
-                        info!("Component to send: {:?}", net_comp);
+                        debug!("Component to send: {:?}", net_comp);
                         spawn_unit.components.push(net_comp);
                     }
                 }

@@ -85,6 +85,8 @@ impl NetComponent {
         }
     }
 
+    /// SAFETY: must be called with the bevy ptr matching this given type ID argument.
+    /// Returns None if the type ID is not a net component.
     pub unsafe fn from_type_id_ptr(
         type_id: TypeId,
         ptr: bevy::ptr::Ptr<'_>,
