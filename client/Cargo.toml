@@ -33,12 +33,16 @@ web-sys = { version = "0.3.85", optional = true, features = [
 "MessageEvent", "WebSocket", "PresentationConnection", "Blob", "ReadableStream", "ReadableStreamDefaultReader"
 ] }
 wasm-bindgen-futures = {version = "0.4.58", optional = true }
+reqwest = { version = "0.13.1", default-features = false, features = ["rustls", "json"] , optional = true }
+tokio = { version = "1.49.0", optional = true }
+futures = { version = "0.3.31", optional = true }
+serde_json = "1.0.149"
 
 [features]
 inspector = ["dep:bevy-inspector-egui"]
 singleplayer = ["dep:server"]
 web = ["dep:wasm-bindgen", "dep:raw-window-handle", "dep:web-sys", "shared/web", "dep:getrandom", "dep:wasm-bindgen-futures", "getrandom/wasm_js"]
 udp = ["shared/udp", "dep:message-io"]
-steam = ["dep:bevy-steamworks"]
+steam = ["dep:bevy-steamworks", "dep:tokio", "dep:futures", "dep:reqwest"]
 clipboard = ["dep:arboard"]
 default = ["steam", "udp", "clipboard"]

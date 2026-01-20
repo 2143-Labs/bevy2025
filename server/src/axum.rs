@@ -1,10 +1,10 @@
 use axum::Router;
 use bevy::{prelude::*, time::common_conditions::on_real_timer};
 use shared::{
-    event::PlayerId, net_components::ours::PlayerName, netlib::ServerNetworkingResources,
+    event::PlayerId, net_components::ours::PlayerName, netlib::ServerNetworkingResources, tokio_udp::TokioRuntimeResource,
 };
 
-use crate::{ConnectedPlayer, ServerState, TokioRuntimeResource};
+use crate::{ConnectedPlayer, ServerState};
 
 pub struct AxumServerPlugin;
 

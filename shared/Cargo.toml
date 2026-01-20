@@ -35,6 +35,7 @@ fastrand = "2.3.0"
 noise = "0.9.0"
 dashmap = { version = "6.1.0", features = ["rayon"] }
 rayon = "1.11.0"
+tokio = { version = "1.49.0", features = ["net", "rt-multi-thread"], optional = true }
 #webrtc = "0.14.0"
 
 #clap = { version = "4.5.25", features = ["derive"] }
@@ -49,6 +50,6 @@ regex = "1.12.2"
 syn = "2.0.114"
 
 [features]
-udp = ["dep:message-io"]
+udp = ["dep:message-io", "dep:tokio"]
 web = []
 default = []
