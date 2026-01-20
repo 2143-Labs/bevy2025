@@ -63,6 +63,9 @@ struct ClapArgs {
     fake_ping_jitter: Option<u64>,
 }
 
+#[cfg(not(feature = "web"))]
+use tokio::runtime::Runtime;
+#[cfg(not(feature = "web"))]
 fn main() {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -73,11 +76,18 @@ fn main() {
 
     let runtime2 = runtime.clone();
     runtime.block_on(async {
-        main_client(runtime2);
+        main_client(Some(runtime2));
     });
 }
 
-fn main_client(runtime: std::sync::Arc<tokio::runtime::Runtime>) {
+#[cfg(feature = "web")]
+pub struct Runtime;
+#[cfg(feature = "web")]
+fn main() {
+    main_client(None);
+}
+
+fn main_client(runtime: Option<std::sync::Arc<Runtime>>) {
     let mut args = ClapArgs::parse();
 
     if args.print_binds {
@@ -109,7 +119,7 @@ fn main_client(runtime: std::sync::Arc<tokio::runtime::Runtime>) {
 
     #[cfg(feature = "steam")]
     {
-        app.add_plugins((steamworks::SteamworksPlugin::new(AppId(440), runtime.clone()),));
+        app.add_plugins((steamworks::SteamworksPlugin::new(AppId(440), runtime.unwrap().clone()),));
     }
 
     app.add_plugins((
