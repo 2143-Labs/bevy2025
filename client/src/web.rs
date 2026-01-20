@@ -32,6 +32,14 @@ impl Plugin for WebPlugin {
             .parse()
             .expect("server_port element text content is not a valid u16");
 
+        let auth_server: String = document
+            .get_element_by_id("auth_server")
+            .expect("No auth_server element in html")
+            .text_content()
+            .expect("auth_server element has no text content")
+            .parse()
+            .expect("auth_server element text content is not a valid u16");
+
         let ip_addr: std::net::IpAddr = ip_str
             .parse()
             .expect("server_ip element text content is not a valid IpAddr");
@@ -61,13 +69,16 @@ impl Plugin for WebPlugin {
             }),
         ));
 
+
+        app.insert_resource(AuthServerResource(auth_server));
+
         info!("Connecting to server at {}:{}", ip_str, port);
 
         // TODO use this to query for active servers
-        commands.insert_resource(crate::login::LoginServerResource {
-            player_id: PlayerId(random::random_range(0..=u64::MAX)),
-            temp_auth_token: "yippee".to_string(),
-        });
+        //commands.insert_resource(crate::login::LoginServerResource {
+            //player_id: PlayerId(random::random_range(0..=u64::MAX)),
+            //temp_auth_token: "yippee".to_string(),
+        //});
 
         app.add_systems(OnEnter(NetworkGameState::ClientSendRequestPacket), setup);
         //while in ClientConencting, run

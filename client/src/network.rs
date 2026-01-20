@@ -45,6 +45,10 @@ pub mod inventory;
 #[derive(Component)]
 pub struct WorldEntity;
 
+/// HTTP/s location of the main auth server to use
+#[derive(Resource)]
+pub struct AuthServerEndpoint(pub String);
+
 /// Temporary storage for camera NetEntId until camera is spawned
 #[derive(Resource)]
 struct PendingCameraId(NetEntId);

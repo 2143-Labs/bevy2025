@@ -83,7 +83,7 @@ fn try_steam_login(
     let app_owner = client.apps().app_owner();
     let steam_id = format!("{:?}", app_owner);
 
-    let login_server = clap_args.login_server.to_string();
+    let login_server = clap_args.login_server_steam.to_string();
     tokio_runtime.spawn(async move {
         let cl = reqwest::Client::new();
         let req = cl
