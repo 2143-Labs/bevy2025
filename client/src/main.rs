@@ -48,7 +48,10 @@ struct ClapArgs {
     print_config: bool,
     #[clap(long)]
     autoconnect: Option<String>,
-    #[clap(long, default_value = "http://192.168.1.32:8002/api/v1/steam/weak_login")]
+    #[clap(
+        long,
+        default_value = "http://192.168.1.32:8002/api/v1/steam/weak_login"
+    )]
     login_server_steam: String,
     /// If set, will simulate a fake ping to the server with the given ms delay. See also
     /// --fake-ping-inbound, --fake-ping-outbound, --fake-ping-jitter
