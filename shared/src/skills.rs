@@ -40,6 +40,7 @@ pub enum Skill {
     HomingArrows,
 }
 
+
 pub fn all_skills() -> Vec<Skill> {
     vec![
         Skill::Spark,
