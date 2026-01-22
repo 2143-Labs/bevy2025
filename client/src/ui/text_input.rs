@@ -1,3 +1,6 @@
+#[cfg(feature = "clipboard")]
+use arboard::Clipboard;
+
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use arboard::Clipboard;
 
@@ -30,10 +33,12 @@ impl TextInput {
         self
     }
 
-
     pub fn get_selection(&self) -> Option<(usize, usize)> {
         if let Some(start) = self.selection_start {
-            Some((start.min(self.cursor_position), start.max(self.cursor_position)))
+            Some((
+                start.min(self.cursor_position),
+                start.max(self.cursor_position),
+            ))
         } else {
             None
         }
@@ -129,9 +134,11 @@ pub fn handle_text_input_keyboard(
     };
 
     let mut changed = false;
-    let ctrl_pressed = keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
+    let ctrl_pressed =
+        keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
 
     // Handle special key combinations first
+    #[cfg(feature = "clipboard")]
     if ctrl_pressed {
         if keyboard.just_pressed(KeyCode::KeyA) {
             // Ctrl+A - Select all

@@ -93,14 +93,14 @@
 			"componentType":5126,
 			"count":367,
 			"max":[
-				0.6111470460891724,
-				2.707247257232666,
-				2.324921131134033
+				2.4445881843566895,
+				10.828989028930664,
+				9.299684524536133
 			],
 			"min":[
-				-0.6007914543151855,
-				0.502953052520752,
-				1.4849066734313965
+				-2.403165817260742,
+				2.011812210083008,
+				5.939626693725586
 			],
 			"type":"VEC3"
 		},
@@ -125,35 +125,35 @@
 		{
 			"bufferView":4,
 			"componentType":5126,
-			"count":10692,
+			"count":79818,
 			"max":[
-				1.899999976158142,
-				32.00270462036133,
-				1.899999976158142
+				8.232748985290527,
+				128.55209350585938,
+				8.258976936340332
 			],
 			"min":[
-				-1.899999976158142,
-				0,
-				-1.899999976158142
+				-8.185997009277344,
+				-0.5258792638778687,
+				-8.226213455200195
 			],
 			"type":"VEC3"
 		},
 		{
 			"bufferView":5,
 			"componentType":5126,
-			"count":10692,
+			"count":79818,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":6,
 			"componentType":5126,
-			"count":10692,
+			"count":79818,
 			"type":"VEC2"
 		},
 		{
 			"bufferView":7,
-			"componentType":5123,
-			"count":29880,
+			"componentType":5125,
+			"count":147360,
 			"type":"SCALAR"
 		},
 		{
@@ -161,14 +161,14 @@
 			"componentType":5126,
 			"count":66,
 			"max":[
-				1,
-				0.5022737979888916,
-				5.0359601974487305
+				4,
+				2.0090951919555664,
+				20.143840789794922
 			],
 			"min":[
-				-1,
-				0.0079302117228508,
-				1.89741849899292
+				-4,
+				0.0317208468914032,
+				7.58967399597168
 			],
 			"type":"VEC3"
 		},
@@ -218,56 +218,56 @@
 		},
 		{
 			"buffer":0,
-			"byteLength":128304,
+			"byteLength":957816,
 			"byteOffset":13172,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":128304,
-			"byteOffset":141476,
+			"byteLength":957816,
+			"byteOffset":970988,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":85536,
-			"byteOffset":269780,
+			"byteLength":638544,
+			"byteOffset":1928804,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":59760,
-			"byteOffset":355316,
+			"byteLength":589440,
+			"byteOffset":2567348,
 			"target":34963
 		},
 		{
 			"buffer":0,
 			"byteLength":792,
-			"byteOffset":415076,
+			"byteOffset":3156788,
 			"target":34962
 		},
 		{
 			"buffer":0,
 			"byteLength":792,
-			"byteOffset":415868,
+			"byteOffset":3157580,
 			"target":34962
 		},
 		{
 			"buffer":0,
 			"byteLength":528,
-			"byteOffset":416660,
+			"byteOffset":3158372,
 			"target":34962
 		},
 		{
 			"buffer":0,
 			"byteLength":288,
-			"byteOffset":417188,
+			"byteOffset":3158900,
 			"target":34963
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":417476,
+			"byteLength":3159188,
 			"uri":"stone-tower001.bin"
 		}
 	]

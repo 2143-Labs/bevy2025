@@ -33,6 +33,7 @@ pub struct SpawnCircle {
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct SpawnMan {
     pub position: Vec3,
+    pub controller_type: String,
 }
 
 //#[derive(Debug, Clone, Serialize, Deserialize, Message)]

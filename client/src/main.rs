@@ -6,6 +6,7 @@ mod character_controller_client;
 mod debug;
 pub mod game_state;
 mod grass;
+mod login;
 mod network;
 pub mod notification;
 mod physics;
@@ -47,6 +48,11 @@ struct ClapArgs {
     print_config: bool,
     #[clap(long)]
     autoconnect: Option<String>,
+    #[clap(
+        long,
+        default_value = "http://192.168.1.32:8002/api/v1/steam/weak_login"
+    )]
+    login_server_steam: String,
     /// If set, will simulate a fake ping to the server with the given ms delay. See also
     /// --fake-ping-inbound, --fake-ping-outbound, --fake-ping-jitter
     #[clap(long, short = 'p')]
@@ -60,7 +66,31 @@ struct ClapArgs {
     fake_ping_jitter: Option<u64>,
 }
 
+#[cfg(not(feature = "web"))]
+use tokio::runtime::Runtime;
+#[cfg(not(feature = "web"))]
 fn main() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+
+    let runtime = std::sync::Arc::new(runtime);
+
+    let runtime2 = runtime.clone();
+    runtime.block_on(async {
+        main_client(Some(runtime2));
+    });
+}
+
+#[cfg(feature = "web")]
+pub struct Runtime;
+#[cfg(feature = "web")]
+fn main() {
+    main_client(None);
+}
+
+fn main_client(runtime: Option<std::sync::Arc<Runtime>>) {
     let mut args = ClapArgs::parse();
 
     if args.print_binds {
@@ -88,6 +118,14 @@ fn main() {
     #[cfg(not(feature = "web"))]
     {
         app.add_plugins(DefaultPlugins);
+    }
+
+    #[cfg(feature = "steam")]
+    {
+        app.add_plugins((steamworks::SteamworksPlugin::new(
+            AppId(440),
+            runtime.unwrap().clone(),
+        ),));
     }
 
     app.add_plugins((
@@ -119,23 +157,6 @@ fn main() {
     .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue
     .insert_resource(args)
     .add_systems(Startup, check_all_clap_args);
-
-    #[cfg(feature = "steam")]
-    {
-        app.add_plugins((steamworks::SteamworksPlugin(AppId(480)),))
-            .add_systems(Startup, |client: Res<bevy_steamworks::Client>| {
-                let app_owner = client.apps().app_owner();
-                info!("App Owner Steam ID: {:?}", app_owner);
-                //for friend in client.friends().get_friends(FriendFlags::IMMEDIATE) {
-                //info!(
-                //"Friend: {} = {:?} {:?}",
-                //friend.name(),
-                //friend.id(),
-                //friend.state()
-                //);
-                //}
-            });
-    }
 
     app.run();
 }

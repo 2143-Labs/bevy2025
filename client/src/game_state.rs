@@ -85,8 +85,14 @@ fn despawn_world(mut commands: Commands, world_entities: Query<Entity, With<Terr
     info!("Despawned {} world entities", world_entities.iter().count());
 }
 
-fn quit_event(mut app_exit_events: MessageWriter<bevy::app::AppExit>) {
-    app_exit_events.write(bevy::app::AppExit::Success);
+// go to main menu again
+fn quit_event(
+    //mut app_exit_events: MessageWriter<bevy::app::AppExit>
+    mut next_game_state: ResMut<NextState<GameState>>,
+) {
+    //app_exit_events.write(bevy::app::AppExit::Success);
+    info!("Quitting to MainMenu");
+    next_game_state.set(GameState::MainMenu);
 }
 
 /// Transition to Home menu when entering MainMenu

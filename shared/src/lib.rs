@@ -28,6 +28,21 @@ pub mod message_io;
 #[cfg(feature = "udp")]
 pub use message_io;
 
+#[cfg(feature = "udp")]
+pub mod tokio_udp {
+    use bevy::prelude::Resource;
+
+    #[derive(Resource, Clone)]
+    pub struct TokioRuntimeResource(pub std::sync::Arc<tokio::runtime::Runtime>);
+
+    impl std::ops::Deref for TokioRuntimeResource {
+        type Target = tokio::runtime::Runtime;
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+}
+
 pub const BASE_TICKS_PER_SECOND: u16 = 60;
 
 #[derive(
@@ -374,7 +389,7 @@ pub fn increment_ticks(
         last_completed_increment.latest_tick_times.pop_front();
     }
 
-    if current_tick.0 .0.is_multiple_of(100) {
+    if current_tick.0.0.is_multiple_of(100) {
         let mut ticks_in_order = last_completed_increment
             .latest_tick_times
             .iter()

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{event::NetEntId, items::SkillFromSkillSource, netlib::Tick, CurrentTick};
+use crate::{CurrentTick, event::NetEntId, items::SkillFromSkillSource, netlib::Tick};
 
 pub struct SharedAnimationPlugin;
 

@@ -7,8 +7,8 @@ use crate::net_components::PlayerConnectionInfo;
 use crate::netlib::{NetworkingResources, Tick};
 use crate::physics::terrain::TerrainParams;
 use crate::projectile::{ProjectileAI, ProjectileSource};
-use crate::{event::EventFromEndpoint, net_components::NetComponent};
 use crate::{PlayerPing, PlayerPingInteger, ServerTPS};
+use crate::{event::EventFromEndpoint, net_components::NetComponent};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 

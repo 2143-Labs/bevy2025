@@ -15,6 +15,7 @@ use crate::game_state::NetworkGameState;
 
 impl Plugin for WebPlugin {
     fn build(&self, app: &mut App) {
+        info!("Initializing web plugin");
         // get our default location
         let window = web_sys::window().unwrap();
         let document = window.document().unwrap();
@@ -32,6 +33,14 @@ impl Plugin for WebPlugin {
             .parse()
             .expect("server_port element text content is not a valid u16");
 
+        let auth_server: String = document
+            .get_element_by_id("auth_server")
+            .expect("No auth_server element in html")
+            .text_content()
+            .expect("auth_server element has no text content")
+            .parse()
+            .expect("auth_server element text content is not a valid u16");
+
         let ip_addr: std::net::IpAddr = ip_str
             .parse()
             .expect("server_ip element text content is not a valid IpAddr");
@@ -42,6 +51,33 @@ impl Plugin for WebPlugin {
             // p tag
             .dyn_into::<HtmlParagraphElement>()
             .expect("loading element is not a paragraph element");
+
+        let localstorage_player_id = document
+            .get_element_by_id("player_id")
+            .expect("No player_id element in html")
+            .dyn_into::<HtmlParagraphElement>()
+            .expect("player_id element is not a paragraph element")
+            .text_content();
+        let localstorage_token = document
+            .get_element_by_id("auth_token")
+            .expect("No auth_token element in html")
+            .dyn_into::<HtmlParagraphElement>()
+            .expect("auth_token element is not a paragraph element")
+            .text_content();
+
+        if let (Some(token), Some(player_id)) = (localstorage_token, localstorage_player_id) {
+            info!("Found auth token and player id in localstorage, using them for authentication");
+            app.insert_resource(crate::login::LoginServerResource {
+                temp_auth_token: token,
+                player_id: shared::event::PlayerId(
+                    player_id
+                        .parse()
+                        .expect("player_id in localstorage is not a valid u64"),
+                ),
+            });
+        } else {
+            info!("No auth token or player id found in localstorage, starting unauthenticated");
+        }
 
         loading_element.set_text_content(Some(""));
 
@@ -55,13 +91,21 @@ impl Plugin for WebPlugin {
         }));
         //app.add_plugins(DefaultPlugins);
 
-        app.insert_resource(MainServerEndpoint(
-            shared::netlib::EndpointGeneral::WebSocket(shared::netlib::WebSocketEndpoint {
-                socket_addr: (ip_addr, port).into(),
-            }),
-        ));
+        //app.insert_resource(MainServerEndpoint(
+        //shared::netlib::EndpointGeneral::WebSocket(shared::netlib::WebSocketEndpoint {
+        //socket_addr: (ip_addr, port).into(),
+        //}),
+        //));
+
+        app.insert_resource(crate::network::AuthServerEndpoint(auth_server));
 
         info!("Connecting to server at {}:{}", ip_str, port);
+
+        // TODO use this to query for active servers
+        //commands.insert_resource(crate::login::LoginServerResource {
+        //player_id: PlayerId(random::random_range(0..=u64::MAX)),
+        //temp_auth_token: "yippee".to_string(),
+        //});
 
         app.add_systems(OnEnter(NetworkGameState::ClientSendRequestPacket), setup);
         //while in ClientConencting, run

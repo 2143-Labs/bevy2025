@@ -4,26 +4,26 @@ use avian3d::prelude::{Gravity, LinearVelocity, Rotation};
 use bevy::{app::ScheduleRunnerPlugin, platform::collections::HashSet, prelude::*};
 use rand::Rng;
 use shared::{
+    Config, ConfigPlugin, CurrentTick, PlayerPing, PlayerPingAtomic, PlayerPingInteger,
     event::{
+        NetEntId, PlayerId, UDPacketEvent,
         client::{
             DespawnUnit2, HeartbeatChallenge, HeartbeatResponse, PlayerDisconnected, SpawnUnit2,
             UpdateUnit2, WorldData2,
         },
         server::{ChangeMovement, Heartbeat, HeartbeatChallengeResponse, IWantToDisconnect},
-        NetEntId, PlayerId, UDPacketEvent,
     },
     net_components::{
+        ToNetComponent,
         ents::{PlayerCamera, SendNetworkTranformUpdates},
         make_ball,
         ours::{ControlledBy, DespawnOnPlayerDisconnect, PlayerColor, PlayerName},
-        ToNetComponent,
     },
     netlib::{
         EndpointGeneral, EventToClient, EventToServer, NetworkConnectionTarget,
         ServerNetworkingResources, Tick,
     },
     physics::terrain::TerrainParams,
-    Config, ConfigPlugin, CurrentTick, PlayerPing, PlayerPingAtomic, PlayerPingInteger,
 };
 
 /// How often to run the system
@@ -73,19 +73,10 @@ pub mod spawns;
 pub mod terrain;
 pub mod websocket;
 
-#[derive(Resource, Clone)]
-pub struct TokioRuntimeResource(pub Arc<tokio::runtime::Runtime>);
-impl std::ops::Deref for TokioRuntimeResource {
-    type Target = tokio::runtime::Runtime;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 pub fn main_multiplayer_server(tokio_runtime: Arc<tokio::runtime::Runtime>) {
     do_app(|app| {
         app.add_systems(Startup, add_network_connection_info_from_config);
-        app.insert_resource(TokioRuntimeResource(tokio_runtime));
+        app.insert_resource(shared::tokio_udp::TokioRuntimeResource(tokio_runtime));
         app.add_plugins(axum::AxumServerPlugin);
     });
 }
@@ -455,6 +446,7 @@ fn on_disconnect_packet(
     endpoint_mapping: Res<EndpointToPlayerId>,
 ) {
     for dp in disconnect_packets.read() {
+        info!("Received disconnect packet from {:?}", dp.endpoint);
         if let Some(player_id) = endpoint_mapping.map.get(&dp.endpoint) {
             on_disconnect.write(PlayerDisconnected {
                 id: *player_id,
@@ -532,6 +524,8 @@ fn on_player_disconnect(
                 });
             }
         }
+
+        info!("Player {:?} disconnected: {}", player.id, player.reason);
 
         for (c_ent, net_client, player_id) in &clients {
             sr.send_outgoing_event_next_tick_batch(net_client.0, &events);

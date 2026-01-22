@@ -1,12 +1,12 @@
 use avian3d::prelude::CollisionStart;
 use bevy::prelude::*;
 use shared::{
-    event::{client::SpawnProjectile, NetEntId},
+    event::{NetEntId, client::SpawnProjectile},
     netlib::ServerNetworkingResources,
     projectile::{ProjectileAI, ProjectileRealtime, ProjectileSource},
 };
 
-use crate::{spawns::UnitDie, ConnectedPlayer, PlayerEndpoint, ServerState};
+use crate::{ConnectedPlayer, PlayerEndpoint, ServerState, spawns::UnitDie};
 
 pub struct ProjectilePlugin;
 

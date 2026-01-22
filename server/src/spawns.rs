@@ -1,22 +1,21 @@
 use avian3d::prelude::RigidBody;
 use bevy::prelude::*;
 use shared::{
+    CurrentTick,
     character_controller::{CharacterController, NPCController},
     event::{
+        NetEntId, PlayerId, UDPacketEvent,
         client::{BeginThirdpersonControllingUnit, SpawnUnit2},
         server::{SpawnCircle, SpawnMan},
-        NetEntId, PlayerId, UDPacketEvent,
     },
     net_components::{
-        make_man, make_small_loot,
+        ToNetComponent, make_man, make_small_loot,
         ours::{ControlledBy, Dead, DespawnOnPlayerDisconnect, HasInventory},
-        ToNetComponent,
     },
     netlib::{EventToClient, ServerNetworkingResources},
-    CurrentTick,
 };
 
-use crate::{make_ball, ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint, ServerState};
+use crate::{ConnectedPlayer, EndpointToPlayerId, PlayerEndpoint, ServerState, make_ball};
 
 pub struct SpawnPlugin;
 impl Plugin for SpawnPlugin {
@@ -155,7 +154,11 @@ fn on_man_spawn(
         let inventory = shared::items::goblin_drops();
         //TODO add to server inventory
 
-        let mut unit = make_man(transform, ControlledBy::single(*player_id_of_spawner));
+        let mut unit = make_man(
+            transform,
+            ControlledBy::single(*player_id_of_spawner),
+            &spawn.controller_type,
+        );
         unit.components.push(
             HasInventory {
                 inventory_id: inventory.id,

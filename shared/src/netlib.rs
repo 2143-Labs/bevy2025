@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     collections::VecDeque,
-    sync::{atomic::AtomicUsize, Arc, RwLock},
+    sync::{Arc, RwLock, atomic::AtomicUsize},
 };
 
 use crate::message_io::{
@@ -188,7 +188,7 @@ impl std::ops::Add for Tick {
 
 pub use crate::event::client::EventToClient;
 pub use crate::event::server::EventToServer;
-use crate::{CurrentTick, BASE_TICKS_PER_SECOND};
+use crate::{BASE_TICKS_PER_SECOND, CurrentTick};
 
 pub trait NetworkingEvent:
     Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static + core::fmt::Debug
@@ -593,9 +593,11 @@ fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
         });
 
         let res2 = res.clone();
-        std::thread::spawn(move || loop {
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            res2.networking_stats.flush_and_reset();
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                res2.networking_stats.flush_and_reset();
+            }
         });
     }
 }
