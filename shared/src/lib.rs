@@ -442,3 +442,21 @@ impl PlayerPing<PlayerPingInteger> {
         }
     }
 }
+
+pub fn camel_to_normalized(s: &str) -> String {
+    let mut result = String::new();
+    let mut chars = s.chars().peekable();
+    
+    while let Some(c) = chars.next() {
+        if result.is_empty() {
+            result.push(c.to_ascii_uppercase());
+        } else if c.is_uppercase() {
+            result.push(' ');
+            result.push(c);
+        } else {
+            result.push(c);
+        }
+    }
+    
+    result
+}
