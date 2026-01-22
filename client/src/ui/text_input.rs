@@ -2,7 +2,6 @@
 use arboard::Clipboard;
 
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
-use arboard::Clipboard;
 
 /// Text input component that handles user keyboard input
 #[derive(Component, Debug, Clone)]

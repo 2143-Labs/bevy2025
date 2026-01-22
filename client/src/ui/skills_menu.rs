@@ -216,7 +216,7 @@ pub fn handle_skill_tooltip(
     mut commands: Commands,
     skill_buttons: Query<(&Interaction, &SkillButton)>,
     skills_menu: Query<Entity, With<SkillsMenu>>,
-    inventory_map: Res<InventoryItemCache>,
+    _inventory_map: Res<InventoryItemCache>,
     fonts: Res<crate::assets::FontAssets>,
     mut cursor_events: MessageReader<CursorMoved>,
     mut tooltip_state: ResMut<TooltipState>,
@@ -249,7 +249,7 @@ pub fn handle_skill_tooltip(
             (currently_hovered_skill.as_ref(), cursor_pos, skills_menu.single()) {
             
             // Spawn new tooltip directly as a root UI element
-            let tooltip_entity = commands.spawn((
+            let mut tooltip_cmd = commands.spawn((
                 SkillTooltip,
                 Node {
                     position_type: PositionType::Absolute,
@@ -260,10 +260,12 @@ pub fn handle_skill_tooltip(
                     ..default()
                 },
                 BackgroundColor(TOOLTIP_BACKGROUND_COLOR),
-                BorderColor::all(TOOLTIP_BORDER_COLOR),
-                BorderRadius::all(Val::Px(8.0)),
-                ZIndex(1000),
-            )).with_children(|tooltip_parent| {
+            ));
+            
+            tooltip_cmd.insert(BorderColor::all(TOOLTIP_BORDER_COLOR));
+            tooltip_cmd.insert(ZIndex(1000));
+            
+            let tooltip_entity = tooltip_cmd.with_children(|tooltip_parent| {
                 tooltip_parent.spawn((
                     Text::new(camel_to_normalized(&format!("{:?}",hovered_skill.skill))),
                     TextFont {
