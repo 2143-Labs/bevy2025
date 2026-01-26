@@ -72,6 +72,8 @@ fn setup_shared_axum_server(
     };
 
     let router = Router::new()
+        .route("/gshealthz", axum::routing::get(|| async { "OK" }))
+        .route("/healthz", axum::routing::get(|| async { "OK" }))
         .route("/", axum::routing::get(|| async { "Hello, World!" }))
         .route("/players", axum::routing::get(get_players_endpoint))
         .with_state(state);
