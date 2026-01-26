@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy_internal::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{BASE_TICKS_PER_SECOND, items::ItemId};
@@ -39,7 +39,6 @@ pub enum Skill {
     /// After hitting a target, fire homing bolts for up to 5 seconds
     HomingArrows,
 }
-
 
 pub fn all_skills() -> Vec<Skill> {
     vec![

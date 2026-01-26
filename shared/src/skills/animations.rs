@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy_internal::prelude::*;
 
 use crate::{CurrentTick, event::NetEntId, items::SkillFromSkillSource, netlib::Tick};
 

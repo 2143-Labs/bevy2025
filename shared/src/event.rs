@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy_internal::prelude::*;
 
 use crate::{
     message_io::network::Endpoint,

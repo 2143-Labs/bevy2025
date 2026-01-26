@@ -1,6 +1,6 @@
 #![allow(unused)]
 use avian3d::prelude::TransformInterpolation;
-use bevy::prelude::*;
+use bevy_internal::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::net_components::ToNetComponent;
@@ -59,7 +59,7 @@ impl NetComponentForeign {
 
     pub unsafe fn from_type_id_ptr(
         type_id: std::any::TypeId,
-        ptr: bevy::ptr::Ptr<'_>,
+        ptr: bevy_internal::ptr::Ptr<'_>,
     ) -> Option<NetComponentForeign> {
         if type_id == std::any::TypeId::of::<Transform>() {
             Some(NetComponentForeign::Transform(

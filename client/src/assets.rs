@@ -28,7 +28,7 @@ pub struct ImageAssets {
     #[asset(image(sampler(filter = nearest)))]
     pub paper: Handle<Image>,
 
-    // Skill icons 
+    // Skill icons
     #[asset(path = "images/BasicBowAttack.png")]
     #[asset(image(sampler(filter = nearest)))]
     pub basic_bow_attack: Handle<Image>,

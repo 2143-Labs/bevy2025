@@ -8,7 +8,7 @@ pub mod ents;
 pub mod foreign;
 pub mod ours;
 
-use bevy::prelude::*;
+use bevy_internal::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -87,7 +87,7 @@ impl NetComponent {
 
     pub unsafe fn from_type_id_ptr(
         type_id: TypeId,
-        ptr: bevy::ptr::Ptr<'_>,
+        ptr: bevy_internal::ptr::Ptr<'_>,
     ) -> Option<NetComponent> {
         if type_id == TypeId::of::<NetEntId>() {
             Some(NetComponent::NetEntId(

@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy_internal::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{event::NetEntId, net_components::ToNetComponent};
@@ -83,7 +83,7 @@ impl NetComponentEnts {
 
     pub unsafe fn from_type_id_ptr(
         type_id: std::any::TypeId,
-        ptr: bevy::ptr::Ptr<'_>,
+        ptr: bevy_internal::ptr::Ptr<'_>,
     ) -> Option<NetComponentEnts> {
         if type_id == std::any::TypeId::of::<Ball>() {
             Some(NetComponentEnts::Ball(

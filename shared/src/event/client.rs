@@ -9,7 +9,7 @@ use crate::physics::terrain::TerrainParams;
 use crate::projectile::{ProjectileAI, ProjectileSource};
 use crate::{PlayerPing, PlayerPingInteger, ServerTPS};
 use crate::{event::EventFromEndpoint, net_components::NetComponent};
-use bevy::prelude::*;
+use bevy_internal::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use super::NetEntId;

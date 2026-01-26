@@ -1,13 +1,16 @@
 use crate::{
-    assets::get_skill_icon, game_state::OverlayMenuState, network::CurrentThirdPersonControlledUnit, ui::{
-        skills_menu::binds::SkillBindOverlayState,
-        styles::{menu_button_bundle},
-    }
+    assets::get_skill_icon,
+    game_state::OverlayMenuState,
+    network::CurrentThirdPersonControlledUnit,
+    ui::{skills_menu::binds::SkillBindOverlayState, styles::menu_button_bundle},
 };
 
 use bevy::prelude::*;
 use shared::{
-    camel_to_normalized, items::{InventoryItemCache, SkillFromSkillSource}, net_components::ours::HasInventory, skills::SkillSource
+    camel_to_normalized,
+    items::{InventoryItemCache, SkillFromSkillSource},
+    net_components::ours::HasInventory,
+    skills::SkillSource,
 };
 
 pub mod binds;
@@ -42,16 +45,20 @@ pub struct SkillsMenuPlugin;
 impl Plugin for SkillsMenuPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(TooltipState {
-                current_skill: None,
-                tooltip_entity: None,
-            })
-            .add_systems(OnEnter(OverlayMenuState::Skills), spawn_skills_menu)
-            .add_systems(OnExit(OverlayMenuState::Skills), despawn_skills_menu)
-            .add_systems(
-                Update,
-                (handle_skills_menu_buttons, update_skills_menu, handle_skill_tooltip)
-                    .run_if(in_state(OverlayMenuState::Skills)),
-            );
+            current_skill: None,
+            tooltip_entity: None,
+        })
+        .add_systems(OnEnter(OverlayMenuState::Skills), spawn_skills_menu)
+        .add_systems(OnExit(OverlayMenuState::Skills), despawn_skills_menu)
+        .add_systems(
+            Update,
+            (
+                handle_skills_menu_buttons,
+                update_skills_menu,
+                handle_skill_tooltip,
+            )
+                .run_if(in_state(OverlayMenuState::Skills)),
+        );
     }
 }
 
@@ -70,7 +77,7 @@ pub fn spawn_skills_menu(
     images: Res<crate::assets::ImageAssets>,
 ) {
     info!("Spawning skills menu");
-    
+
     let Ok(current_char_inv) = current_char.single() else {
         error!("No current character found when spawning skills menu");
         return;
@@ -87,17 +94,20 @@ pub fn spawn_skills_menu(
 
     let skills: Vec<SkillFromSkillSource> = inventory_full.get_equipped_skills();
     info!("Equipped skills: {:?}", skills);
-    
+
     // Calculate grid size based on number of skills (next perfect square)
     let skill_count = skills.len();
     let grid_size = ((skill_count as f32).sqrt().ceil() as usize).max(1);
-    info!("Grid size for {} skills: {}x{}", skill_count, grid_size, grid_size);
+    info!(
+        "Grid size for {} skills: {}x{}",
+        skill_count, grid_size, grid_size
+    );
 
     // spawn outer container with paper background
     let mut skills_menu_ent = commands.spawn((
         SkillsMenu,
         Node {
-            width: Val::Vh(80.0), // Square: same as height (80vh)
+            width: Val::Vh(80.0),  // Square: same as height (80vh)
             height: Val::Vh(80.0), // 80% of viewport height
             justify_content: JustifyContent::Center,
             align_items: AlignItems::Center,
@@ -117,20 +127,18 @@ pub fn spawn_skills_menu(
 
     // Create inner skills grid container (takes 2/3 of paper space)
     skills_menu_ent.with_children(|paper_parent| {
-        let mut skills_grid = paper_parent.spawn((
-            Node {
-                display: Display::Grid,
-                grid_template_columns: RepeatedGridTrack::flex(grid_size as u16, 1.0),
-                grid_template_rows: RepeatedGridTrack::flex(grid_size as u16, 1.0),
-                column_gap: Val::Px(GAP),
-                row_gap: Val::Px(GAP),
-                width: Val::Percent(66.7), // 2/3 of paper width
-                height: Val::Percent(66.7), // 2/3 of paper height
-                justify_self: JustifySelf::Center,
-                align_self: AlignSelf::Center,
-                ..default()
-            },
-        ));
+        let mut skills_grid = paper_parent.spawn((Node {
+            display: Display::Grid,
+            grid_template_columns: RepeatedGridTrack::flex(grid_size as u16, 1.0),
+            grid_template_rows: RepeatedGridTrack::flex(grid_size as u16, 1.0),
+            column_gap: Val::Px(GAP),
+            row_gap: Val::Px(GAP),
+            width: Val::Percent(66.7),  // 2/3 of paper width
+            height: Val::Percent(66.7), // 2/3 of paper height
+            justify_self: JustifySelf::Center,
+            align_self: AlignSelf::Center,
+            ..default()
+        },));
 
         // Spawn a button for each skill
         for equipped_skill in &skills {
@@ -155,8 +163,8 @@ pub fn spawn_skills_menu(
                 let (_node, _bg_color, border_color) = menu_button_bundle();
                 grid_parent
                     .spawn((
-                        Node{
-                            width: Val::Percent(100.0), // Fill grid cell
+                        Node {
+                            width: Val::Percent(100.0),  // Fill grid cell
                             height: Val::Percent(100.0), // Fill grid cell
                             justify_content: JustifyContent::Center,
                             align_items: AlignItems::Center,
@@ -245,9 +253,11 @@ pub fn handle_skill_tooltip(
         }
 
         // Create new tooltip if hovering over a skill
-        if let (Some(hovered_skill), Some(cursor_position), Ok(_skills_menu_entity)) = 
-            (currently_hovered_skill.as_ref(), cursor_pos, skills_menu.single()) {
-            
+        if let (Some(hovered_skill), Some(cursor_position), Ok(_skills_menu_entity)) = (
+            currently_hovered_skill.as_ref(),
+            cursor_pos,
+            skills_menu.single(),
+        ) {
             // Spawn new tooltip directly as a root UI element
             let mut tooltip_cmd = commands.spawn((
                 SkillTooltip,
@@ -261,22 +271,24 @@ pub fn handle_skill_tooltip(
                 },
                 BackgroundColor(TOOLTIP_BACKGROUND_COLOR),
             ));
-            
+
             tooltip_cmd.insert(BorderColor::all(TOOLTIP_BORDER_COLOR));
             tooltip_cmd.insert(ZIndex(1000));
-            
-            let tooltip_entity = tooltip_cmd.with_children(|tooltip_parent| {
-                tooltip_parent.spawn((
-                    Text::new(camel_to_normalized(&format!("{:?}",hovered_skill.skill))),
-                    TextFont {
-                        font: fonts.regular.clone(),
-                        font_size: 14.0,
-                        ..default()
-                    },
-                    TextColor(TOOLTIP_TEXT_COLOR),
-                    SkillTooltipText,
-                ));
-            }).id();
+
+            let tooltip_entity = tooltip_cmd
+                .with_children(|tooltip_parent| {
+                    tooltip_parent.spawn((
+                        Text::new(camel_to_normalized(&format!("{:?}", hovered_skill.skill))),
+                        TextFont {
+                            font: fonts.regular.clone(),
+                            font_size: 14.0,
+                            ..default()
+                        },
+                        TextColor(TOOLTIP_TEXT_COLOR),
+                        SkillTooltipText,
+                    ));
+                })
+                .id();
 
             tooltip_state.tooltip_entity = Some(tooltip_entity);
         }
@@ -285,4 +297,3 @@ pub fn handle_skill_tooltip(
         tooltip_state.current_skill = currently_hovered_skill;
     }
 }
-

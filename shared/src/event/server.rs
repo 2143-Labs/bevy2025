@@ -4,7 +4,7 @@ use crate::items::SkillFromSkillSource;
 //use crate::net_components::NetComponent;
 use crate::netlib::NetworkingResources;
 use avian3d::prelude::{LinearVelocity, Rotation};
-use bevy::prelude::*;
+use bevy_internal::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]

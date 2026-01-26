@@ -1,5 +1,5 @@
 use avian3d::prelude::*;
-use bevy::{
+use bevy_internal::{
     asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
 };
 use noise::{NoiseFn, Perlin};

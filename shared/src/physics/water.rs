@@ -1,5 +1,5 @@
 use avian3d::prelude::*;
-use bevy::prelude::*;
+use bevy_internal::prelude::*;
 
 use crate::net_components::ents::Ball;
 

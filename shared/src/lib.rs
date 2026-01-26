@@ -5,7 +5,7 @@ use std::{
     sync::atomic::AtomicI32,
 };
 
-use bevy::prelude::*;
+use bevy_internal::prelude::*;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
@@ -461,7 +461,7 @@ impl PlayerPing<PlayerPingInteger> {
 pub fn camel_to_normalized(s: &str) -> String {
     let mut result = String::new();
     let mut chars = s.chars().peekable();
-    
+
     while let Some(c) = chars.next() {
         if result.is_empty() {
             result.push(c.to_ascii_uppercase());
@@ -472,6 +472,6 @@ pub fn camel_to_normalized(s: &str) -> String {
             result.push(c);
         }
     }
-    
+
     result
 }

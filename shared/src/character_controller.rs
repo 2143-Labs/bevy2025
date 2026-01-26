@@ -1,7 +1,7 @@
 //! A simple kinematic character controller implementation using Avian3D and Bevy.
 //! Copied from https://github.com/avianphysics/avian/blob/60ef5cf4/crates/avian2d/examples/kinematic_character_2d/plugin.rs#L39-L140
 use avian3d::{math::*, prelude::*};
-use bevy::prelude::*;
+use bevy_internal::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{event::NetEntId, net_components::ours::Dead};

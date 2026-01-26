@@ -1,5 +1,5 @@
 use avian3d::prelude::{Collider, CollisionEventsEnabled, Sensor};
-use bevy::prelude::*;
+use bevy_internal::prelude::*;
 
 use crate::{
     BASE_TICKS_PER_SECOND, CurrentTick,

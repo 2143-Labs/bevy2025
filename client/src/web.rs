@@ -33,7 +33,6 @@ impl Plugin for WebPlugin {
             .parse()
             .expect("server_port element text content is not a valid u16");
 
-
         let ip_addr: std::net::IpAddr = ip_str
             .parse()
             .expect("server_ip element text content is not a valid IpAddr");
