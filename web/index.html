@@ -28,6 +28,7 @@
     <title>ROTS</title>
   </head>
   <script type="module">
+    let login_elem = document.getElementById('login');
     // First: check if we just got redirected from the auth server:
     // If so, we will have two fragments: #player_id=1&login_token=47d3c3e4661514797398358e867ece844a8822f201b79f9a342c19e9c7143283
     // So, get the player id and token.
@@ -51,13 +52,12 @@
         // Remove from history, and hide the fragments from the URL
         window.history.replaceState({}, document.title, window.location.pathname);
         // Finally, hide the login with discord button
-        document.getElementById('login').style.display = 'none';
+        login_elem.style.display = 'none';
         // set document fields for bevy to read
         document.getElementById('localstorage_player_id').innerText = player_id;
         document.getElementById('localstorage_login_token').innerText = login_token;
     } else {
         // add ?redirect_to=${location.href} to the login url
-        document.getElementById('login').href = document.getElementById('login').href + '?redirect_to=' + encodeURIComponent(window.location.host);
     }
 
     console.log("Player ID:", localStorage.getItem('player_id'));
@@ -67,11 +67,10 @@
   </script>
   <body>
     <p id="loading">ROTS is loading</p>
-    <a id="login" href="http://ofdb.2143.me:8002/api/v1/discord/get_login_url">Login with discord</a>
+    <a id="login" href="/auth/api/v1/discord/get_login_url">Login with discord</a>
     <canvas id="bevy-canvas" width="800" height="600"></canvas>
     <p id="server_ip" class="invisible">71.126.177.34</p>
     <p id="server_port" class="invisible">25555</p>
-    <p id="auth_server" class="invisible">http://ofdb.2143.me:8002</p>
     <p id="localstorage_player_id" class="invisible"></p>
     <p id="localstorage_login_token" class="invisible"></p>
   </body>

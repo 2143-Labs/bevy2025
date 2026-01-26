@@ -33,13 +33,6 @@ impl Plugin for WebPlugin {
             .parse()
             .expect("server_port element text content is not a valid u16");
 
-        let auth_server: String = document
-            .get_element_by_id("auth_server")
-            .expect("No auth_server element in html")
-            .text_content()
-            .expect("auth_server element has no text content")
-            .parse()
-            .expect("auth_server element text content is not a valid u16");
 
         let ip_addr: std::net::IpAddr = ip_str
             .parse()
@@ -53,13 +46,13 @@ impl Plugin for WebPlugin {
             .expect("loading element is not a paragraph element");
 
         let localstorage_player_id = document
-            .get_element_by_id("player_id")
+            .get_element_by_id("localstorage_player_id")
             .expect("No player_id element in html")
             .dyn_into::<HtmlParagraphElement>()
             .expect("player_id element is not a paragraph element")
             .text_content();
         let localstorage_token = document
-            .get_element_by_id("auth_token")
+            .get_element_by_id("localstorage_login_token")
             .expect("No auth_token element in html")
             .dyn_into::<HtmlParagraphElement>()
             .expect("auth_token element is not a paragraph element")
@@ -97,7 +90,8 @@ impl Plugin for WebPlugin {
         //}),
         //));
 
-        app.insert_resource(crate::network::AuthServerEndpoint(auth_server));
+        // TODO
+        //app.insert_resource(crate::network::AuthServerEndpoint(auth_server));
 
         info!("Connecting to server at {}:{}", ip_str, port);
 
