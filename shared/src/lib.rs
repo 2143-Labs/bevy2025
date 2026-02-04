@@ -30,7 +30,7 @@ pub use message_io;
 
 #[cfg(feature = "udp")]
 pub mod tokio_udp {
-    use bevy::prelude::Resource;
+    use bevy_internal::prelude::Resource;
 
     #[derive(Resource, Clone)]
     pub struct TokioRuntimeResource(pub std::sync::Arc<tokio::runtime::Runtime>);

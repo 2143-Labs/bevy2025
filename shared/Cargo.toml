@@ -46,9 +46,9 @@ avian3d = { version = "0.5.0", features = ["3d", "collider-from-mesh", "f32", "p
 tungstenite = "0.28.0"
 
 [build-dependencies]
-quote = "1.0.43"
+quote = "1.0.44"
 prettyplease = "0.2.37"
-regex = "1.12.2"
+regex = "1.12.3"
 syn = "2.0.114"
 
 [features]

@@ -19,7 +19,7 @@ server = { path = "../server", optional = true }
 postcard = { version = "1.1.3", features = ["use-std", "alloc"] }
 
 bevy-inspector-egui = { version = "0.36.0", optional = true }
-clap = { version = "4.5.54", features = ["derive", "env"] }
+clap = { version = "4.5.57", features = ["derive", "env"] }
 dashmap = "6.1.0"
 arboard = { version = "3.6.1", optional = true }
 bevy-steamworks = { version = "0.16.0", optional = true }
@@ -27,7 +27,7 @@ bevy-steamworks = { version = "0.16.0", optional = true }
 raw-window-handle = { version = "0.6.2", optional = true }
 wasm-bindgen = { version = "0.2.108", optional = true }
 # transitive dependency feature flag required for web: getrandom/wasm_js
-getrandom = { version = "0.3.4", optional = true }
+getrandom = { version = "0.3.4", optional = true, features = ["wasm_js"] }
 web-sys = { version = "0.3.85", optional = true, features = [
 "Window", "Document", "HtmlCanvasElement", "HtmlParagraphElement", "console",
 "MessageEvent", "WebSocket", "PresentationConnection", "Blob", "ReadableStream", "ReadableStreamDefaultReader"
@@ -41,7 +41,7 @@ serde_json = "1.0.149"
 [features]
 inspector = ["dep:bevy-inspector-egui"]
 singleplayer = ["dep:server"]
-web = ["dep:wasm-bindgen", "dep:raw-window-handle", "dep:web-sys", "shared/web", "dep:getrandom", "dep:wasm-bindgen-futures", "getrandom/wasm_js"]
+web = ["dep:wasm-bindgen", "dep:raw-window-handle", "dep:web-sys", "shared/web", "dep:getrandom", "dep:wasm-bindgen-futures"]
 udp = ["shared/udp", "dep:message-io"]
 steam = ["dep:bevy-steamworks", "dep:tokio", "dep:futures", "dep:reqwest"]
 clipboard = ["dep:arboard"]
