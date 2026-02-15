@@ -18,8 +18,7 @@ version = "0.18"
 default-features = false
 features = ["serialize", "bevy_log", "https", "bevy_asset",
 "bevy_scene", "bevy_mesh", "bevy_light",
-"bevy_gltf", "bevy_animation",
-"bevy_state", "bevy_dev_tools"
+"bevy_gltf", "bevy_state",
 ]
 
 

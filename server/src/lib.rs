@@ -99,7 +99,10 @@ fn do_app(f: impl FnOnce(&mut App)) {
         .insert_resource(HeartbeatList::default())
         .add_message::<PlayerDisconnected>()
         .add_message::<DespawnUnit2>()
-        .add_plugins(DefaultPlugins)
+        .add_plugins((
+            // Default plugins, but no render
+            DefaultPlugins
+        ))
         .add_plugins((
             ScheduleRunnerPlugin::run_loop(Duration::from_millis(1)),
             avian3d::PhysicsPlugins::default(),
