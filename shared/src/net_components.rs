@@ -85,23 +85,25 @@ impl NetComponent {
         }
     }
 
+    /// # SAFETY
+    /// This must be called with a valid bevy construction
     pub unsafe fn from_type_id_ptr(
         type_id: TypeId,
         ptr: bevy_internal::ptr::Ptr<'_>,
     ) -> Option<NetComponent> {
         if type_id == TypeId::of::<NetEntId>() {
-            Some(NetComponent::NetEntId(
-                unsafe { ptr.deref::<NetEntId>() }.clone(),
-            ))
+            Some(NetComponent::NetEntId(unsafe { *ptr.deref::<NetEntId>() }))
         } else if type_id == TypeId::of::<PlayerId>() {
-            Some(NetComponent::PlayerId(
-                unsafe { ptr.deref::<PlayerId>() }.clone(),
-            ))
-        } else if let Some(foreign) = foreign::NetComponentForeign::from_type_id_ptr(type_id, ptr) {
+            Some(NetComponent::PlayerId(unsafe { *ptr.deref::<PlayerId>() }))
+        } else if let Some(foreign) =
+            unsafe { foreign::NetComponentForeign::from_type_id_ptr(type_id, ptr) }
+        {
             Some(NetComponent::Foreign(foreign))
-        } else if let Some(ours) = ours::NetComponentOurs::from_type_id_ptr(type_id, ptr) {
+        } else if let Some(ours) = unsafe { ours::NetComponentOurs::from_type_id_ptr(type_id, ptr) }
+        {
             Some(NetComponent::Ours(ours))
-        } else if let Some(ents) = ents::NetComponentEnts::from_type_id_ptr(type_id, ptr) {
+        } else if let Some(ents) = unsafe { ents::NetComponentEnts::from_type_id_ptr(type_id, ptr) }
+        {
             Some(NetComponent::Ents(ents))
         // This won't happen because Bundles get expanded into their components on insert usually
         } else if type_id == TypeId::of::<CharacterControllerBundle>() {

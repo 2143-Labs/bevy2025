@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use avian3d::prelude::{Gravity, LinearVelocity, Rotation};
 use bevy::{app::ScheduleRunnerPlugin, platform::collections::HashSet, prelude::*};
-use rand::Rng;
+use rand::RngExt;
 use shared::{
     Config, ConfigPlugin, CurrentTick, PlayerPing, PlayerPingAtomic, PlayerPingInteger,
     event::{

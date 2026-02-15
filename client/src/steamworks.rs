@@ -100,7 +100,8 @@ fn try_steam_login(
 
         let resp = match res_val {
             Ok(resp) => resp,
-            Err(e) => {
+            Err(_e) => {
+                // TODO retry
                 return;
             }
         };

@@ -47,6 +47,8 @@ pub struct WorldEntity;
 
 /// HTTP/s location of the main auth server to use
 #[derive(Resource)]
+#[allow(unused)]
+// TODO use this
 pub struct AuthServerEndpoint(pub String);
 
 /// Temporary storage for camera NetEntId until camera is spawned

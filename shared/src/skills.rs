@@ -6,6 +6,7 @@ use crate::{BASE_TICKS_PER_SECOND, items::ItemId};
 pub mod animations;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum Skill {
     /// Launch 4 projectiles in a random path around you
     Spark,

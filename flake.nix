@@ -10,7 +10,7 @@
   outputs = { self, nixpkgs, utils, naersk }:
     utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs { inherit system; };
+        pkgs = (import nixpkgs) { inherit system; };
         naersk-lib = pkgs.callPackage naersk { };
         buildInputsAll = with pkgs; [
           wayland
