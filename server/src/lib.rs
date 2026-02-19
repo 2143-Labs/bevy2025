@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use avian3d::prelude::{Gravity, LinearVelocity, Rotation};
-use bevy::{app::ScheduleRunnerPlugin, platform::collections::HashSet, prelude::*};
+use bevy::{platform::collections::HashSet, prelude::*};
 use rand::RngExt;
 use shared::{
     Config, ConfigPlugin, CurrentTick, PlayerPing, PlayerPingAtomic, PlayerPingInteger,
@@ -99,14 +99,8 @@ fn do_app(f: impl FnOnce(&mut App)) {
         .insert_resource(HeartbeatList::default())
         .add_message::<PlayerDisconnected>()
         .add_message::<DespawnUnit2>()
-        .add_plugins((
-            // Default plugins, but no render
-            DefaultPlugins
-        ))
-        .add_plugins((
-            ScheduleRunnerPlugin::run_loop(Duration::from_millis(1)),
-            avian3d::PhysicsPlugins::default(),
-        ))
+        .add_plugins(DefaultPlugins)
+        .add_plugins(avian3d::PhysicsPlugins::default())
         .insert_resource(Gravity(Vec3::new(0.0, -9.81, 0.0)))
         .add_plugins((
             ConfigPlugin,

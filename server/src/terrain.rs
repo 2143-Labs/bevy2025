@@ -1,7 +1,7 @@
 use avian3d::prelude::*;
 use bevy::prelude::*;
 use shared::physics::{
-    terrain::{Terrain, TerrainParams, generate_terrain_mesh, spawn_boundary_walls},
+    terrain::{Terrain, TerrainParams, generate_terrain_trimesh, spawn_boundary_walls},
     water::spawn_water_shared,
 };
 
@@ -22,14 +22,14 @@ pub fn setup_terrain_server(mut commands: Commands, terrain_params: Res<TerrainP
     let max_height = terrain_params.max_height_delta;
     let water_level = min_height + 0.3 * (max_height - min_height);
 
-    // Generate terrain mesh
-    let terrain_mesh = generate_terrain_mesh(&terrain_params);
+    // Generate terrain collision mesh data
+    let (vertices, indices) = generate_terrain_trimesh(&terrain_params);
 
     // Spawn terrain with physics collider
     commands.spawn((
         Transform::from_xyz(0.0, 0.0, 0.0),
         RigidBody::Static,
-        Collider::trimesh_from_mesh(&terrain_mesh).unwrap(),
+        Collider::trimesh(vertices, indices),
         Terrain,
     ));
 

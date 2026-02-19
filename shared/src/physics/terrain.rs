@@ -1,6 +1,9 @@
 use avian3d::prelude::*;
-use bevy_internal::{asset::RenderAssetUsages, mesh::Indices, prelude::*};
-use bevy_render::render_resource::PrimitiveTopology;
+use bevy_internal::prelude::*;
+#[cfg(feature = "render")]
+use bevy_asset::RenderAssetUsages;
+#[cfg(feature = "render")]
+use bevy_mesh::{Indices, Mesh, PrimitiveTopology};
 use noise::{NoiseFn, Perlin};
 
 use serde::{Deserialize, Serialize};
@@ -287,7 +290,9 @@ pub fn spawn_boundary_walls(commands: &mut Commands, params: &TerrainParams) -> 
 }
 
 /// Generate procedural terrain mesh using Perlin noise
-pub fn generate_terrain_mesh(params: &TerrainParams) -> Mesh {
+fn generate_terrain_mesh_buffers(
+    params: &TerrainParams,
+) -> (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<[f32; 2]>, Vec<[u32; 3]>) {
     let noise = params.perlin();
     let subdivisions = params.subdivisions;
     let size = params.plane_size;
@@ -323,26 +328,21 @@ pub fn generate_terrain_mesh(params: &TerrainParams) -> Mesh {
     }
 
     // Generate indices for triangles
-    let mut indices = Vec::new();
+    let mut triangles = Vec::new();
     for z in 0..subdivisions {
         for x in 0..subdivisions {
             let i = z * vertices_per_side + x;
 
             // Two triangles per quad
-            indices.push(i);
-            indices.push(i + vertices_per_side);
-            indices.push(i + 1);
-
-            indices.push(i + 1);
-            indices.push(i + vertices_per_side);
-            indices.push(i + vertices_per_side + 1);
+            triangles.push([i, i + vertices_per_side, i + 1]);
+            triangles.push([i + 1, i + vertices_per_side, i + vertices_per_side + 1]);
         }
     }
 
     // Calculate proper normals
     let mut calculated_normals = vec![Vec3::ZERO; vertex_count];
 
-    for triangle in indices.chunks(3) {
+    for triangle in &triangles {
         let i0 = triangle[0] as usize;
         let i1 = triangle[1] as usize;
         let i2 = triangle[2] as usize;
@@ -366,6 +366,27 @@ pub fn generate_terrain_mesh(params: &TerrainParams) -> Mesh {
     // Convert back to array format
     for (i, normal) in calculated_normals.iter().enumerate() {
         normals[i] = normal.to_array();
+    }
+
+    (positions, normals, uvs, triangles)
+}
+
+/// Generate terrain triangle mesh data for collision generation.
+pub fn generate_terrain_trimesh(params: &TerrainParams) -> (Vec<Vec3>, Vec<[u32; 3]>) {
+    let (positions, _normals, _uvs, triangles) = generate_terrain_mesh_buffers(params);
+    let vertices = positions.into_iter().map(Vec3::from).collect();
+    (vertices, triangles)
+}
+
+/// Generate procedural terrain mesh using Perlin noise.
+#[cfg(feature = "render")]
+pub fn generate_terrain_mesh(params: &TerrainParams) -> Mesh {
+    let (positions, normals, uvs, triangles) = generate_terrain_mesh_buffers(params);
+    let mut indices = Vec::with_capacity(triangles.len() * 3);
+    for [a, b, c] in triangles {
+        indices.push(a);
+        indices.push(b);
+        indices.push(c);
     }
 
     // Create mesh
