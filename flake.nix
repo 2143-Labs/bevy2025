@@ -5,13 +5,27 @@
     naersk.url = "github:nix-community/naersk/master";
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     utils.url = "github:numtide/flake-utils";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    flake-compat = {
+      url = "github:NixOS/flake-compat";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, utils, naersk }:
+  outputs = { self, nixpkgs, utils, naersk, rust-overlay, ... }:
     utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs { inherit system; };
-        naersk-lib = pkgs.callPackage naersk { };
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ rust-overlay.overlays.default ];
+        };
+        rust-toolchain = pkgs.rust-bin.stable.latest.default.override {
+          extensions = [ "rust-src" "clippy" "rustfmt" "rust-analyzer" ];
+        };
+        naersk-lib = pkgs.callPackage naersk {
+          cargo = rust-toolchain;
+          rustc = rust-toolchain;
+        };
         buildInputsAll = with pkgs; [
           wayland
           libxkbcommon
@@ -67,12 +81,9 @@
         };
         devShells.default = with pkgs; mkShell {
           buildInputs = [
-            rust-analyzer
-            cargo 
-            rustPackages.rustfmt
-            rustPackages.clippy
+            rust-toolchain
             cargo-flamegraph
-            pre-commit 
+            pre-commit
             pkg-config
             bacon
             # Additional useful development tools
@@ -84,7 +95,7 @@
             lld
             binaryen
           ] ++ buildInputsAll;
-          RUST_SRC_PATH = rustPlatform.rustLibSrc;
+          RUST_SRC_PATH = "${rust-toolchain}/lib/rustlib/src/rust/library";
           LD_LIBRARY_PATH = lib.makeLibraryPath buildInputsAll;
           # Set environment variables for better development experience
           shellHook = ''

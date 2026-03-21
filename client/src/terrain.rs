@@ -46,7 +46,7 @@ fn draw_boundary_debug(
             let pos = transform.translation;
 
             // Draw a wireframe box
-            gizmos.cuboid(
+            gizmos.cube(
                 Transform::from_translation(pos).with_scale(Vec3::from(half_extents) * 2.0),
                 Color::srgb(1.0, 0.0, 0.0), // Red debug lines
             );

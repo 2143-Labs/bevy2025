@@ -18,7 +18,11 @@
       "Bash(nul)",
       "Bash(cargo doc:*)",
       "Bash(cargo rustdoc:*)",
-      "Bash(cargo tree:*)"
+      "Bash(cargo tree:*)",
+      "WebFetch(domain:hoverbear.org)",
+      "WebFetch(domain:blog.graysonhead.net)",
+      "Bash(nix flake:*)",
+      "Bash(rustc --version)"
     ],
     "deny": [],
     "ask": []
