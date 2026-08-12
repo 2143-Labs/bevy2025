@@ -95,7 +95,8 @@ jobs:
 
   build-linux:
     name: Linux build (Nix)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, nixos]
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     #needs: version-bump
     permissions:
       contents: read
@@ -103,14 +104,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@v26
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-
-      - name: Setup Nix cache
-        uses: DeterminateSystems/magic-nix-cache-action@v8
 
       - name: Build with Nix
         run: nix build
@@ -147,7 +140,8 @@ jobs:
 
   build-wasm:
     name: Build and push WASM container
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, nixos]
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     #needs: version-bump
     permissions:
       contents: read
@@ -156,20 +150,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@v26
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-
-      - name: Setup Nix cache
-        uses: DeterminateSystems/magic-nix-cache-action@v8
 
       - name: Build container with Nix
         run: nix build .#staticWebserver
 
-      - name: Install skopeo
-        run: sudo apt-get install -y skopeo
 
       - name: Push container with skopeo
         run: |
@@ -189,7 +173,8 @@ jobs:
 
   build-container:
     name: Build and push container
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, nixos]
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     #needs: version-bump
     permissions:
       contents: read
@@ -198,20 +183,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@v26
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-
-      - name: Setup Nix cache
-        uses: DeterminateSystems/magic-nix-cache-action@v8
 
       - name: Build container with Nix
         run: nix build .#container
 
-      - name: Install skopeo
-        run: sudo apt-get install -y skopeo
 
       - name: Push container with skopeo
         run: |
@@ -275,7 +250,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, nixos]
     needs:
       - build-linux
       - build-windows
