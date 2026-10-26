@@ -414,7 +414,7 @@ fn on_special_unit_spawn_remote_camera(
             .with_children(|parent| {
                 // Spawn the remote player camera visuals
                 parent.spawn((
-                    SceneRoot(model_assets.g_toilet_scene.clone()),
+                    WorldAssetRoot(model_assets.g_toilet_scene.clone()),
                     Transform::from_xyz(0.0, 0.0, 0.0)
                         .with_rotation(Quat::from_rotation_y(std::f32::consts::PI))
                         .with_scale(Vec3::splat(0.5)),
@@ -431,8 +431,8 @@ fn on_special_unit_spawn_remote_camera(
             },
             Text::new(player_name.name.clone()),
             TextFont {
-                font: font_assets.regular.clone(),
-                font_size: 20.0,
+                font: font_assets.regular.clone().into(),
+                font_size: FontSize::Px(20.0),
                 ..default()
             },
             TextColor(Color::WHITE),
@@ -454,7 +454,7 @@ fn on_special_unit_spawn_tower(
         info!(?entity, "Spawning tower entity");
         commands
             .entity(entity)
-            .insert((SceneRoot(model_assets.stone_tower.clone()),))
+            .insert((WorldAssetRoot(model_assets.stone_tower.clone()),))
             .remove::<NeedsClientConstruction>();
         //info!("Tower spawned, checking children:");
         //for child in children.iter_ancestors(entity) {

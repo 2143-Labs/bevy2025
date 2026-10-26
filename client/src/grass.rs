@@ -4,7 +4,7 @@ use bevy::{
     pbr::{ExtendedMaterial, MaterialExtension},
     prelude::*,
     render::{
-        experimental::occlusion_culling::OcclusionCulling,
+        occlusion_culling::OcclusionCulling,
         render_resource::{AsBindGroup, PrimitiveTopology},
     },
     shader::ShaderRef,

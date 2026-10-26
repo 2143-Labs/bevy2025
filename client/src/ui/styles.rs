@@ -22,7 +22,7 @@ pub fn menu_button_text(text: impl Into<String>) -> (Text, TextFont, TextColor) 
     (
         Text::new(text),
         TextFont {
-            font_size: 32.0,
+            font_size: FontSize::Px(32.0),
             ..default()
         },
         TextColor(Color::srgb(0.9, 0.9, 0.9)),
@@ -59,7 +59,7 @@ pub fn heading_text(text: impl Into<String>, font_size: f32) -> (Text, TextFont,
     (
         Text::new(text),
         TextFont {
-            font_size,
+            font_size: FontSize::Px(font_size),
             ..default()
         },
         TextColor(Color::WHITE),
@@ -71,7 +71,7 @@ pub fn label_text(text: impl Into<String>) -> (Text, TextFont, TextColor) {
     (
         Text::new(text),
         TextFont {
-            font_size: 24.0,
+            font_size: FontSize::Px(24.0),
             ..default()
         },
         TextColor(Color::srgb(0.8, 0.8, 0.8)),

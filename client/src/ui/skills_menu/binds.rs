@@ -310,7 +310,7 @@ fn spawn_skill_bind_overlay(mut commands: Commands) {
                         SkillBindOverlayText,
                         Text::new("Press a key combination to bind a skill..."),
                         TextFont {
-                            font_size: 32.0,
+                            font_size: FontSize::Px(32.0),
                             ..default()
                         },
                         TextColor(Color::srgb(0.9, 0.9, 0.9)),

@@ -280,8 +280,8 @@ pub fn handle_skill_tooltip(
                     tooltip_parent.spawn((
                         Text::new(camel_to_normalized(&format!("{:?}", hovered_skill.skill))),
                         TextFont {
-                            font: fonts.regular.clone(),
-                            font_size: 14.0,
+                            font: fonts.regular.clone().into(),
+                            font_size: FontSize::Px(14.0),
                             ..default()
                         },
                         TextColor(TOOLTIP_TEXT_COLOR),

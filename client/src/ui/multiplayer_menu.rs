@@ -104,7 +104,7 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                             input_parent.spawn((
                                 Text::new(&server_address),
                                 TextFont {
-                                    font_size: 20.0,
+                                    font_size: FontSize::Px(20.0),
                                     ..default()
                                 },
                                 TextColor(Color::WHITE),
@@ -152,7 +152,7 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                             input_parent.spawn((
                                 Text::new(&username),
                                 TextFont {
-                                    font_size: 20.0,
+                                    font_size: FontSize::Px(20.0),
                                     ..default()
                                 },
                                 TextColor(Color::WHITE),
