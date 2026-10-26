@@ -94,7 +94,7 @@ impl Plugin for NetworkingPlugin {
                 )
                     .run_if(
                         in_state(NetworkGameState::ClientSendRequestPacket)
-                            .or(in_state(NetworkGameState::ClientConnected)),
+                            .or_else(in_state(NetworkGameState::ClientConnected)),
                     ),
             )
             .add_systems(
@@ -127,7 +127,7 @@ impl Plugin for NetworkingPlugin {
                 FixedPostUpdate,
                 (shared::netlib::flush_outgoing_events_udp::<EventToClient, EventToServer>).run_if(
                     in_state(NetworkGameState::ClientSendRequestPacket)
-                        .or(in_state(NetworkGameState::ClientConnected)),
+                        .or_else(in_state(NetworkGameState::ClientConnected)),
                 ),
             )
             //.add_systems(

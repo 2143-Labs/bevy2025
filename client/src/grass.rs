@@ -67,11 +67,11 @@ pub struct GrassMaterial {
 
 impl MaterialExtension for GrassMaterial {
     fn vertex_shader() -> ShaderRef {
-        "shaders/grass.wgsl".into()
+        "shaders/grass.wesl".into()
     }
 
     fn fragment_shader() -> ShaderRef {
-        "shaders/grass.wgsl".into()
+        "shaders/grass.wesl".into()
     }
 }
 

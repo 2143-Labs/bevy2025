@@ -59,7 +59,7 @@ pub struct ImageAssets {
     #[asset(path = "images/WinterOrb.png")]
     #[asset(image(sampler(filter = nearest)))]
     pub winter_orb: Handle<Image>,
-    #[asset(path = "images/Frostbolt.png")]
+    #[asset(path = "images/FrostBolt.png")]
     #[asset(image(sampler(filter = nearest)))]
     pub frostbolt: Handle<Image>,
     #[asset(path = "images/Hammerdin.png")]

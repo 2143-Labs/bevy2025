@@ -1,20 +1,17 @@
-#import bevy_pbr::{
-    mesh_view_bindings::globals,
-    mesh_view_bindings::view,
+import bevy_pbr::render::{
+    mesh_view_bindings::{globals, view},
     forward_io::VertexOutput,
     mesh_functions,
-    mesh_bindings::mesh,
     view_transformations::position_world_to_clip,
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::apply_pbr_lighting,
-    pbr_types::PbrInput,
-}
+};
 
 struct GrassMaterial {
     wind_data: vec4<f32>, // direction.x, direction.y, strength, time
 }
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(100)
+@group(constants::MATERIAL_BIND_GROUP) @binding(100)
 var<uniform> grass_material: GrassMaterial;
 
 @vertex
@@ -56,7 +53,7 @@ fn vertex(
     var out: VertexOutput;
     var world_from_local = mesh_functions::get_world_from_local(instance_index);
 
-    let world_position_temp = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(bent_position, 1.0));
+    var world_position = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(bent_position, 1.0));
 
     // Camera-facing effects (Ghost of Tsushima technique)
     let camera_pos = view.world_position;

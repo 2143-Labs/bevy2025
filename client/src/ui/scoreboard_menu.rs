@@ -49,13 +49,15 @@ impl Plugin for ScoreboardMenuPlugin {
         .add_systems(
             Update,
             send_scoreboard_request_packet.run_if(
-                in_state(OverlayMenuState::Scoreboard).and(on_timer(Duration::from_millis(100))),
+                in_state(OverlayMenuState::Scoreboard)
+                    .and_then(on_timer(Duration::from_millis(100))),
             ),
         )
         .add_systems(
             Update,
             update_debug_network_menu.run_if(
-                in_state(OverlayMenuState::Scoreboard).and(on_timer(Duration::from_millis(500))),
+                in_state(OverlayMenuState::Scoreboard)
+                    .and_then(on_timer(Duration::from_millis(500))),
             ),
         )
         .add_message::<RequestScoreboardResponse>();

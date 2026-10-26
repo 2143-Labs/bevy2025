@@ -1,6 +1,6 @@
 //! A simple kinematic character controller implementation using Avian3D and Bevy.
 //! Copied from https://github.com/avianphysics/avian/blob/60ef5cf4/crates/avian2d/examples/kinematic_character_2d/plugin.rs#L39-L140
-use avian3d::{math::*, prelude::*};
+use avian3d::prelude::*;
 use bevy_internal::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -39,16 +39,16 @@ impl Plugin for CharacterControllerPlugin {
 /// A [`Message`] written for a movement input action.
 #[derive(Component, Clone, Debug, Serialize, Deserialize)]
 pub struct MovementAction {
-    pub move_input_dir: Vector2,
-    pub camera_yaw: Scalar,
-    pub move_speed_modifier: Scalar,
+    pub move_input_dir: Vec2,
+    pub camera_yaw: f32,
+    pub move_speed_modifier: f32,
     pub is_jumping: bool,
 }
 
 impl Default for MovementAction {
     fn default() -> Self {
         Self {
-            move_input_dir: Vector2::ZERO,
+            move_input_dir: Vec2::ZERO,
             camera_yaw: 0.0,
             move_speed_modifier: 1.0,
             is_jumping: false,
@@ -76,7 +76,7 @@ pub struct Groundedness(pub bool);
 /// The normal vector of the ground surface the character is standing on.
 /// This is used to project movement onto slopes.
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
-pub struct GroundNormal(pub Vector);
+pub struct GroundNormal(pub Vec3);
 
 /// Tracks when the player last attempted to jump, allowing for a small buffer
 /// window to make jumping more forgiving when grounded status flickers.
@@ -88,25 +88,25 @@ pub struct JumpBuffer {
 
 /// The acceleration used for character movement.
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
-pub struct MovementAcceleration(pub Scalar);
+pub struct MovementAcceleration(pub f32);
 
 /// The damping factor used for slowing down movement.
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
-pub struct MovementDampingFactor(pub Scalar);
+pub struct MovementDampingFactor(pub f32);
 
 /// The strength of a jump.
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
-pub struct JumpImpulse(pub Scalar);
+pub struct JumpImpulse(pub f32);
 
 /// The gravitational acceleration used for a character controller.
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
-pub struct ControllerGravity(pub Vector);
+pub struct ControllerGravity(pub Vec3);
 
 /// The maximum angle a slope can have for a character controller
 /// to be able to climb and jump. If the slope is steeper than this angle,
 /// the character will slide down.
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
-pub struct MaxSlopeAngle(pub Scalar);
+pub struct MaxSlopeAngle(pub f32);
 
 /// A bundle that contains the components needed for a basic
 /// kinematic character controller.
@@ -146,10 +146,10 @@ pub struct MovementBundle {
 
 impl MovementBundle {
     pub const fn new(
-        acceleration: Scalar,
-        damping: Scalar,
-        jump_impulse: Scalar,
-        max_slope_angle: Scalar,
+        acceleration: f32,
+        damping: f32,
+        jump_impulse: f32,
+        max_slope_angle: f32,
     ) -> Self {
         Self {
             acceleration: MovementAcceleration(acceleration),
@@ -157,7 +157,7 @@ impl MovementBundle {
             jump_impulse: JumpImpulse(jump_impulse),
             max_slope_angle: MaxSlopeAngle(max_slope_angle),
             groundedness: Groundedness(false),
-            ground_normal: GroundNormal(Vector::Y),
+            ground_normal: GroundNormal(Vec3::Y),
             jump_buffer: JumpBuffer {
                 last_jump_attempt_time: f64::NEG_INFINITY,
                 buffer_duration: 0.15, // 150ms buffer window
@@ -168,15 +168,15 @@ impl MovementBundle {
 
 impl Default for MovementBundle {
     fn default() -> Self {
-        Self::new(30.0, 0.9, 7.0, PI * 0.45)
+        Self::new(30.0, 0.9, 7.0, std::f32::consts::PI * 0.45)
     }
 }
 
 impl CharacterControllerBundle {
-    pub fn new(collider: Collider, gravity: Vector) -> Self {
+    pub fn new(collider: Collider, gravity: Vec3) -> Self {
         // Create shape caster as a slightly smaller version of collider
         let mut caster_shape = collider.clone();
-        caster_shape.set_scale(Vector::ONE * 1.05, 10);
+        caster_shape.set_scale(Vec3::ONE * 1.05, 10);
 
         Self {
             character_controller: CharacterController,
@@ -184,7 +184,7 @@ impl CharacterControllerBundle {
             collider,
             ground_caster: ShapeCaster::new(
                 caster_shape,
-                Vector::ZERO,
+                Vec3::ZERO,
                 Quat::from_rotation_y(0.0),
                 -Dir3::Y, // Cast downward to detect ground
             )
@@ -197,10 +197,10 @@ impl CharacterControllerBundle {
 
     pub fn with_movement(
         mut self,
-        acceleration: Scalar,
-        damping: Scalar,
-        jump_impulse: Scalar,
-        max_slope_angle: Scalar,
+        acceleration: f32,
+        damping: f32,
+        jump_impulse: f32,
+        max_slope_angle: f32,
     ) -> Self {
         self.movement = MovementBundle::new(acceleration, damping, jump_impulse, max_slope_angle);
         self
@@ -208,10 +208,10 @@ impl CharacterControllerBundle {
 }
 
 impl NPCControllerBundle {
-    pub fn new(collider: Collider, gravity: Vector) -> Self {
+    pub fn new(collider: Collider, gravity: Vec3) -> Self {
         // Create shape caster as a slightly smaller version of collider
         let mut caster_shape = collider.clone();
-        caster_shape.set_scale(Vector::ONE * 1.05, 10);
+        caster_shape.set_scale(Vec3::ONE * 1.05, 10);
         //base the fields on a CharacterControllerBundle
         let base_char = CharacterControllerBundle::new(collider.clone(), gravity);
 
@@ -228,10 +228,10 @@ impl NPCControllerBundle {
 
     pub fn with_movement(
         mut self,
-        acceleration: Scalar,
-        damping: Scalar,
-        jump_impulse: Scalar,
-        max_slope_angle: Scalar,
+        acceleration: f32,
+        damping: f32,
+        jump_impulse: f32,
+        max_slope_angle: f32,
     ) -> Self {
         self.movement = MovementBundle::new(acceleration, damping, jump_impulse, max_slope_angle);
         self
@@ -259,12 +259,12 @@ fn update_grounded(
         // The character is grounded if the shape caster has a hit with a normal
         // that isn't too steep and is within a reasonable distance.
         let mut found_ground = false;
-        let mut best_normal = Vector::Y;
-        let mut closest_distance = Scalar::MAX;
+        let mut best_normal = Vec3::Y;
+        let mut closest_distance = f32::MAX;
 
         // Maximum distance to consider as "grounded" - should be slightly more than
         // the character's radius to account for small gaps
-        const GROUND_DETECTION_THRESHOLD: Scalar = 0.15;
+        const GROUND_DETECTION_THRESHOLD: f32 = 0.15;
 
         for hit in hits.iter() {
             // Check if the hit is close enough to count as ground
@@ -274,7 +274,7 @@ fn update_grounded(
 
             let world_normal = rotation * -hit.normal2;
             let is_climbable = if let Some(angle) = max_slope_angle {
-                world_normal.angle_between(Vector::Y).abs() <= angle.0
+                world_normal.angle_between(Vec3::Y).abs() <= angle.0
             } else {
                 true
             };
@@ -313,7 +313,7 @@ fn unit_change_movement(
 fn rotation(mut controllers: Query<(&mut Rotation, &MovementAction), Without<Dead>>) {
     for (mut transform, movement_action) in &mut controllers {
         //rotate us around the Y axis based on camera yaw
-        *transform = Rotation(Quat::from_rotation_y(movement_action.camera_yaw as Scalar));
+        *transform = Rotation(Quat::from_rotation_y(movement_action.camera_yaw as f32));
     }
 }
 
@@ -335,7 +335,7 @@ fn movement(
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
-    let delta_time = time.delta_secs_f64().adjust_precision();
+    let delta_time = time.delta_secs();
     let current_time = time.elapsed_secs_f64();
 
     for (
@@ -353,10 +353,10 @@ fn movement(
         let speed_modifier = action.move_speed_modifier;
 
         // Convert input direction to 3D movement direction
-        let input_dir_3d = Vector3::new(-input_dir.x, 0.0, input_dir.y);
+        let input_dir_3d = Vec3::new(-input_dir.x, 0.0, input_dir.y);
 
         // Rotate input direction based on camera yaw
-        let rotation = Quat::from_rotation_y(camera_yaw as Scalar);
+        let rotation = Quat::from_rotation_y(camera_yaw as f32);
         let movement_dir = rotation * input_dir_3d;
 
         // When grounded, project the movement direction onto the slope surface
@@ -408,7 +408,7 @@ fn apply_gravity(
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
-    let delta_time = time.delta_secs_f64().adjust_precision();
+    let delta_time = time.delta_secs();
 
     for (gravity, mut linear_velocity) in &mut controllers {
         linear_velocity.0 += gravity.0 * delta_time;
@@ -422,7 +422,7 @@ fn apply_movement_damping(
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
-    let delta_time = time.delta_secs_f64().adjust_precision();
+    let delta_time = time.delta_secs();
 
     for (damping_factor, mut linear_velocity) in &mut query {
         // We could use `LinearDamping`, but we don't want to dampen movement along the Y axis
@@ -433,7 +433,7 @@ fn apply_movement_damping(
 
 #[derive(Message)]
 pub struct SpawnDebugBall {
-    pub position: Vector3,
+    pub position: Vec3,
     pub color: Color,
 }
 
@@ -505,7 +505,7 @@ fn kinematic_controller_collisions(
                 manifold.normal
             };
 
-            let mut deepest_penetration: Scalar = Scalar::MIN;
+            let mut deepest_penetration: f32 = f32::MIN;
 
             // Solve each penetrating contact in the manifold.
             for contact in manifold.points.iter() {
@@ -521,7 +521,7 @@ fn kinematic_controller_collisions(
             }
 
             // Determine if the slope is climbable or if it's too steep to walk on.
-            let slope_angle = normal.angle_between(Vector::Y);
+            let slope_angle = normal.angle_between(Vec3::Y);
             let climbable = max_slope_angle.is_some_and(|angle| slope_angle.abs() <= angle.0);
             debug!(
                 "\
@@ -553,7 +553,7 @@ fn kinematic_controller_collisions(
                     });
                     // spawn a second ball in the impulse direction
                     debug_ball_writer.write(SpawnDebugBall {
-                        position: position.0 + Vector3::Y * 0.1,
+                        position: position.0 + Vec3::Y * 0.1,
                         color: Color::hsv(125.0, 1.0, 1.0),
                     });
                 } else {
@@ -600,8 +600,7 @@ fn kinematic_controller_collisions(
                 }
 
                 // Compute the impulse to apply.
-                let impulse_magnitude =
-                    normal_speed - (deepest_penetration / time.delta_secs_f64().adjust_precision());
+                let impulse_magnitude = normal_speed - (deepest_penetration / time.delta_secs());
                 let mut impulse = impulse_magnitude * normal;
 
                 // Apply the impulse differently depending on the slope angle.
@@ -647,7 +646,7 @@ fn ai_thunk(
 ) {
     for (transform, mut movement_action) in query_ai {
         //make the NPCs move in a circle
-        let t = time.elapsed_secs_f64().adjust_precision();
+        let t = time.elapsed_secs();
         let radius = 5.0;
         let speed = 0.5;
         let x = radius * (speed * t).cos();
@@ -655,8 +654,8 @@ fn ai_thunk(
         let target_pos = Vec3::new(x, transform.translation.y, z);
         let direction = (target_pos - transform.translation).normalize_or_zero();
 
-        movement_action.move_input_dir = Vector2::new(direction.x, direction.z);
-        movement_action.camera_yaw = speed * t + PI / 2.0;
+        movement_action.move_input_dir = Vec2::new(direction.x, direction.z);
+        movement_action.camera_yaw = speed * t + std::f32::consts::PI / 2.0;
         movement_action.move_speed_modifier = 1.0;
         movement_action.is_jumping = false;
     }

@@ -14,7 +14,7 @@ path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies.bevy]
-version = "0.19.1"
+version = "0.20.0"
 default-features = false
 features = ["bevy_log", "https", "bevy_asset", "bevy_state"]
 
@@ -35,7 +35,7 @@ clap = { version = "4.5.58", features = ["derive"] }
 
 noise = "0.9"
 fastrand = "2.3"
-avian3d = { version = "0.7.0", features = ["3d", "collider-from-mesh", "f32", "parallel", "parry-f32", "xpbd_joints", "serialize", "bevy_scene", "simd"], default-features = false }
+avian3d = { version = "0.8.0", features = ["3d", "collider-from-mesh", "parallel", "parry-f32", "xpbd_joints", "serialize", "bevy_scene"], default-features = false }
 dashmap = { version = "6.1.0", features = ["rayon"] }
 rayon = "1.11.0"
 tokio = { version = "1.49.0", features = ["net", "rt-multi-thread"] }
