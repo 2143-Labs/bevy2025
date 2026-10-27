@@ -147,6 +147,7 @@
             # lld is specifically required by the wasm compiler for web builds (tracing-wasm)
             lld
             binaryen
+            wasm-bindgen-cli
           ] ++ buildInputsAll;
           RUST_SRC_PATH = "${rust-toolchain}/lib/rustlib/src/rust/library";
           LD_LIBRARY_PATH = lib.makeLibraryPath buildInputsAll;
