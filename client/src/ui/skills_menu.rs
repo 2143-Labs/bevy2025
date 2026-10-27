@@ -6,6 +6,7 @@ use crate::{
 };
 
 use bevy::prelude::*;
+use bevy::{picking::hover::Hovered, ui::Pressed, ui_widgets::Button};
 use shared::{
     camel_to_normalized,
     items::{InventoryItemCache, SkillFromSkillSource},
@@ -171,7 +172,8 @@ pub fn spawn_skills_menu(
                             ..default()
                         },
                         border_color,
-                        Interaction::default(),
+                        Button,
+                        Hovered::default(),
                         SkillButton {
                             skill: equipped_skill.clone(),
                         },
@@ -204,25 +206,23 @@ pub fn despawn_skills_menu(mut commands: Commands, menu_query: Query<Entity, Wit
 }
 
 pub fn handle_skills_menu_buttons(
-    mut interaction_query: Query<(&Interaction, &SkillButton, Entity), Changed<Interaction>>,
+    interaction_query: Query<(&SkillButton, Entity), Added<Pressed>>,
     // TODO combine the current_skill_we_are_binding resource with the state
     mut overlay_menu_state: ResMut<NextState<SkillBindOverlayState>>,
     mut commands: Commands,
 ) {
-    for (interaction, SkillButton { skill }, _entity) in interaction_query.iter_mut() {
-        if *interaction == Interaction::Pressed {
-            info!("Skill button pressed: {:?}", skill);
-            commands.insert_resource(binds::CurrentSkillWeAreBinding {
-                skill: skill.clone(),
-            });
-            overlay_menu_state.set(SkillBindOverlayState::Active);
-        }
+    for (SkillButton { skill }, _entity) in interaction_query.iter() {
+        info!("Skill button pressed: {:?}", skill);
+        commands.insert_resource(binds::CurrentSkillWeAreBinding {
+            skill: skill.clone(),
+        });
+        overlay_menu_state.set(SkillBindOverlayState::Active);
     }
 }
 
 pub fn handle_skill_tooltip(
     mut commands: Commands,
-    skill_buttons: Query<(&Interaction, &SkillButton)>,
+    skill_buttons: Query<(&Hovered, &SkillButton)>,
     skills_menu: Query<Entity, With<SkillsMenu>>,
     _inventory_map: Res<InventoryItemCache>,
     fonts: Res<crate::assets::FontAssets>,
@@ -233,8 +233,8 @@ pub fn handle_skill_tooltip(
     let mut currently_hovered_skill: Option<SkillFromSkillSource> = None;
 
     // Check what skill is currently being hovered
-    for (interaction, skill_button) in skill_buttons.iter() {
-        if *interaction == Interaction::Hovered {
+    for (hovered, skill_button) in skill_buttons.iter() {
+        if hovered.get() {
             currently_hovered_skill = Some(skill_button.skill.clone());
             break;
         }

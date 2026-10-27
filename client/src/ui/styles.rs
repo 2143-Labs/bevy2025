@@ -1,5 +1,6 @@
 use super::multiplayer_menu::ColorButton;
 use bevy::prelude::*;
+use bevy::{picking::hover::Hovered, ui::Pressed, ui_widgets::Button};
 
 /// Standard button styling
 pub fn menu_button_bundle() -> (Node, BackgroundColor, BorderColor) {
@@ -32,24 +33,26 @@ pub fn menu_button_text(text: impl Into<String>) -> (Text, TextFont, TextColor) 
 /// System to handle button hover/press visual feedback
 pub fn button_visual_feedback(
     mut interaction_query: Query<
-        (&Interaction, &mut BackgroundColor, &mut BorderColor),
-        (Changed<Interaction>, Without<ColorButton>),
+        (
+            &Hovered,
+            Has<Pressed>,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ),
+        (With<Button>, Without<ColorButton>),
     >,
 ) {
-    for (interaction, mut bg_color, mut border_color) in interaction_query.iter_mut() {
-        match *interaction {
-            Interaction::Pressed => {
-                bg_color.0 = Color::srgb(0.35, 0.35, 0.35);
-                *border_color = BorderColor::all(Color::srgb(0.8, 0.8, 0.8));
-            }
-            Interaction::Hovered => {
-                bg_color.0 = Color::srgb(0.25, 0.25, 0.25);
-                *border_color = BorderColor::all(Color::srgb(0.6, 0.6, 0.6));
-            }
-            Interaction::None => {
-                bg_color.0 = Color::srgb(0.15, 0.15, 0.15);
-                *border_color = BorderColor::all(Color::BLACK);
-            }
+    for (hovered, pressed, mut bg_color, mut border_color) in interaction_query.iter_mut() {
+        let (bg, border) = if pressed {
+            (Color::srgb(0.35, 0.35, 0.35), Color::srgb(0.8, 0.8, 0.8))
+        } else if hovered.get() {
+            (Color::srgb(0.25, 0.25, 0.25), Color::srgb(0.6, 0.6, 0.6))
+        } else {
+            (Color::srgb(0.15, 0.15, 0.15), Color::BLACK)
+        };
+        if bg_color.0 != bg {
+            bg_color.0 = bg;
+            *border_color = BorderColor::all(border);
         }
     }
 }

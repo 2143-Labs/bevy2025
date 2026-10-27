@@ -1,6 +1,7 @@
 use super::styles::*;
 use crate::game_state::{GameState, OverlayMenuState};
 use bevy::prelude::*;
+use bevy::{picking::hover::Hovered, ui::Pressed, ui_widgets::Button};
 
 /// Marker for the paused menu root entity
 #[derive(Component)]
@@ -55,7 +56,8 @@ pub fn spawn_paused_menu(mut commands: Commands) {
                         node,
                         bg_color,
                         border_color,
-                        Interaction::default(),
+                        Button,
+                        Hovered::default(),
                         ResumeButton,
                     ))
                     .with_children(|button| {
@@ -72,7 +74,8 @@ pub fn spawn_paused_menu(mut commands: Commands) {
                         node,
                         bg_color,
                         border_color,
-                        Interaction::default(),
+                        Button,
+                        Hovered::default(),
                         MainMenuButton,
                     ))
                     .with_children(|button| {
@@ -91,32 +94,21 @@ pub fn despawn_paused_menu(mut commands: Commands, menu_query: Query<Entity, Wit
 
 /// Handle button interactions in paused menu
 pub fn handle_paused_menu_buttons(
-    resume_query: Query<&Interaction, (Changed<Interaction>, With<ResumeButton>)>,
-    main_menu_query: Query<
-        &Interaction,
-        (
-            Changed<Interaction>,
-            With<MainMenuButton>,
-            Without<ResumeButton>,
-        ),
-    >,
+    resume_query: Query<(), (Added<Pressed>, With<ResumeButton>)>,
+    main_menu_query: Query<(), (Added<Pressed>, With<MainMenuButton>, Without<ResumeButton>)>,
     mut next_state: ResMut<NextState<GameState>>,
     mut next_menu_state: ResMut<NextState<OverlayMenuState>>,
 ) {
     // Resume button - go back to Playing
-    for interaction in resume_query.iter() {
-        if *interaction == Interaction::Pressed {
-            info!("Resume button pressed");
-            next_menu_state.set(OverlayMenuState::Hidden);
-        }
+    for () in resume_query.iter() {
+        info!("Resume button pressed");
+        next_menu_state.set(OverlayMenuState::Hidden);
     }
 
     // Main Menu button - return to MainMenu
-    for interaction in main_menu_query.iter() {
-        if *interaction == Interaction::Pressed {
-            info!("Main Menu button pressed from pause menu");
-            next_state.set(GameState::MainMenu);
-            next_menu_state.set(OverlayMenuState::Hidden);
-        }
+    for () in main_menu_query.iter() {
+        info!("Main Menu button pressed from pause menu");
+        next_state.set(GameState::MainMenu);
+        next_menu_state.set(OverlayMenuState::Hidden);
     }
 }
