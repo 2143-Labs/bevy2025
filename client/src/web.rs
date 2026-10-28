@@ -49,13 +49,16 @@ impl Plugin for WebPlugin {
             .expect("No player_id element in html")
             .dyn_into::<HtmlParagraphElement>()
             .expect("player_id element is not a paragraph element")
-            .text_content();
+            .text_content()
+            // index.html leaves these <p> tags empty for logged-out visitors.
+            .filter(|s| !s.is_empty());
         let localstorage_token = document
             .get_element_by_id("localstorage_login_token")
             .expect("No auth_token element in html")
             .dyn_into::<HtmlParagraphElement>()
             .expect("auth_token element is not a paragraph element")
-            .text_content();
+            .text_content()
+            .filter(|s| !s.is_empty());
 
         if let (Some(token), Some(player_id)) = (localstorage_token, localstorage_player_id) {
             info!("Found auth token and player id in localstorage, using them for authentication");
