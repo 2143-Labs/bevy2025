@@ -1,5 +1,8 @@
 use super::styles::*;
-use crate::game_state::{GameState, MenuState, NetworkGameState};
+use crate::{
+    auth::AuthState,
+    game_state::{GameState, MenuState, NetworkGameState},
+};
 use bevy::prelude::*;
 use bevy::{picking::hover::Hovered, ui::Pressed, ui_widgets::Button};
 use shared::{Config, netlib::NetworkConnectionTarget};
@@ -16,14 +19,23 @@ pub struct ConnectionStatusText;
 #[derive(Component)]
 pub struct CancelButton;
 
-/// Spawn the connecting menu UI
+/// Spawn the connecting menu UI. The connection itself starts in
+/// [`start_connect_when_ticket_ready`] once the auth module has a game ticket.
 pub fn spawn_connecting_menu_and_connect(
     mut commands: Commands,
     config: Res<Config>,
-    mut next_network_state: ResMut<NextState<NetworkGameState>>,
+    auth_state: Res<State<AuthState>>,
 ) {
+    #[cfg(feature = "web")]
+    let server_display = crate::web::game_server_url();
+    #[cfg(not(feature = "web"))]
     let server_display = format!("{}:{}", config.ip, config.port);
     let username_display = config.name.clone().unwrap_or_else(|| "Player".to_string());
+    let status = if *auth_state.get() == AuthState::Ready {
+        "Attempting to connect..."
+    } else {
+        "Getting ticket..."
+    };
 
     commands
         .spawn((
@@ -77,7 +89,7 @@ pub fn spawn_connecting_menu_and_connect(
             // Status text
             parent.spawn((
                 {
-                    let (text, font, color) = label_text("Attempting to connect...");
+                    let (text, font, color) = label_text(status);
                     (text, font, color)
                 },
                 ConnectionStatusText,
@@ -106,14 +118,27 @@ pub fn spawn_connecting_menu_and_connect(
                         });
                 });
         });
+}
 
+/// Start connecting once a ticket is ready. Resets [`AuthState`] to `Idle` so the ticket is
+/// used for exactly one connection attempt; the next attempt fetches a new one.
+pub fn start_connect_when_ticket_ready(
+    mut commands: Commands,
+    config: Res<Config>,
+    mut next_network_state: ResMut<NextState<NetworkGameState>>,
+    mut next_auth_state: ResMut<NextState<AuthState>>,
+) {
     commands.insert_resource(NetworkConnectionTarget {
         ip: config.ip.clone(),
         port: config.port,
     });
-
-    // Start connection process
     next_network_state.set(NetworkGameState::ClientConnecting);
+    next_auth_state.set(AuthState::Idle);
+}
+
+/// No ticket, no connection: back to the home menu (the auth module already notified).
+pub fn return_home_on_auth_failure(mut next_menu_state: ResMut<NextState<MenuState>>) {
+    next_menu_state.set(MenuState::Home);
 }
 
 /// Despawn the connecting menu
@@ -144,23 +169,24 @@ pub fn handle_connecting_buttons(
 /// Monitor connection status and transition to Playing when connected
 pub fn monitor_connection_status(
     network_state: Res<State<NetworkGameState>>,
+    auth_state: Res<State<AuthState>>,
     mut next_game_state: ResMut<NextState<GameState>>,
     mut status_text_query: Query<&mut Text, With<ConnectionStatusText>>,
-    mut last_state: Local<Option<NetworkGameState>>,
 ) {
-    let current_state = network_state.get();
-
-    // Only update if state changed
-    if Some(current_state) == last_state.as_ref() {
+    if !network_state.is_changed() && !auth_state.is_changed() {
         return;
     }
-    *last_state = Some(current_state.clone());
 
     // Update status text based on network state
     if let Ok(mut text) = status_text_query.single_mut() {
-        match current_state {
-            NetworkGameState::Disconnected => {
-                text.0 = "Disconnected".to_string();
+        match network_state.get() {
+            // Not connecting yet (left over from a previous session): waiting on the ticket.
+            NetworkGameState::Disconnected | NetworkGameState::Quit => {
+                text.0 = match auth_state.get() {
+                    AuthState::Failed => "Login failed",
+                    _ => "Getting ticket...",
+                }
+                .to_string();
             }
             NetworkGameState::ClientConnecting => {
                 text.0 = "Connecting to server...".to_string();
@@ -176,9 +202,6 @@ pub fn monitor_connection_status(
             }
             NetworkGameState::Paused => {
                 text.0 = "Connection paused".to_string();
-            }
-            NetworkGameState::Quit => {
-                text.0 = "Connection failed".to_string();
             }
         }
     }

@@ -30,23 +30,25 @@ wasm-bindgen = { version = "0.2.108", optional = true }
 getrandom = { version = "0.4.1", optional = true, features = ["wasm_js"] }
 web-sys = { version = "0.3.85", optional = true, features = [
 "Window", "Document", "HtmlCanvasElement", "HtmlParagraphElement", "console",
-"MessageEvent", "WebSocket", "PresentationConnection", "Blob", "ReadableStream", "ReadableStreamDefaultReader"
+"MessageEvent", "WebSocket", "PresentationConnection", "Blob", "ReadableStream", "ReadableStreamDefaultReader",
+"Location", "History", "Request", "RequestInit", "RequestCredentials", "Response", "Headers"
 ] }
 wasm-bindgen-futures = {version = "0.4.58", optional = true }
-reqwest = { version = "0.13.2", default-features = false, features = ["rustls", "json"] , optional = true }
-futures = { version = "0.3.32", optional = true }
 serde_json = "1.0.149"
+parking_lot = "0.12.5"
 
 # main.rs drives every non-web build with a tokio runtime, so tokio has to be
 # present on native targets regardless of which networking features are enabled.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1.49.0" }
+# Auth HTTP client (client/src/auth/http.rs); web builds use window.fetch instead.
+reqwest = { version = "0.13.2", default-features = false, features = ["rustls", "json"] }
 
 [features]
 inspector = ["dep:bevy-inspector-egui"]
 singleplayer = ["dep:server"]
 web = ["dep:wasm-bindgen", "dep:raw-window-handle", "dep:web-sys", "shared/web", "dep:getrandom", "dep:wasm-bindgen-futures"]
 udp = ["shared/udp", "dep:message-io"]
-steam = ["dep:bevy-steamworks", "dep:futures", "dep:reqwest"]
+steam = ["dep:bevy-steamworks"]
 clipboard = ["dep:arboard"]
 default = ["steam", "udp", "clipboard"]

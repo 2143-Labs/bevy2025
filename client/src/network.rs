@@ -8,8 +8,8 @@ use shared::{
     event::{
         MyNetEntParentId, NetEntId, PlayerId, UDPacketEvent,
         client::{
-            BeginThirdpersonControllingUnit, HeartbeatChallenge, HeartbeatResponse, SpawnUnit2,
-            WorldData2,
+            BeginThirdpersonControllingUnit, ConnectRejected, HeartbeatChallenge,
+            HeartbeatResponse, SpawnUnit2, WorldData2,
         },
         server::{
             ChangeMovement, ConnectRequest, Heartbeat, HeartbeatChallengeResponse,
@@ -31,6 +31,7 @@ use std::sync::Arc;
 
 use crate::{
     assets::{FontAssets, ModelAssets, WorldAssets},
+    auth::{AuthState, GameTicket},
     camera::LocalCamera,
     game_state::{GameState, NetworkGameState, TerrainEntity},
     notification::Notification,
@@ -44,12 +45,6 @@ pub mod inventory;
 /// going to menu and such.
 #[derive(Component)]
 pub struct WorldEntity;
-
-/// HTTP/s location of the main auth server to use
-#[derive(Resource)]
-#[allow(unused)]
-// TODO use this
-pub struct AuthServerEndpoint(pub String);
 
 /// Temporary storage for camera NetEntId until camera is spawned
 #[derive(Resource)]
@@ -90,6 +85,7 @@ impl Plugin for NetworkingPlugin {
                 Update,
                 (
                     receive_world_data,
+                    receive_connect_rejected,
                     shared::event::client::drain_incoming_events,
                 )
                     .run_if(
@@ -497,9 +493,15 @@ fn send_connect_packet(
     //args: Res<CliArgs>,
     mse: Res<MainServerEndpoint>,
     config: Res<Config>,
+    ticket: Option<Res<GameTicket>>,
     mut notif: MessageWriter<Notification>,
     local_player: Query<&Transform, With<LocalCamera>>,
 ) {
+    // Removed by a ConnectRejected in this frame; the state change to Quit is pending.
+    let Some(ticket) = ticket else {
+        return;
+    };
+
     // Use LocalCamera (FreeCam) transform if available, otherwise use default spawn location
     let my_location = local_player
         .single()
@@ -512,8 +514,7 @@ fn send_connect_packet(
         name: name.clone(),
         my_location,
         color_hue: config.player_color_hue,
-        // Filled from the auth module's GameTicket once the client fetches tickets.
-        ticket: String::new(),
+        ticket: ticket.0.clone(),
     });
     notif.write(Notification(format!(
         "Connecting server={:?} name={name:?}",
@@ -521,6 +522,27 @@ fn send_connect_packet(
     )));
     sr.send_outgoing_event_now(mse.0, &event, None);
     info!("Sent connection packet to {:?}", mse.0);
+}
+
+/// The server refused our ticket (expired, wrong environment, character already playing...).
+/// Drop the ticket and go back to the main menu; the next attempt fetches a new one.
+fn receive_connect_rejected(
+    mut rejected: UDPacketEvent<ConnectRejected>,
+    mut commands: Commands,
+    mut notif: MessageWriter<Notification>,
+    mut auth_state: ResMut<NextState<AuthState>>,
+    mut network_state: ResMut<NextState<NetworkGameState>>,
+) {
+    for event in rejected.read() {
+        let reason = &event.event.reason;
+        warn!("Server rejected connection: {reason}");
+        notif.write(Notification(format!(
+            "Server rejected connection: {reason}"
+        )));
+        commands.remove_resource::<GameTicket>();
+        auth_state.set(AuthState::Idle);
+        network_state.set(NetworkGameState::Quit);
+    }
 }
 
 fn send_disconnect_packet(sr: Res<ClientNetworkingResources>, mse: Res<MainServerEndpoint>) {

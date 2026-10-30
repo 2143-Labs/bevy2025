@@ -1,5 +1,8 @@
 use super::{styles::*, text_input::*};
-use crate::game_state::MenuState;
+use crate::{
+    auth::{AuthRequest, AuthSession},
+    game_state::MenuState,
+};
 use bevy::prelude::*;
 use bevy::{picking::hover::Hovered, ui::Pressed, ui_widgets::Button};
 use shared::Config;
@@ -319,6 +322,7 @@ pub fn update_color_button_hover(
 }
 
 /// Handle button interactions in multiplayer menu
+#[allow(clippy::too_many_arguments)]
 pub fn handle_multiplayer_buttons(
     connect_query: Query<(), (Added<Pressed>, With<ConnectButton>)>,
     back_query: Query<(), (Added<Pressed>, With<BackButton>, Without<ConnectButton>)>,
@@ -326,6 +330,8 @@ pub fn handle_multiplayer_buttons(
     username_input_query: Query<&TextInput, (With<UsernameInput>, Without<ServerAddressInput>)>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
     mut config: ResMut<Config>,
+    session: Res<AuthSession>,
+    mut auth_requests: MessageWriter<AuthRequest>,
 ) {
     // Back button
     for () in back_query.iter() {
@@ -365,6 +371,8 @@ pub fn handle_multiplayer_buttons(
         config.port = port;
         config.name = Some(username);
 
+        // Every connection needs a fresh ticket (a new guest if we have no session yet)
+        auth_requests.write(session.ticket_request());
         // Transition to connecting state
         next_menu_state.set(MenuState::Connecting);
     }
