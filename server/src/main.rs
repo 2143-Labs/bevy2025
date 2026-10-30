@@ -1,4 +1,4 @@
-use server::main_multiplayer_server;
+use server::{main_multiplayer_server, ticket::TicketVerifier};
 use tokio::runtime;
 
 //single thread
@@ -12,6 +12,7 @@ fn main() {
 
     let runtime2 = runtime.clone();
     runtime.block_on(async {
-        main_multiplayer_server(runtime2);
+        let verifier = TicketVerifier::from_env().await;
+        main_multiplayer_server(runtime2, verifier);
     });
 }

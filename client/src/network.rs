@@ -512,6 +512,8 @@ fn send_connect_packet(
         name: name.clone(),
         my_location,
         color_hue: config.player_color_hue,
+        // Filled from the auth module's GameTicket once the client fetches tickets.
+        ticket: String::new(),
     });
     notif.write(Notification(format!(
         "Connecting server={:?} name={name:?}",

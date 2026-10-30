@@ -38,11 +38,16 @@ fastrand = "2.3"
 avian3d = { version = "0.8.0", features = ["3d", "collider-from-mesh", "parallel", "parry-f32", "xpbd_joints", "serialize", "bevy_scene"], default-features = false }
 dashmap = { version = "6.1.0", features = ["rayon"] }
 rayon = "1.11.0"
-tokio = { version = "1.49.0", features = ["net", "rt-multi-thread"] }
+tokio = { version = "1.49.0", features = ["net", "rt-multi-thread", "time"] }
 axum = "0.8.8"
 tokio-tungstenite = "0.28.0"
 futures-util = "0.3.32"
 futures-channel = "0.3.32"
+jsonwebtoken = { version = "11", features = ["rust_crypto"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
 
 [dev-dependencies]
 tungstenite = "0.28.0"
+# Same major as jsonwebtoken's rust_crypto backend, so only one copy is built.
+ed25519-dalek = { version = "2", features = ["pkcs8", "alloc"] }
+base64 = "0.22"
