@@ -87,7 +87,7 @@ impl Plugin for UIPlugin {
             // Global button feedback
             .add_systems(Update, styles::button_visual_feedback);
 
-        #[cfg(feature = "singleplayer")]
+        #[cfg(feature = "testing")]
         app.add_systems(
             Update,
             home_menu::handle_enter_testing_button.run_if(in_state(MenuState::Home)),

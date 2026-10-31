@@ -16,7 +16,7 @@ pub struct HomeMenu;
 pub struct PlayNowButton;
 
 /// Marker for the Enter testing button (local test world on an in-process server)
-#[cfg(feature = "singleplayer")]
+#[cfg(feature = "testing")]
 #[derive(Component)]
 pub struct EnterTestingButton;
 
@@ -117,7 +117,7 @@ fn build_home_menu(
             });
 
             spawn_menu_button(parent, "Play now", PlayNowButton);
-            #[cfg(feature = "singleplayer")]
+            #[cfg(feature = "testing")]
             spawn_menu_button(parent, "Enter testing", EnterTestingButton);
 
             if !session.is_account() && !methods.0.is_empty() {
@@ -238,7 +238,7 @@ pub fn handle_home_buttons(
 
 /// Enter testing - a local test world on an in-process server with ticket verification
 /// disabled, so no authserver round trip: an empty ticket is ready immediately.
-#[cfg(feature = "singleplayer")]
+#[cfg(feature = "testing")]
 pub fn handle_enter_testing_button(
     testing_query: Query<(), (Added<Pressed>, With<EnterTestingButton>)>,
     mut commands: Commands,
@@ -268,7 +268,7 @@ pub fn handle_enter_testing_button(
                 })
                 .add(bevy::app::ScheduleRunnerPlugin::default());
             // TODO exit
-            server::call_from_client_for_singleplayer(
+            server::call_from_client_for_testing(
                 NetworkConnectionTarget {
                     ip: "127.0.0.1".to_string(),
                     port,

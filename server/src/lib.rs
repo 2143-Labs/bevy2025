@@ -94,12 +94,12 @@ pub fn main_multiplayer_server(
 /// Run the server inside the client process. The client passes the base plugin group because
 /// feature unification gives this crate the client's windowing features there: the caller must
 /// leave out the window, event loop and logging plugins the client already owns.
-pub fn call_from_client_for_singleplayer(
+pub fn call_from_client_for_testing(
     network_target: NetworkConnectionTarget,
     base_plugins: bevy::app::PluginGroupBuilder,
 ) {
     info!(
-        "Starting singleplayer server connecting to {:?}",
+        "Starting local test server connecting to {:?}",
         network_target
     );
     do_app(base_plugins, |app| {

@@ -46,9 +46,9 @@ reqwest = { version = "0.13.2", default-features = false, features = ["rustls", 
 
 [features]
 inspector = ["dep:bevy-inspector-egui"]
-singleplayer = ["dep:server"]
+testing = ["dep:server"]
 web = ["dep:wasm-bindgen", "dep:raw-window-handle", "dep:web-sys", "shared/web", "dep:getrandom", "dep:wasm-bindgen-futures"]
 udp = ["shared/udp", "dep:message-io"]
 steam = ["dep:bevy-steamworks"]
 clipboard = ["dep:arboard"]
-default = ["steam", "udp", "clipboard", "singleplayer"]
+default = ["steam", "udp", "clipboard", "testing"]
