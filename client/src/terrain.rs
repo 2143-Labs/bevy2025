@@ -134,7 +134,7 @@ fn setup_terrain_client(
         Name::new("Sun (Directional Light)"),
         DirectionalLight {
             illuminance: 10000.0,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.7, 0.3, 0.0)),

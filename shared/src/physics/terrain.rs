@@ -1,7 +1,7 @@
 use avian3d::prelude::*;
-use bevy_internal::prelude::*;
 #[cfg(feature = "render")]
 use bevy_asset::RenderAssetUsages;
+use bevy_internal::prelude::*;
 #[cfg(feature = "render")]
 use bevy_mesh::{Indices, Mesh, PrimitiveTopology};
 use noise::{NoiseFn, Perlin};

@@ -1,6 +1,7 @@
 use super::styles::*;
 use crate::game_state::{GameState, MenuState, NetworkGameState};
 use bevy::prelude::*;
+use bevy::{picking::hover::Hovered, ui::Pressed, ui_widgets::Button};
 use shared::{Config, netlib::NetworkConnectionTarget};
 
 /// Marker for the connecting menu root entity
@@ -96,7 +97,8 @@ pub fn spawn_connecting_menu_and_connect(
                             node,
                             bg_color,
                             border_color,
-                            Interaction::default(),
+                            Button,
+                            Hovered::default(),
                             CancelButton,
                         ))
                         .with_children(|button| {
@@ -126,18 +128,16 @@ pub fn despawn_connecting_menu(
 
 /// Handle cancel button in connecting menu
 pub fn handle_connecting_buttons(
-    cancel_query: Query<&Interaction, (Changed<Interaction>, With<CancelButton>)>,
+    cancel_query: Query<(), (Added<Pressed>, With<CancelButton>)>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
     mut next_network_state: ResMut<NextState<NetworkGameState>>,
 ) {
-    for interaction in cancel_query.iter() {
-        if *interaction == Interaction::Pressed {
-            info!("Cancel button pressed - returning to home menu");
-            // Disconnect if connecting
-            next_network_state.set(NetworkGameState::Disconnected);
-            // Return to home menu
-            next_menu_state.set(MenuState::Home);
-        }
+    for () in cancel_query.iter() {
+        info!("Cancel button pressed - returning to home menu");
+        // Disconnect if connecting
+        next_network_state.set(NetworkGameState::Disconnected);
+        // Return to home menu
+        next_menu_state.set(MenuState::Home);
     }
 }
 

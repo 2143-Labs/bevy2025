@@ -38,11 +38,11 @@ pub struct WaterMaterial {
 
 impl MaterialExtension for WaterMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/water.wgsl".into()
+        "shaders/water.wesl".into()
     }
 
     fn deferred_fragment_shader() -> ShaderRef {
-        "shaders/water.wgsl".into()
+        "shaders/water.wesl".into()
     }
 }
 

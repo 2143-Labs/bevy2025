@@ -59,7 +59,7 @@ pub struct ImageAssets {
     #[asset(path = "images/WinterOrb.png")]
     #[asset(image(sampler(filter = nearest)))]
     pub winter_orb: Handle<Image>,
-    #[asset(path = "images/Frostbolt.png")]
+    #[asset(path = "images/FrostBolt.png")]
     #[asset(image(sampler(filter = nearest)))]
     pub frostbolt: Handle<Image>,
     #[asset(path = "images/Hammerdin.png")]
@@ -106,12 +106,12 @@ pub struct ModelAssets {
 
     // If you want to access specific scenes within the GLTF:
     #[asset(path = "models/g-toilet/scene.gltf#Scene0")]
-    pub g_toilet_scene: Handle<Scene>,
+    pub g_toilet_scene: Handle<WorldAsset>,
 }
 
 #[derive(AssetCollection, Resource)]
 pub struct WorldAssets {
     // If you want to access specific scenes within the GLTF:
     #[asset(path = "models/tower/stone-tower001.gltf#Scene0")]
-    pub stone_tower: Handle<Scene>,
+    pub stone_tower: Handle<WorldAsset>,
 }

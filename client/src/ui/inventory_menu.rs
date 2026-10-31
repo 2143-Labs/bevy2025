@@ -1,6 +1,7 @@
 use super::styles::*;
 use crate::{game_state::OverlayMenuState, network::CurrentThirdPersonControlledUnit};
 use bevy::prelude::*;
+use bevy::{picking::hover::Hovered, ui_widgets::Button};
 use shared::{items::InventoryItemCache, net_components::ours::HasInventory};
 
 /// Marker for the paused menu root entity
@@ -97,7 +98,7 @@ pub fn spawn_inventory_menu(
                     color.0 = Color::linear_rgb(1.0, 0.84, 0.0);
                 }
                 parent
-                    .spawn((node, bg_color, border_color, Interaction::default()))
+                    .spawn((node, bg_color, border_color, Button, Hovered::default()))
                     .with_children(|button| {
                         button.spawn((text, font, color));
                     });

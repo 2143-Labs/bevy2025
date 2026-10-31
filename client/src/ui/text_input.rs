@@ -1,6 +1,7 @@
 #[cfg(feature = "clipboard")]
 use arboard::Clipboard;
 
+use bevy::ui::Pressed;
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
 
 /// Text input component that handles user keyboard input
@@ -82,34 +83,29 @@ pub struct FocusedInput(pub Option<Entity>);
 
 /// System to handle clicking on text input fields
 pub fn handle_text_input_focus(
-    interaction_query: Query<
-        (Entity, &Interaction, &Children),
-        (Changed<Interaction>, With<TextInput>),
-    >,
+    interaction_query: Query<(Entity, &Children), (Added<Pressed>, With<TextInput>)>,
     mut all_inputs: Query<&mut TextInput>,
     mut text_query: Query<&mut TextColor, With<TextInputDisplay>>,
     mut focused: ResMut<FocusedInput>,
 ) {
-    for (entity, interaction, children) in interaction_query.iter() {
-        if *interaction == Interaction::Pressed {
-            // Unfocus previous input
-            if let Some(prev_entity) = focused.0
-                && let Ok(mut prev_input) = all_inputs.get_mut(prev_entity)
-            {
-                prev_input.is_focused = false;
-            }
+    for (entity, children) in interaction_query.iter() {
+        // Unfocus previous input
+        if let Some(prev_entity) = focused.0
+            && let Ok(mut prev_input) = all_inputs.get_mut(prev_entity)
+        {
+            prev_input.is_focused = false;
+        }
 
-            // Focus this input
-            if let Ok(mut input) = all_inputs.get_mut(entity) {
-                input.is_focused = true;
-            }
-            focused.0 = Some(entity);
+        // Focus this input
+        if let Ok(mut input) = all_inputs.get_mut(entity) {
+            input.is_focused = true;
+        }
+        focused.0 = Some(entity);
 
-            // Update text color to show focus
-            for child in children.iter() {
-                if let Ok(mut text_color) = text_query.get_mut(child) {
-                    text_color.0 = Color::WHITE;
-                }
+        // Update text color to show focus
+        for child in children.iter() {
+            if let Ok(mut text_color) = text_query.get_mut(child) {
+                text_color.0 = Color::WHITE;
             }
         }
     }

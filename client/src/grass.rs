@@ -4,7 +4,7 @@ use bevy::{
     pbr::{ExtendedMaterial, MaterialExtension},
     prelude::*,
     render::{
-        experimental::occlusion_culling::OcclusionCulling,
+        occlusion_culling::OcclusionCulling,
         render_resource::{AsBindGroup, PrimitiveTopology},
     },
     shader::ShaderRef,
@@ -67,11 +67,11 @@ pub struct GrassMaterial {
 
 impl MaterialExtension for GrassMaterial {
     fn vertex_shader() -> ShaderRef {
-        "shaders/grass.wgsl".into()
+        "shaders/grass.wesl".into()
     }
 
     fn fragment_shader() -> ShaderRef {
-        "shaders/grass.wgsl".into()
+        "shaders/grass.wesl".into()
     }
 }
 

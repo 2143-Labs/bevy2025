@@ -166,7 +166,7 @@ jobs:
           skopeo copy docker-archive://$RESULT docker://ghcr.io/2143-labs/bevy2025:webserver-wasm-${IMAGE_TAG}
           # if not pull request, then also push as latest
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            skopeo copy docker-archive://$RESULT docker://ghcr.io/2143-labs/bevy2025:webserver-wasm-branch-${{ github.head_ref }}
+            skopeo copy docker-archive://$RESULT docker://ghcr.io/2143-labs/bevy2025:webserver-wasm-pr-${{ github.event.pull_request.number }}
           else
             skopeo copy docker-archive://$RESULT docker://ghcr.io/2143-labs/bevy2025:webserver-wasm-latest
           fi

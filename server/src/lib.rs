@@ -324,7 +324,7 @@ fn on_player_connect(
                     "Preparing to send existing unit {:?} to new player",
                     unit_net_ent_id
                 );
-                let ciids = component_info.map(|ci| ci.id()).collect::<HashSet<_>>();
+                let ciids = component_info.map(|(id, _)| id).collect::<HashSet<_>>();
                 let Ok(ents_res) = world.entity(unit_ent).get_by_id(&ciids) else {
                     error!("Failed to get components for entity {:?}", unit_ent);
                     continue;

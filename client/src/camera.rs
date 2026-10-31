@@ -286,10 +286,8 @@ fn update_freecam_transform_from_settings_tps(
     freecam_transform.look_at(look_at_position, Vec3::Y);
 }
 
-use avian3d::math::*;
-
 #[derive(Resource, Default)]
-struct LastInputDirection(Vector2);
+struct LastInputDirection(Vec2);
 
 /// TODO move this
 /// Sends [`MovementAction`] events based on keyboard input.
@@ -309,7 +307,7 @@ fn keyboard_input_tps(
 
     let vertical = (forward as i8 - backward as i8) as f32;
     let horizontal = (right as i8 - left as i8) as f32;
-    let direction = Vector2::new(horizontal, vertical).normalize_or_zero();
+    let direction = Vec2::new(horizontal, vertical).normalize_or_zero();
     //info!("TPS input direction: {:?}", direction);
     let unit_net_id = match my_controlled_unit.single() {
         Ok(data) => data,

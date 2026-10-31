@@ -1,4 +1,3 @@
-use avian3d::math::Vector3;
 use bevy::prelude::*;
 use shared::character_controller::SpawnDebugBall;
 
@@ -34,7 +33,7 @@ fn debug_spawn_collision_ball(
 ) {
     for event in message_reader.read() {
         commands.spawn((
-            Transform::from_translation(event.position + Vector3::Y * 2.0),
+            Transform::from_translation(event.position + Vec3::Y * 2.0),
             MeshMaterial3d(materials.add(StandardMaterial {
                 base_color: event.color,
                 unlit: true,

@@ -1,6 +1,7 @@
 use super::styles::*;
 use crate::{assets::ImageAssets, game_state::MenuState};
 use bevy::{math::Rot2, prelude::*, ui::UiTransform};
+use bevy::{picking::hover::Hovered, ui::Pressed, ui_widgets::Button};
 
 /// Marker for the home menu root entity
 #[derive(Component)]
@@ -78,7 +79,8 @@ pub fn spawn_home_menu(mut commands: Commands, image_assets: Res<ImageAssets>) {
                         node,
                         bg_color,
                         border_color,
-                        Interaction::default(),
+                        Button,
+                        Hovered::default(),
                         PlayButton,
                     ))
                     .with_children(|button| {
@@ -95,7 +97,8 @@ pub fn spawn_home_menu(mut commands: Commands, image_assets: Res<ImageAssets>) {
                         node,
                         bg_color,
                         border_color,
-                        Interaction::default(),
+                        Button,
+                        Hovered::default(),
                         MultiplayerButton,
                     ))
                     .with_children(|button| {
@@ -114,52 +117,41 @@ pub fn despawn_home_menu(mut commands: Commands, menu_query: Query<Entity, With<
 
 /// Handle button interactions in home menu
 pub fn handle_home_buttons(
-    mut play_query: Query<&Interaction, (Changed<Interaction>, With<PlayButton>)>,
-    mut multiplayer_query: Query<
-        &Interaction,
-        (
-            Changed<Interaction>,
-            With<MultiplayerButton>,
-            Without<PlayButton>,
-        ),
-    >,
+    play_query: Query<(), (Added<Pressed>, With<PlayButton>)>,
+    multiplayer_query: Query<(), (Added<Pressed>, With<MultiplayerButton>, Without<PlayButton>)>,
     //next_game_state: ResMut<NextState<GameState>>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
     mut _config: ResMut<crate::Config>,
 ) {
     // Play button - skip networking, go directly to single-player
-    for interaction in play_query.iter_mut() {
-        if *interaction == Interaction::Pressed {
-            info!("Play button pressed - starting single-player");
-            #[cfg(feature = "singleplayer")]
-            {
-                use shared::netlib::NetworkConnectionTarget;
-                let port = rand::random_range(20000..60000);
-                _config.port = port;
-                _config.ip = "127.0.0.1".to_string();
-                _config.host_ip = None;
-                std::thread::spawn(move || {
-                    // TODO exit
-                    server::call_from_client_for_singleplayer(NetworkConnectionTarget {
-                        ip: "127.0.0.1".to_string(),
-                        port,
-                    });
+    for () in play_query.iter() {
+        info!("Play button pressed - starting single-player");
+        #[cfg(feature = "singleplayer")]
+        {
+            use shared::netlib::NetworkConnectionTarget;
+            let port = rand::random_range(20000..60000);
+            _config.port = port;
+            _config.ip = "127.0.0.1".to_string();
+            _config.host_ip = None;
+            std::thread::spawn(move || {
+                // TODO exit
+                server::call_from_client_for_singleplayer(NetworkConnectionTarget {
+                    ip: "127.0.0.1".to_string(),
+                    port,
                 });
-                next_menu_state.set(MenuState::Connecting);
-            }
-            #[cfg(not(feature = "singleplayer"))]
-            {
-                warn!("Single-player mode is not enabled in this build.");
-            }
+            });
+            next_menu_state.set(MenuState::Connecting);
+        }
+        #[cfg(not(feature = "singleplayer"))]
+        {
+            warn!("Single-player mode is not enabled in this build.");
         }
     }
 
     // Multiplayer button - go to multiplayer setup
-    for interaction in multiplayer_query.iter_mut() {
-        if *interaction == Interaction::Pressed {
-            info!("Multiplayer button pressed");
-            next_menu_state.set(MenuState::Multiplayer);
-        }
+    for () in multiplayer_query.iter() {
+        info!("Multiplayer button pressed");
+        next_menu_state.set(MenuState::Multiplayer);
     }
 }
 

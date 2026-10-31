@@ -9,7 +9,7 @@ function my_signal_handler --on-signal SIGINT
 end
 
 function last_pid
-    pgrep -f "ROTS/target/release/server"
+    pgrep -f "target/release/server"
 end
 
 function launch
@@ -18,7 +18,6 @@ function launch
 end
 
 function unlaunch
-    #kill %ROTS/target/release/server
     set pid (last_pid)
     echo "killing $pid"
     kill $pid

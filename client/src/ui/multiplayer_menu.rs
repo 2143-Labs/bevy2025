@@ -1,6 +1,7 @@
 use super::{styles::*, text_input::*};
 use crate::game_state::MenuState;
 use bevy::prelude::*;
+use bevy::{picking::hover::Hovered, ui::Pressed, ui_widgets::Button};
 use shared::Config;
 
 /// Marker for the multiplayer menu root entity
@@ -96,7 +97,8 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                             },
                             BorderColor::all(Color::srgb(0.4, 0.4, 0.4)),
                             BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
-                            Interaction::default(),
+                            Button,
+                            Hovered::default(),
                             input,
                             ServerAddressInput,
                         ))
@@ -104,7 +106,7 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                             input_parent.spawn((
                                 Text::new(&server_address),
                                 TextFont {
-                                    font_size: 20.0,
+                                    font_size: FontSize::Px(20.0),
                                     ..default()
                                 },
                                 TextColor(Color::WHITE),
@@ -144,7 +146,8 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                             },
                             BorderColor::all(Color::srgb(0.4, 0.4, 0.4)),
                             BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
-                            Interaction::default(),
+                            Button,
+                            Hovered::default(),
                             input,
                             UsernameInput,
                         ))
@@ -152,7 +155,7 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                             input_parent.spawn((
                                 Text::new(&username),
                                 TextFont {
-                                    font_size: 20.0,
+                                    font_size: FontSize::Px(20.0),
                                     ..default()
                                 },
                                 TextColor(Color::WHITE),
@@ -210,7 +213,8 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                                     } else {
                                         Color::srgb(0.4, 0.4, 0.4)
                                     }),
-                                    Interaction::default(),
+                                    Button,
+                                    Hovered::default(),
                                     ColorButton { hue },
                                 ));
                             }
@@ -234,7 +238,8 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                                 node,
                                 bg_color,
                                 border_color,
-                                Interaction::default(),
+                                Button,
+                                Hovered::default(),
                                 BackButton,
                             ))
                             .with_children(|button| {
@@ -251,7 +256,8 @@ pub fn spawn_multiplayer_menu(mut commands: Commands, config: Res<Config>) {
                                 node,
                                 bg_color,
                                 border_color,
-                                Interaction::default(),
+                                Button,
+                                Hovered::default(),
                                 ConnectButton,
                             ))
                             .with_children(|button| {
@@ -274,23 +280,21 @@ pub fn despawn_multiplayer_menu(
 
 /// Handle color button interactions
 pub fn handle_color_buttons(
-    color_query: Query<(&Interaction, &ColorButton), Changed<Interaction>>,
+    color_query: Query<&ColorButton, Added<Pressed>>,
     mut all_color_buttons: Query<(&mut BorderColor, &mut Node, &ColorButton)>,
     mut config: ResMut<Config>,
 ) {
-    for (interaction, color_button) in color_query.iter() {
-        if *interaction == Interaction::Pressed {
-            config.player_color_hue = color_button.hue;
+    for color_button in color_query.iter() {
+        config.player_color_hue = color_button.hue;
 
-            // Update border colors and widths for all buttons
-            for (mut border, mut node, button) in all_color_buttons.iter_mut() {
-                if (button.hue - color_button.hue).abs() < 1.0 {
-                    *border = BorderColor::all(Color::WHITE);
-                    node.border = UiRect::all(Val::Px(4.0));
-                } else {
-                    *border = BorderColor::all(Color::srgb(0.4, 0.4, 0.4));
-                    node.border = UiRect::all(Val::Px(2.0));
-                }
+        // Update border colors and widths for all buttons
+        for (mut border, mut node, button) in all_color_buttons.iter_mut() {
+            if (button.hue - color_button.hue).abs() < 1.0 {
+                *border = BorderColor::all(Color::WHITE);
+                node.border = UiRect::all(Val::Px(4.0));
+            } else {
+                *border = BorderColor::all(Color::srgb(0.4, 0.4, 0.4));
+                node.border = UiRect::all(Val::Px(2.0));
             }
         }
     }
@@ -298,90 +302,70 @@ pub fn handle_color_buttons(
 
 /// Update color button hover effects
 pub fn update_color_button_hover(
-    mut color_query: Query<
-        (&Interaction, &ColorButton, &mut BorderColor),
-        (Changed<Interaction>, With<ColorButton>),
-    >,
+    mut color_query: Query<(&Hovered, &ColorButton, &mut BorderColor), Changed<Hovered>>,
     config: Res<Config>,
 ) {
-    for (interaction, color_button, mut border_color) in color_query.iter_mut() {
+    for (hovered, color_button, mut border_color) in color_query.iter_mut() {
         let is_selected = (color_button.hue - config.player_color_hue).abs() < 1.0;
 
-        match interaction {
-            Interaction::Hovered => {
-                if !is_selected {
-                    *border_color = BorderColor::all(Color::srgb(0.7, 0.7, 0.7));
-                }
-            }
-            Interaction::None => {
-                if !is_selected {
-                    *border_color = BorderColor::all(Color::srgb(0.4, 0.4, 0.4));
-                }
-            }
-            _ => {}
+        if !is_selected {
+            *border_color = if hovered.get() {
+                BorderColor::all(Color::srgb(0.7, 0.7, 0.7))
+            } else {
+                BorderColor::all(Color::srgb(0.4, 0.4, 0.4))
+            };
         }
     }
 }
 
 /// Handle button interactions in multiplayer menu
 pub fn handle_multiplayer_buttons(
-    connect_query: Query<&Interaction, (Changed<Interaction>, With<ConnectButton>)>,
-    back_query: Query<
-        &Interaction,
-        (
-            Changed<Interaction>,
-            With<BackButton>,
-            Without<ConnectButton>,
-        ),
-    >,
+    connect_query: Query<(), (Added<Pressed>, With<ConnectButton>)>,
+    back_query: Query<(), (Added<Pressed>, With<BackButton>, Without<ConnectButton>)>,
     server_input_query: Query<&TextInput, With<ServerAddressInput>>,
     username_input_query: Query<&TextInput, (With<UsernameInput>, Without<ServerAddressInput>)>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
     mut config: ResMut<Config>,
 ) {
     // Back button
-    for interaction in back_query.iter() {
-        if *interaction == Interaction::Pressed {
-            info!("Back button pressed");
-            next_menu_state.set(MenuState::Home);
-        }
+    for () in back_query.iter() {
+        info!("Back button pressed");
+        next_menu_state.set(MenuState::Home);
     }
 
     // Connect button
-    for interaction in connect_query.iter() {
-        if *interaction == Interaction::Pressed {
-            // Get input values
-            let Ok(server_input) = server_input_query.single() else {
-                continue;
-            };
-            let Ok(username_input) = username_input_query.single() else {
-                continue;
-            };
+    for () in connect_query.iter() {
+        // Get input values
+        let Ok(server_input) = server_input_query.single() else {
+            continue;
+        };
+        let Ok(username_input) = username_input_query.single() else {
+            continue;
+        };
 
-            let server_address = server_input.value.clone();
-            let username = username_input.value.clone();
+        let server_address = server_input.value.clone();
+        let username = username_input.value.clone();
 
-            // Parse server address (format: "ip:port" or "domain:port")
-            let (ip, port) = if let Some((ip_part, port_part)) = server_address.split_once(':') {
-                let port = port_part.parse().unwrap_or(config.port);
-                (ip_part.to_string(), port)
-            } else {
-                // No colon, treat entire input as IP with default port
-                (server_address.clone(), config.port)
-            };
+        // Parse server address (format: "ip:port" or "domain:port")
+        let (ip, port) = if let Some((ip_part, port_part)) = server_address.split_once(':') {
+            let port = port_part.parse().unwrap_or(config.port);
+            (ip_part.to_string(), port)
+        } else {
+            // No colon, treat entire input as IP with default port
+            (server_address.clone(), config.port)
+        };
 
-            info!(
-                "Connect button pressed - IP: {}, Port: {}, Username: {}, Color: {}",
-                ip, port, username, config.player_color_hue
-            );
+        info!(
+            "Connect button pressed - IP: {}, Port: {}, Username: {}, Color: {}",
+            ip, port, username, config.player_color_hue
+        );
 
-            // Update config (temporary, not persisted)
-            config.ip = ip;
-            config.port = port;
-            config.name = Some(username);
+        // Update config (temporary, not persisted)
+        config.ip = ip;
+        config.port = port;
+        config.name = Some(username);
 
-            // Transition to connecting state
-            next_menu_state.set(MenuState::Connecting);
-        }
+        // Transition to connecting state
+        next_menu_state.set(MenuState::Connecting);
     }
 }

@@ -297,7 +297,7 @@ fn apply_player_color_tint(
                     intensity: 500000.0, // Increased intensity
                     range: 8.0,          // Increased range
                     radius: 1.0,         // Larger radius for softer light
-                    shadows_enabled: false,
+                    shadow_maps_enabled: false,
                     ..default()
                 },
                 Transform::from_xyz(0.0, 0.5, 0.0), // Positioned lower, more central
