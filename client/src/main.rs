@@ -49,7 +49,7 @@ struct ClapArgs {
     auth_url: String,
     /// Game server used by "Play now", as `host:port` or `host`
     #[cfg(not(feature = "web"))]
-    #[clap(long, default_value = "rots.john2143.com:29000")]
+    #[clap(long, default_value = "rots.john2143.com:35000")]
     play_server: String,
     /// If set, will simulate a fake ping to the server with the given ms delay. See also
     /// --fake-ping-inbound, --fake-ping-outbound, --fake-ping-jitter
