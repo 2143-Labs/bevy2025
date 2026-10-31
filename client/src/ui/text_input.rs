@@ -27,12 +27,6 @@ impl TextInput {
         }
     }
 
-    pub fn with_value(mut self, value: impl Into<String>) -> Self {
-        self.value = value.into();
-        self.cursor_position = self.value.len();
-        self
-    }
-
     pub fn get_selection(&self) -> Option<(usize, usize)> {
         if let Some(start) = self.selection_start {
             Some((

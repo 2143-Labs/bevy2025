@@ -80,7 +80,7 @@ pub fn main_multiplayer_server(
     tokio_runtime: Arc<tokio::runtime::Runtime>,
     verifier: TicketVerifier,
 ) {
-    do_app(|app| {
+    do_app(DefaultPlugins.build(), |app| {
         if matches!(verifier, TicketVerifier::Disabled) {
             app.add_systems(Startup, || warn!("ticket verification disabled"));
         }
@@ -91,18 +91,24 @@ pub fn main_multiplayer_server(
     });
 }
 
-pub fn call_from_client_for_singleplayer(network_target: NetworkConnectionTarget) {
+/// Run the server inside the client process. The client passes the base plugin group because
+/// feature unification gives this crate the client's windowing features there: the caller must
+/// leave out the window, event loop and logging plugins the client already owns.
+pub fn call_from_client_for_singleplayer(
+    network_target: NetworkConnectionTarget,
+    base_plugins: bevy::app::PluginGroupBuilder,
+) {
     info!(
         "Starting singleplayer server connecting to {:?}",
         network_target
     );
-    do_app(|app| {
+    do_app(base_plugins, |app| {
         app.insert_resource(network_target);
         app.insert_resource(TicketVerifier::Disabled);
     });
 }
 
-fn do_app(f: impl FnOnce(&mut App)) {
+fn do_app(base_plugins: bevy::app::PluginGroupBuilder, f: impl FnOnce(&mut App)) {
     info!("Main Start");
     let mut app = App::new();
 
@@ -110,7 +116,7 @@ fn do_app(f: impl FnOnce(&mut App)) {
         .insert_resource(HeartbeatList::default())
         .add_message::<PlayerDisconnected>()
         .add_message::<DespawnUnit2>()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(base_plugins)
         .add_plugins(avian3d::PhysicsPlugins::default())
         .insert_resource(Gravity(Vec3::new(0.0, -9.81, 0.0)))
         .add_plugins((

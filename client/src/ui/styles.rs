@@ -1,4 +1,3 @@
-use super::multiplayer_menu::ColorButton;
 use bevy::prelude::*;
 use bevy::{picking::hover::Hovered, ui::Pressed, ui_widgets::Button};
 
@@ -39,7 +38,7 @@ pub fn button_visual_feedback(
             &mut BackgroundColor,
             &mut BorderColor,
         ),
-        (With<Button>, Without<ColorButton>),
+        With<Button>,
     >,
 ) {
     for (hovered, pressed, mut bg_color, mut border_color) in interaction_query.iter_mut() {

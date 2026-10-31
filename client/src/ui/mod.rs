@@ -1,7 +1,6 @@
 pub mod connecting_menu;
 pub mod home_menu;
 pub mod inventory_menu;
-pub mod multiplayer_menu;
 pub mod paused_menu;
 pub mod scoreboard_menu;
 pub mod skills_menu;
@@ -43,27 +42,6 @@ impl Plugin for UIPlugin {
                     text_input::update_text_input_visual_feedback,
                 )
                     .run_if(in_state(MenuState::Home)),
-            )
-            // Multiplayer Menu
-            .add_systems(
-                OnEnter(MenuState::Multiplayer),
-                multiplayer_menu::spawn_multiplayer_menu,
-            )
-            .add_systems(
-                OnExit(MenuState::Multiplayer),
-                multiplayer_menu::despawn_multiplayer_menu,
-            )
-            .add_systems(
-                Update,
-                (
-                    multiplayer_menu::handle_multiplayer_buttons,
-                    multiplayer_menu::handle_color_buttons,
-                    multiplayer_menu::update_color_button_hover,
-                    text_input::handle_text_input_focus,
-                    text_input::handle_text_input_keyboard,
-                    text_input::update_text_input_visual_feedback,
-                )
-                    .run_if(in_state(MenuState::Multiplayer)),
             )
             // Connecting Menu
             .add_systems(
@@ -112,7 +90,7 @@ impl Plugin for UIPlugin {
         #[cfg(feature = "singleplayer")]
         app.add_systems(
             Update,
-            home_menu::handle_singleplayer_button.run_if(in_state(MenuState::Home)),
+            home_menu::handle_enter_testing_button.run_if(in_state(MenuState::Home)),
         );
     }
 }

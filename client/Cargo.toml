@@ -51,4 +51,4 @@ web = ["dep:wasm-bindgen", "dep:raw-window-handle", "dep:web-sys", "shared/web",
 udp = ["shared/udp", "dep:message-io"]
 steam = ["dep:bevy-steamworks"]
 clipboard = ["dep:arboard"]
-default = ["steam", "udp", "clipboard"]
+default = ["steam", "udp", "clipboard", "singleplayer"]

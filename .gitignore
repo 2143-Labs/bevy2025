@@ -55,3 +55,6 @@ result-*
 # OS
 Thumbs.db
 .Trash-*
+
+# Native guest/account session token (written at runtime by client/src/auth)
+rots_session.json

@@ -17,7 +17,7 @@ A three-crate Cargo workspace, Rust 2024 edition:
 
 - `shared/` — code used by both sides: net library, config, components, physics/character controller, terrain generation. Generated networking code comes from `shared/build.rs`. Features: `udp`, `web`, `render`.
 - `server/` — headless authoritative server (`lib.rs` + thin `main.rs`). Compiled without Bevy's default features.
-- `client/` — the game. Feature flags: `steam` + `udp` + `clipboard` (default), `singleplayer` (runs the server in-process), `inspector` (egui world inspector), `web` (wasm build).
+- `client/` — the game. Feature flags: `steam` + `udp` + `clipboard` + `singleplayer` (default; `singleplayer` runs the server in-process for the menu's "Enter testing" local world, and the client hands the server a plugin group without window/winit/log plugins), `inspector` (egui world inspector), `web` (wasm build).
 - `web/` — `index.html` for the wasm build; served by `packages.staticWebserver`.
 
 ## Build and Development Commands

@@ -18,9 +18,8 @@ pub enum GameState {
 pub enum MenuState {
     #[default]
     Hidden, // When not in MainMenu GameState
-    Home,        // Main menu with Play/Multiplayer buttons
-    Multiplayer, // IP/username input form
-    Connecting,  // Connecting to server with status display
+    Home,       // Main menu with Play now / Enter testing buttons
+    Connecting, // Connecting to server with status display
 }
 
 /// Like main menu states, but for while we are playing

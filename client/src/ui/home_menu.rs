@@ -15,14 +15,10 @@ pub struct HomeMenu;
 #[derive(Component)]
 pub struct PlayNowButton;
 
-/// Marker for the Singleplayer button (in-process server)
+/// Marker for the Enter testing button (local test world on an in-process server)
 #[cfg(feature = "singleplayer")]
 #[derive(Component)]
-pub struct SingleplayerButton;
-
-/// Marker for the Multiplayer button (go to multiplayer setup)
-#[derive(Component)]
-pub struct MultiplayerButton;
+pub struct EnterTestingButton;
 
 #[derive(Component)]
 pub struct LoginButton(pub LoginMethod);
@@ -122,8 +118,7 @@ fn build_home_menu(
 
             spawn_menu_button(parent, "Play now", PlayNowButton);
             #[cfg(feature = "singleplayer")]
-            spawn_menu_button(parent, "Singleplayer", SingleplayerButton);
-            spawn_menu_button(parent, "Multiplayer", MultiplayerButton);
+            spawn_menu_button(parent, "Enter testing", EnterTestingButton);
 
             if !session.is_account() && !methods.0.is_empty() {
                 parent.spawn(wrapping_row()).with_children(|row| {
@@ -180,7 +175,7 @@ fn spawn_menu_button(parent: &mut ChildSpawnerCommands, label: &str, marker: imp
         });
 }
 
-/// Same shape as the multiplayer menu's username input.
+/// Text input sized like a menu button.
 fn spawn_claim_input(parent: &mut ChildSpawnerCommands) {
     const PLACEHOLDER: &str = "XXXXX-XXXXX";
     parent
@@ -221,10 +216,9 @@ pub fn despawn_home_menu(mut commands: Commands, menu_query: Query<Entity, With<
     }
 }
 
-/// Handle Play now / Multiplayer
+/// Handle Play now
 pub fn handle_home_buttons(
     play_query: Query<(), (Added<Pressed>, With<PlayNowButton>)>,
-    multiplayer_query: Query<(), (Added<Pressed>, With<MultiplayerButton>)>,
     session: Res<AuthSession>,
     mut auth_requests: MessageWriter<AuthRequest>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
@@ -240,37 +234,47 @@ pub fn handle_home_buttons(
         crate::apply_server_addr(&mut config, &args.play_server);
         next_menu_state.set(MenuState::Connecting);
     }
-
-    // Multiplayer button - go to multiplayer setup
-    for () in multiplayer_query.iter() {
-        info!("Multiplayer button pressed");
-        next_menu_state.set(MenuState::Multiplayer);
-    }
 }
 
-/// Singleplayer - in-process server with ticket verification disabled, so no authserver round
-/// trip: an empty ticket is ready immediately.
+/// Enter testing - a local test world on an in-process server with ticket verification
+/// disabled, so no authserver round trip: an empty ticket is ready immediately.
 #[cfg(feature = "singleplayer")]
-pub fn handle_singleplayer_button(
-    singleplayer_query: Query<(), (Added<Pressed>, With<SingleplayerButton>)>,
+pub fn handle_enter_testing_button(
+    testing_query: Query<(), (Added<Pressed>, With<EnterTestingButton>)>,
     mut commands: Commands,
     mut config: ResMut<crate::Config>,
     mut next_auth_state: ResMut<NextState<crate::auth::AuthState>>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
 ) {
-    for () in singleplayer_query.iter() {
-        info!("Singleplayer button pressed - starting local server");
+    for () in testing_query.iter() {
+        info!("Enter testing pressed - starting local server");
         use shared::netlib::NetworkConnectionTarget;
         let port = rand::random_range(20000..60000);
         config.port = port;
         config.ip = "127.0.0.1".to_string();
         config.host_ip = None;
         std::thread::spawn(move || {
+            // The client owns the window, event loop and global logger; the server must not
+            // create its own, so it runs on a plain schedule loop instead.
+            let plugins = DefaultPlugins
+                .build()
+                .disable::<bevy::log::LogPlugin>()
+                .disable::<bevy::winit::WinitPlugin>()
+                .set(bevy::window::WindowPlugin {
+                    primary_window: None,
+                    exit_condition: bevy::window::ExitCondition::DontExit,
+                    close_when_requested: false,
+                    ..default()
+                })
+                .add(bevy::app::ScheduleRunnerPlugin::default());
             // TODO exit
-            server::call_from_client_for_singleplayer(NetworkConnectionTarget {
-                ip: "127.0.0.1".to_string(),
-                port,
-            });
+            server::call_from_client_for_singleplayer(
+                NetworkConnectionTarget {
+                    ip: "127.0.0.1".to_string(),
+                    port,
+                },
+                plugins,
+            );
         });
         commands.insert_resource(crate::auth::GameTicket(String::new()));
         next_auth_state.set(crate::auth::AuthState::Ready);
