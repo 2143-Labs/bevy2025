@@ -1,5 +1,5 @@
-//! "Login with Steam" for Steam builds: a Steamworks Web API ticket (identity `rots-auth`) is
-//! traded at the authserver for an account session.
+//! Steam builds sign in with a Steamworks Web API ticket (identity `rots-auth`) at startup and
+//! from "Login with Steam"; the authserver trades it for an account session.
 
 use std::{fmt::Write, sync::Arc};
 
@@ -37,13 +37,23 @@ impl Plugin for SteamLoginPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<AvailableLoginMethods>()
             .init_resource::<SteamTicketSlot>()
-            .add_systems(Startup, register_ticket_callback)
+            .add_systems(
+                Startup,
+                (register_ticket_callback, login_with_steam_at_startup),
+            )
             .add_systems(Update, (request_steam_ticket, send_steam_ticket));
         app.world_mut()
             .resource_mut::<AvailableLoginMethods>()
             .0
             .push(LoginMethod::SteamTicket);
     }
+}
+
+/// Steam is running (this plugin only exists then): sign in without a click. Sessions are not
+/// stored, so this is how Steam players stay signed in across launches.
+fn login_with_steam_at_startup(mut requests: MessageWriter<AuthRequest>) {
+    info!("Steam is running - signing in with Steam");
+    requests.write(AuthRequest::Login(LoginMethod::SteamTicket));
 }
 
 type TicketResult = Result<Vec<u8>, String>;

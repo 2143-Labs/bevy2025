@@ -56,5 +56,5 @@ result-*
 Thumbs.db
 .Trash-*
 
-# Native guest/account session token (written at runtime by client/src/auth)
+# Legacy session file written by builds before 2026-10-31; safe to delete
 rots_session.json
