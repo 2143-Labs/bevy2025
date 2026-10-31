@@ -116,13 +116,15 @@ fn setup_terrain_client(
     ));
 
     // Spawn water at calculated level
-    spawn_water_client(
-        &mut commands,
-        &mut meshes,
-        &mut water_materials,
-        water_level,
-        terrain_params.plane_size,
-    );
+    if terrain_params.water {
+        spawn_water_client(
+            &mut commands,
+            &mut meshes,
+            &mut water_materials,
+            water_level,
+            terrain_params.plane_size,
+        );
+    }
 
     let ents = spawn_boundary_walls(&mut commands, &terrain_params);
     for e in ents {
@@ -148,4 +150,6 @@ fn despawn_terrain(mut commands: Commands, world_entity_query: Query<Entity, Wit
     for entity in world_entity_query.iter() {
         commands.entity(entity).despawn();
     }
+    // The next server may have no water (testing gym).
+    commands.remove_resource::<shared::physics::water::WaterLevel>();
 }

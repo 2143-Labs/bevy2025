@@ -37,5 +37,7 @@ pub fn setup_terrain_server(mut commands: Commands, terrain_params: Res<TerrainP
     spawn_boundary_walls(&mut commands, &terrain_params);
 
     // Spawn water at calculated level
-    spawn_water_shared(&mut commands, water_level, terrain_params.plane_size);
+    if terrain_params.water {
+        spawn_water_shared(&mut commands, water_level, terrain_params.plane_size);
+    }
 }

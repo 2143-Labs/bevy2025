@@ -4,7 +4,9 @@ use bevy::{
     render::render_resource::AsBindGroup,
     shader::ShaderRef,
 };
-use shared::physics::water::{Water, apply_buoyancy, check_water_immersion, spawn_water_shared};
+use shared::physics::water::{
+    Water, WaterLevel, apply_buoyancy, check_water_immersion, spawn_water_shared,
+};
 
 use crate::game_state::{GameState, TerrainEntity};
 
@@ -22,7 +24,8 @@ impl Plugin for WaterPlugin {
                 Update,
                 (check_water_immersion, apply_buoyancy)
                     .chain()
-                    .run_if(in_state(GameState::Playing)),
+                    .run_if(in_state(GameState::Playing))
+                    .run_if(resource_exists::<WaterLevel>),
             )
             .add_plugins(shared::physics::water::SharedWaterPlugin);
     }

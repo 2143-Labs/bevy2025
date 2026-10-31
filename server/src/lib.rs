@@ -58,16 +58,11 @@ struct EndpointToPlayerId {
 #[derive(Debug, Component)]
 struct PlayerEndpoint(EndpointGeneral);
 
-//#[derive(Resource, Debug)]
-//struct ServerSettings {
-//tick_rate: u16,
-//cheats: bool,
-//}
-
 //pub mod chat;
 //pub mod game_manager;
 pub mod animations;
 pub mod axum;
+pub mod gym_beacon;
 pub mod projectile;
 pub mod spawns;
 pub mod terrain;
@@ -76,35 +71,115 @@ pub mod websocket;
 
 use ticket::TicketVerifier;
 
-pub fn main_multiplayer_server(
+/// Private internal coordinator for this server (player placement, server lifecycle).
+/// Only an endpoint for now; `None` = standalone server.
+#[derive(Resource, Clone, Debug)]
+pub struct GameServerCoordinator {
+    pub endpoint: String,
+}
+
+impl GameServerCoordinator {
+    /// `ROTS_COORDINATOR_URL`, unset or empty = standalone.
+    pub fn from_env() -> Option<Self> {
+        std::env::var("ROTS_COORDINATOR_URL")
+            .ok()
+            .filter(|v| !v.is_empty())
+            .map(|endpoint| Self { endpoint })
+    }
+}
+
+/// How a server process was launched.
+pub struct ServerSettings {
+    pub verifier: TicketVerifier,
+    /// `None`: bind from config.yaml, overridden by `ROTS_BIND_IP` / `ROTS_PORT`.
+    pub bind: Option<NetworkConnectionTarget>,
+    /// `None`: random terrain (`TerrainParams::default()`).
+    pub terrain: Option<TerrainParams>,
+    pub coordinator: Option<GameServerCoordinator>,
+    /// `Some(name)`: broadcast a LAN testing gym beacon under this name.
+    pub lan_beacon: Option<String>,
+}
+
+/// Minimum time per server loop iteration (at most 200 Hz). Bevy's default runner never sleeps
+/// and burns a whole core; FixedUpdate keeps its 60 Hz tick regardless.
+pub const SERVER_LOOP_WAIT: std::time::Duration = std::time::Duration::from_millis(5);
+
+/// The single server startup path: dedicated servers (server/src/main.rs) and
+/// client-hosted testing gyms (host_testing_server). Blocks for the life of the server.
+pub fn run_server(
+    base_plugins: bevy::app::PluginGroupBuilder,
     tokio_runtime: Arc<tokio::runtime::Runtime>,
-    verifier: TicketVerifier,
+    settings: ServerSettings,
 ) {
-    do_app(DefaultPlugins.build(), |app| {
+    let ServerSettings {
+        verifier,
+        bind,
+        terrain,
+        coordinator,
+        lan_beacon,
+    } = settings;
+    do_app(base_plugins, |app| {
         if matches!(verifier, TicketVerifier::Disabled) {
             app.add_systems(Startup, || warn!("ticket verification disabled"));
         }
         app.insert_resource(verifier);
-        app.add_systems(Startup, add_network_connection_info_from_config);
         app.insert_resource(shared::tokio_udp::TokioRuntimeResource(tokio_runtime));
         app.add_plugins(axum::AxumServerPlugin);
+        match bind {
+            Some(target) => {
+                app.insert_resource(target);
+            }
+            None => {
+                app.add_systems(Startup, add_network_connection_info_from_config);
+            }
+        }
+        if let Some(terrain) = terrain {
+            app.insert_resource(terrain);
+        }
+        match coordinator {
+            Some(c) => {
+                info!("coordinator: {}", c.endpoint);
+                app.insert_resource(c);
+            }
+            None => info!("coordinator: none (standalone)"),
+        }
+        if let Some(name) = lan_beacon {
+            app.add_plugins(gym_beacon::GymBeaconPlugin { name });
+        }
     });
 }
 
-/// Run the server inside the client process. The client passes the base plugin group because
-/// feature unification gives this crate the client's windowing features there: the caller must
-/// leave out the window, event loop and logging plugins the client already owns.
-pub fn call_from_client_for_testing(
-    network_target: NetworkConnectionTarget,
-    base_plugins: bevy::app::PluginGroupBuilder,
-) {
-    info!(
-        "Starting local test server connecting to {:?}",
-        network_target
+/// Host a gym inside the client process ("Enter testing"). Blocks forever.
+/// The client passes the base plugin group because feature unification gives this crate the
+/// client's windowing features there: the caller must leave out the window, event loop and
+/// logging plugins the client already owns.
+pub fn host_testing_server(base_plugins: bevy::app::PluginGroupBuilder, host_name: String) {
+    let runtime = Arc::new(
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap(),
     );
-    do_app(base_plugins, |app| {
-        app.insert_resource(network_target);
-        app.insert_resource(TicketVerifier::Disabled);
+    let runtime2 = runtime.clone();
+    runtime.block_on(async move {
+        info!(
+            "Hosting testing gym on 0.0.0.0:{}",
+            shared::gym::GYM_GAME_PORT
+        );
+        run_server(
+            base_plugins,
+            runtime2,
+            ServerSettings {
+                verifier: TicketVerifier::Disabled,
+                bind: Some(NetworkConnectionTarget {
+                    ip: "0.0.0.0".to_string(),
+                    port: shared::gym::GYM_GAME_PORT,
+                }),
+                terrain: Some(TerrainParams::gym()),
+                coordinator: None,
+                lan_beacon: Some(host_name),
+            },
+        );
     });
 }
 

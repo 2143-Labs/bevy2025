@@ -19,12 +19,7 @@ pub struct WebsocketPlugin;
 
 impl Plugin for WebsocketPlugin {
     fn build(&self, app: &mut App) {
-        // The local test server has no tokio runtime (it talks UDP only), so skip the WebSocket
-        // listener there instead of panicking on the missing resource.
-        app.add_systems(
-            OnEnter(ServerState::Running),
-            setup_shared_websocket_server.run_if(resource_exists::<TokioRuntimeResource>),
-        );
+        app.add_systems(OnEnter(ServerState::Running), setup_shared_websocket_server);
 
         app.add_systems(
             FixedPostUpdate,
