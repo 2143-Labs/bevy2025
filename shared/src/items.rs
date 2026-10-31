@@ -370,6 +370,12 @@ pub struct Item {
     pub data: ItemData,
 }
 
+impl AsRef<Item> for Item {
+    fn as_ref(&self) -> &Item {
+        self
+    }
+}
+
 impl HasMods for Item {
     fn get_mods(&self) -> Vec<Mod> {
         self.data.get_mods()

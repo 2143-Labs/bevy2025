@@ -20,16 +20,12 @@ pub struct TerrainPlugin;
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnExit(GameState::Playing), despawn_terrain)
-            // Temporarily disabled to test if this is causing the red rectangle
-            // .add_systems(Update, draw_boundary_debug)
             .add_message::<SetupTerrain>()
-            // .add_systems(Update, draw_boundary_debug)
             .add_systems(
                 Update,
                 setup_terrain_client.run_if(on_message::<SetupTerrain>),
             )
             .insert_resource(TerrainParams::default());
-        //.add_plugins(SharedTerrainPlugin);
     }
 }
 

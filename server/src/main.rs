@@ -2,7 +2,6 @@ use bevy::prelude::PluginGroup;
 use server::{GameServerCoordinator, ServerSettings, run_server, ticket::TicketVerifier};
 use tokio::runtime;
 
-//single thread
 fn main() {
     let runtime = runtime::Builder::new_multi_thread()
         .enable_all()
