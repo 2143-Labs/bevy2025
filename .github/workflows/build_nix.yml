@@ -199,7 +199,7 @@ jobs:
           skopeo copy docker-archive://$RESULT docker://ghcr.io/2143-labs/bevy2025:gameserver-${IMAGE_TAG}
           # if not pull request, then also push as latest
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            skopeo copy docker-archive://$RESULT docker://ghcr.io/2143-labs/bevy2025:gameserver-branch-${{ github.head_ref }}
+            skopeo copy docker-archive://$RESULT docker://ghcr.io/2143-labs/bevy2025:gameserver-pr-${{ github.event.pull_request.number }}
           else
             skopeo copy docker-archive://$RESULT docker://ghcr.io/2143-labs/bevy2025:gameserver-latest
           fi

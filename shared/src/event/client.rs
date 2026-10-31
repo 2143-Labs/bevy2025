@@ -138,4 +138,10 @@ pub struct TickHappened {
     pub tick: Tick,
 }
 
+/// Sent instead of `WorldData2` when the server refuses a `ConnectRequest`.
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct ConnectRejected {
+    pub reason: String,
+}
+
 include!(concat!(env!("OUT_DIR"), "/client_event.rs"));

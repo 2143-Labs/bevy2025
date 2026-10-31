@@ -8,8 +8,8 @@ use shared::{
     event::{
         NetEntId, PlayerId, UDPacketEvent,
         client::{
-            DespawnUnit2, HeartbeatChallenge, HeartbeatResponse, PlayerDisconnected, SpawnUnit2,
-            UpdateUnit2, WorldData2,
+            ConnectRejected, DespawnUnit2, HeartbeatChallenge, HeartbeatResponse,
+            PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2,
         },
         server::{ChangeMovement, Heartbeat, HeartbeatChallengeResponse, IWantToDisconnect},
     },
@@ -71,10 +71,20 @@ pub mod axum;
 pub mod projectile;
 pub mod spawns;
 pub mod terrain;
+pub mod ticket;
 pub mod websocket;
 
-pub fn main_multiplayer_server(tokio_runtime: Arc<tokio::runtime::Runtime>) {
+use ticket::TicketVerifier;
+
+pub fn main_multiplayer_server(
+    tokio_runtime: Arc<tokio::runtime::Runtime>,
+    verifier: TicketVerifier,
+) {
     do_app(|app| {
+        if matches!(verifier, TicketVerifier::Disabled) {
+            app.add_systems(Startup, || warn!("ticket verification disabled"));
+        }
+        app.insert_resource(verifier);
         app.add_systems(Startup, add_network_connection_info_from_config);
         app.insert_resource(shared::tokio_udp::TokioRuntimeResource(tokio_runtime));
         app.add_plugins(axum::AxumServerPlugin);
@@ -88,6 +98,7 @@ pub fn call_from_client_for_singleplayer(network_target: NetworkConnectionTarget
     );
     do_app(|app| {
         app.insert_resource(network_target);
+        app.insert_resource(TicketVerifier::Disabled);
     });
 }
 
@@ -199,10 +210,15 @@ fn add_tick_just_happened_packet(
     }
 }
 
+/// `ROTS_BIND_IP` / `ROTS_PORT` override config.yaml, which containers cannot edit.
 fn add_network_connection_info_from_config(config: Res<Config>, mut commands: Commands) {
+    let env = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
     commands.insert_resource(NetworkConnectionTarget {
-        ip: config.host_ip.as_ref().unwrap_or(&config.ip).clone(),
-        port: config.port,
+        ip: env("ROTS_BIND_IP")
+            .unwrap_or_else(|| config.host_ip.as_ref().unwrap_or(&config.ip).clone()),
+        port: env("ROTS_PORT").map_or(config.port, |p| {
+            p.parse().expect("ROTS_PORT must be a port number")
+        }),
     });
 }
 
@@ -225,13 +241,46 @@ fn on_player_connect(
     let sr = world.resource::<ServerNetworkingResources>().clone();
     let terrain = world.resource::<TerrainParams>().clone();
     let _config = world.resource::<Config>().clone();
+    let verifier = world.resource::<TicketVerifier>();
+    // Characters with a live connection, and where from. Updated as requests are accepted so two
+    // requests for one character in the same frame cannot both get through.
+    let mut connected: HashMap<PlayerId, EndpointGeneral> = world
+        .try_query_filtered::<(&PlayerId, &PlayerEndpoint), With<ConnectedPlayer>>()
+        .map(|mut q| q.iter(world).map(|(id, ep)| (*id, ep.0)).collect())
+        .unwrap_or_default();
     for player in new_players.read() {
         info!("Got packet");
-        // Generate their name
-        let name = player
-            .event
+        let verified = match verifier.verify(&player.event.ticket) {
+            Ok(verified) => verified,
+            Err(reason) => {
+                reject_connection(&sr, player.endpoint, reason);
+                continue;
+            }
+        };
+
+        match connected.get(&verified.player_id) {
+            // The client resends ConnectRequest every second until WorldData2 arrives; a resend
+            // from the connection we already accepted is not a second login.
+            Some(endpoint) if *endpoint == player.endpoint => {
+                debug!(who = ?player.endpoint, "Ignoring repeated ConnectRequest");
+                continue;
+            }
+            Some(_) => {
+                reject_connection(
+                    &sr,
+                    player.endpoint,
+                    "character already connected".to_string(),
+                );
+                continue;
+            }
+            None => {}
+        }
+        connected.insert(verified.player_id, player.endpoint);
+
+        // Account tickets carry the character name; guests keep the name they asked for.
+        let name = verified
             .name
-            .clone()
+            .or_else(|| player.event.name.clone())
             .unwrap_or_else(|| format!("Player #{}", rand::rng().random_range(1..10000)));
 
         let spawn_location = player.event.my_location;
@@ -239,7 +288,7 @@ fn on_player_connect(
             hue: player.event.color_hue,
         };
 
-        let new_player_id = PlayerId::random();
+        let new_player_id = verified.player_id;
 
         // Spawn player entity as ConnectedPlayer
         // SPAWN A
@@ -409,6 +458,15 @@ fn on_player_connect(
 
         sr.send_outgoing_event_next_tick_batch(player.endpoint, &events);
     }
+}
+
+fn reject_connection(sr: &ServerNetworkingResources, endpoint: EndpointGeneral, reason: String) {
+    info!(who = ?endpoint, %reason, "Rejected connection");
+    sr.send_outgoing_event_now(
+        endpoint,
+        &EventToClient::ConnectRejected(ConnectRejected { reason }),
+        None,
+    );
 }
 
 fn check_heartbeats(

@@ -1,12 +1,12 @@
 #![allow(clippy::type_complexity)]
 mod animations;
 mod assets;
+mod auth;
 mod camera;
 mod character_controller_client;
 mod debug;
 pub mod game_state;
 mod grass;
-mod login;
 mod network;
 pub mod notification;
 mod physics;
@@ -19,11 +19,6 @@ mod water;
 
 #[cfg(feature = "web")]
 mod web;
-
-#[cfg(feature = "steam")]
-use bevy_steamworks::AppId;
-#[cfg(feature = "steam")]
-mod steamworks;
 
 use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
 
@@ -48,11 +43,14 @@ struct ClapArgs {
     print_config: bool,
     #[clap(long)]
     autoconnect: Option<String>,
-    #[clap(
-        long,
-        default_value = "http://192.168.1.32:8002/api/v1/steam/weak_login"
-    )]
-    login_server_steam: String,
+    /// Authserver base URL (rots-authserver behind `/auth`)
+    #[cfg(not(feature = "web"))]
+    #[clap(long, default_value = "https://rots.john2143.com/auth")]
+    auth_url: String,
+    /// Game server used by "Play now", as `host:port` or `host`
+    #[cfg(not(feature = "web"))]
+    #[clap(long, default_value = "rots.john2143.com:36000")]
+    play_server: String,
     /// If set, will simulate a fake ping to the server with the given ms delay. See also
     /// --fake-ping-inbound, --fake-ping-outbound, --fake-ping-jitter
     #[clap(long, short = 'p')]
@@ -67,8 +65,6 @@ struct ClapArgs {
 }
 
 #[cfg(not(feature = "web"))]
-use tokio::runtime::Runtime;
-#[cfg(not(feature = "web"))]
 fn main() {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -79,18 +75,16 @@ fn main() {
 
     let runtime2 = runtime.clone();
     runtime.block_on(async {
-        main_client(Some(runtime2));
+        main_client(runtime2);
     });
 }
 
 #[cfg(feature = "web")]
-pub struct Runtime;
-#[cfg(feature = "web")]
 fn main() {
-    main_client(None);
+    main_client();
 }
 
-fn main_client(runtime: Option<std::sync::Arc<Runtime>>) {
+fn main_client(#[cfg(not(feature = "web"))] runtime: std::sync::Arc<tokio::runtime::Runtime>) {
     let mut args = ClapArgs::parse();
 
     if args.print_binds {
@@ -110,6 +104,10 @@ fn main_client(runtime: Option<std::sync::Arc<Runtime>>) {
 
     let mut app = App::new();
 
+    // bevy_steamworks must be added before DefaultPlugins (RenderPlugin).
+    #[cfg(feature = "steam")]
+    auth::steam::init(&mut app);
+
     #[cfg(feature = "web")]
     {
         app.add_plugins(web::WebPlugin);
@@ -120,13 +118,15 @@ fn main_client(runtime: Option<std::sync::Arc<Runtime>>) {
         app.add_plugins(DefaultPlugins);
     }
 
-    #[cfg(feature = "steam")]
-    {
-        app.add_plugins((steamworks::SteamworksPlugin::new(
-            AppId(440),
-            runtime.unwrap().clone(),
-        ),));
-    }
+    // Login backends are registered here only; `auth` itself is platform-agnostic.
+    app.add_plugins(auth::AuthPlugin);
+    #[cfg(not(feature = "web"))]
+    app.add_plugins(auth::native::NativeAuthPlugin {
+        runtime,
+        auth_url: args.auth_url.clone(),
+    });
+    #[cfg(feature = "web")]
+    app.add_plugins(auth::web::WebAuthPlugin);
 
     app.add_plugins((
         game_state::StatePlugin,
@@ -164,16 +164,20 @@ fn main_client(runtime: Option<std::sync::Arc<Runtime>>) {
 /// This looks for the clap args like autoconnect and modifys the config if neede
 fn check_all_clap_args(mut config: ResMut<Config>, args: Res<ClapArgs>) {
     if let Some(ip_and_port) = &args.autoconnect {
-        // 2 choices: ip:port or just ip and then default port
-        let mut parts = ip_and_port.split(':');
-        let ip_as_str = parts.next();
-        let port: Option<u16> = parts.next().and_then(|s| s.parse().ok());
+        apply_server_addr(&mut config, ip_and_port);
+    }
+}
 
-        if let Some(ip) = ip_as_str {
-            config.ip = ip.to_string();
-        }
-        if let Some(port) = port {
-            config.port = port;
-        }
+/// Point `config` at `ip:port`, or just `ip` keeping the configured port.
+fn apply_server_addr(config: &mut Config, addr: &str) {
+    let mut parts = addr.split(':');
+    let ip_as_str = parts.next();
+    let port: Option<u16> = parts.next().and_then(|s| s.parse().ok());
+
+    if let Some(ip) = ip_as_str {
+        config.ip = ip.to_string();
+    }
+    if let Some(port) = port {
+        config.port = port;
     }
 }

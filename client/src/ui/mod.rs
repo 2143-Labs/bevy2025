@@ -8,7 +8,10 @@ pub mod skills_menu;
 pub mod styles;
 pub mod text_input;
 
-use crate::game_state::{MenuState, OverlayMenuState};
+use crate::{
+    auth::{AuthSession, AuthState, AvailableLoginMethods},
+    game_state::{MenuState, OverlayMenuState},
+};
 use bevy::prelude::*;
 
 pub use text_input::FocusedInput;
@@ -27,7 +30,18 @@ impl Plugin for UIPlugin {
             .add_systems(OnExit(MenuState::Home), home_menu::despawn_home_menu)
             .add_systems(
                 Update,
-                (home_menu::handle_home_buttons, home_menu::animate_logo)
+                (
+                    home_menu::handle_home_buttons,
+                    home_menu::handle_account_buttons,
+                    home_menu::animate_logo,
+                    home_menu::rebuild_home_menu.run_if(
+                        resource_changed::<AuthSession>
+                            .or_else(resource_changed::<AvailableLoginMethods>),
+                    ),
+                    text_input::handle_text_input_focus,
+                    text_input::handle_text_input_keyboard,
+                    text_input::update_text_input_visual_feedback,
+                )
                     .run_if(in_state(MenuState::Home)),
             )
             // Multiplayer Menu
@@ -65,6 +79,10 @@ impl Plugin for UIPlugin {
                 (
                     connecting_menu::handle_connecting_buttons,
                     connecting_menu::monitor_connection_status,
+                    connecting_menu::start_connect_when_ticket_ready
+                        .run_if(in_state(AuthState::Ready)),
+                    connecting_menu::return_home_on_auth_failure
+                        .run_if(in_state(AuthState::Failed)),
                 )
                     .run_if(in_state(MenuState::Connecting)),
             )
@@ -90,6 +108,12 @@ impl Plugin for UIPlugin {
             ))
             // Global button feedback
             .add_systems(Update, styles::button_visual_feedback);
+
+        #[cfg(feature = "singleplayer")]
+        app.add_systems(
+            Update,
+            home_menu::handle_singleplayer_button.run_if(in_state(MenuState::Home)),
+        );
     }
 }
 

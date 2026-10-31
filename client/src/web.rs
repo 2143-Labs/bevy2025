@@ -4,8 +4,9 @@ use wasm_bindgen::prelude::*;
 use web_sys::HtmlParagraphElement;
 use web_sys::js_sys::Reflect;
 
-use shared::netlib::ClientNetworkingResources;
-use shared::netlib::MainServerEndpoint;
+use shared::netlib::{
+    ClientNetworkingResources, EndpointGeneral, MainServerEndpoint, WebSocketEndpoint,
+};
 
 //use raw_window_handle::HasRawWindowHandle;
 
@@ -13,66 +14,31 @@ pub struct WebPlugin;
 
 use crate::game_state::NetworkGameState;
 
+/// Placeholder UDP target for the message_io web stub, which only needs a parseable
+/// `SocketAddr`. Web traffic goes over the WebSocket from [`game_server_url`].
+const WEB_STUB_ADDR: (&str, u16) = ("127.0.0.1", 1);
+
+/// Game server pod 0 on the page's own host, through the gateway's `/ws/0` route.
+pub fn game_server_url() -> String {
+    let location = web_sys::window().expect("no window").location();
+    let scheme = match location.protocol().as_deref() {
+        Ok("http:") => "ws",
+        _ => "wss",
+    };
+    let host = location.host().expect("no location host");
+    format!("{scheme}://{host}/ws/0")
+}
+
 impl Plugin for WebPlugin {
     fn build(&self, app: &mut App) {
         info!("Initializing web plugin");
-        // get our default location
-        let window = web_sys::window().unwrap();
-        let document = window.document().unwrap();
-        let ip_str: String = document
-            .get_element_by_id("server_ip")
-            .expect("No server_ip element in html")
-            .text_content()
-            .expect("server_ip element has no text content");
-
-        let port: u16 = document
-            .get_element_by_id("server_port")
-            .expect("No server_port element in html")
-            .text_content()
-            .expect("server_port element has no text content")
-            .parse()
-            .expect("server_port element text content is not a valid u16");
-
-        let ip_addr: std::net::IpAddr = ip_str
-            .parse()
-            .expect("server_ip element text content is not a valid IpAddr");
-
+        let document = web_sys::window().unwrap().document().unwrap();
         let loading_element = document
             .get_element_by_id("loading")
             .expect("No loading_status element in html")
             // p tag
             .dyn_into::<HtmlParagraphElement>()
             .expect("loading element is not a paragraph element");
-
-        let localstorage_player_id = document
-            .get_element_by_id("localstorage_player_id")
-            .expect("No player_id element in html")
-            .dyn_into::<HtmlParagraphElement>()
-            .expect("player_id element is not a paragraph element")
-            .text_content()
-            // index.html leaves these <p> tags empty for logged-out visitors.
-            .filter(|s| !s.is_empty());
-        let localstorage_token = document
-            .get_element_by_id("localstorage_login_token")
-            .expect("No auth_token element in html")
-            .dyn_into::<HtmlParagraphElement>()
-            .expect("auth_token element is not a paragraph element")
-            .text_content()
-            .filter(|s| !s.is_empty());
-
-        if let (Some(token), Some(player_id)) = (localstorage_token, localstorage_player_id) {
-            info!("Found auth token and player id in localstorage, using them for authentication");
-            app.insert_resource(crate::login::LoginServerResource {
-                temp_auth_token: token,
-                player_id: shared::event::PlayerId(
-                    player_id
-                        .parse()
-                        .expect("player_id in localstorage is not a valid u64"),
-                ),
-            });
-        } else {
-            info!("No auth token or player id found in localstorage, starting unauthenticated");
-        }
 
         loading_element.set_text_content(Some(""));
 
@@ -84,24 +50,6 @@ impl Plugin for WebPlugin {
             }),
             ..default()
         }));
-        //app.add_plugins(DefaultPlugins);
-
-        //app.insert_resource(MainServerEndpoint(
-        //shared::netlib::EndpointGeneral::WebSocket(shared::netlib::WebSocketEndpoint {
-        //socket_addr: (ip_addr, port).into(),
-        //}),
-        //));
-
-        // TODO
-        //app.insert_resource(crate::network::AuthServerEndpoint(auth_server));
-
-        info!("Connecting to server at {}:{}", ip_str, port);
-
-        // TODO use this to query for active servers
-        //commands.insert_resource(crate::login::LoginServerResource {
-        //player_id: PlayerId(random::random_range(0..=u64::MAX)),
-        //temp_auth_token: "yippee".to_string(),
-        //});
 
         app.add_systems(OnEnter(NetworkGameState::ClientSendRequestPacket), setup);
         //while in ClientConencting, run
@@ -111,9 +59,9 @@ impl Plugin for WebPlugin {
         );
 
         use crate::Config;
-        app.add_systems(Startup, move |mut config: ResMut<Config>| {
-            config.ip = ip_str.clone();
-            config.port = port.clone();
+        app.add_systems(Startup, |mut config: ResMut<Config>| {
+            config.ip = WEB_STUB_ADDR.0.to_string();
+            config.port = WEB_STUB_ADDR.1;
         });
 
         app.add_systems(
@@ -169,11 +117,12 @@ fn send_messages_over_websocket(
     ws_res: Res<WebSocketResource>,
     our_endpoint: Res<MainServerEndpoint>,
 ) {
+    // Between a reconnect's ClientConnecting (UDP endpoint) and `setup` (WebSocket endpoint).
+    let Some(endpoint) = our_endpoint.as_websocket() else {
+        return;
+    };
     let taken_events;
-    if let Some(mut m) = net_res
-        .event_list_outgoing_websocket
-        .get_mut(&our_endpoint.as_websocket().unwrap())
-    {
+    if let Some(mut m) = net_res.event_list_outgoing_websocket.get_mut(&endpoint) {
         taken_events = std::mem::take(&mut *m);
     } else {
         taken_events = Vec::new();
@@ -194,14 +143,18 @@ fn send_messages_over_websocket(
     let _ = ws_res.websocket.send_with_u8_array(&data);
 }
 
-fn setup(
-    mut commands: Commands,
-    net_res: Res<ClientNetworkingResources>,
-    main_server_endpoint: Res<MainServerEndpoint>,
-) {
-    let ws_endpoint = main_server_endpoint.as_websocket().unwrap();
-    let addr = ws_endpoint.socket_addr;
-    let url = format!("ws://{}:{}", addr.ip(), addr.port());
+fn setup(mut commands: Commands, net_res: Res<ClientNetworkingResources>) {
+    // `setup_incoming_client` inserted a UDP endpoint for the stub; on web everything goes over
+    // this WebSocket instead. The address is only a key for the outgoing queue.
+    let ws_endpoint = WebSocketEndpoint {
+        socket_addr: format!("{}:{}", WEB_STUB_ADDR.0, WEB_STUB_ADDR.1)
+            .parse()
+            .unwrap(),
+    };
+    commands.insert_resource(MainServerEndpoint(EndpointGeneral::WebSocket(ws_endpoint)));
+
+    let url = game_server_url();
+    info!("Connecting to game server at {url}");
     let ws = web_sys::WebSocket::new(&url).unwrap();
     let magic_ws = MagicWebSocketPointer::new(ws);
 
