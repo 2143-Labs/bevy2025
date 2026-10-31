@@ -19,7 +19,12 @@ pub struct WebsocketPlugin;
 
 impl Plugin for WebsocketPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(ServerState::Running), setup_shared_websocket_server);
+        // Singleplayer has no tokio runtime (it talks UDP only), so skip the WebSocket
+        // listener there instead of panicking on the missing resource.
+        app.add_systems(
+            OnEnter(ServerState::Running),
+            setup_shared_websocket_server.run_if(resource_exists::<TokioRuntimeResource>),
+        );
 
         app.add_systems(
             FixedPostUpdate,
