@@ -1,4 +1,6 @@
 pub mod connecting_menu;
+#[cfg(feature = "testing")]
+pub mod gym_list;
 pub mod home_menu;
 pub mod inventory_menu;
 pub mod paused_menu;
@@ -88,10 +90,18 @@ impl Plugin for UIPlugin {
             .add_systems(Update, styles::button_visual_feedback);
 
         #[cfg(feature = "testing")]
-        app.add_systems(
-            Update,
-            home_menu::handle_enter_testing_button.run_if(in_state(MenuState::Home)),
-        );
+        app.add_systems(OnEnter(MenuState::Home), gym_list::spawn_gym_list_panel)
+            .add_systems(OnExit(MenuState::Home), gym_list::despawn_gym_list_panel)
+            .add_systems(
+                Update,
+                (
+                    home_menu::handle_enter_testing_button,
+                    gym_list::handle_gym_join_buttons,
+                    gym_list::refresh_gym_list
+                        .run_if(resource_changed::<crate::gym_discovery::DiscoveredGyms>),
+                )
+                    .run_if(in_state(MenuState::Home)),
+            );
     }
 }
 

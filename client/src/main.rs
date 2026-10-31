@@ -7,6 +7,8 @@ mod character_controller_client;
 mod debug;
 pub mod game_state;
 mod grass;
+#[cfg(feature = "testing")]
+mod gym_discovery;
 mod network;
 pub mod notification;
 mod physics;
@@ -127,6 +129,8 @@ fn main_client(#[cfg(not(feature = "web"))] runtime: std::sync::Arc<tokio::runti
     });
     #[cfg(feature = "web")]
     app.add_plugins(auth::web::WebAuthPlugin);
+    #[cfg(feature = "testing")]
+    app.add_plugins(gym_discovery::GymDiscoveryPlugin);
 
     app.add_plugins((
         game_state::StatePlugin,
