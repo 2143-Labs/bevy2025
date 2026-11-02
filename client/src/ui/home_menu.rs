@@ -300,7 +300,8 @@ pub fn handle_enter_testing_button(
                         .add(bevy::app::ScheduleRunnerPlugin::run_loop(
                             server::SERVER_LOOP_WAIT,
                         ));
-                    // TODO exit
+                    // The gym thread never returns: main() ends the process without tearing it
+                    // down (see main_client), so the gym is not signalled to stop.
                     server::host_testing_server(plugins, host_name);
                 });
             }

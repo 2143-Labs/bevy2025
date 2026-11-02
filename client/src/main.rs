@@ -154,6 +154,13 @@ fn main_client(#[cfg(not(feature = "web"))] runtime: std::sync::Arc<tokio::runti
     .insert_resource(args);
 
     app.run();
+
+    // "Enter testing" hosts a gym on a thread that never returns, with its own bevy app, wgpu
+    // device and tokio runtime. Tearing the client's app, runtime and process globals down while
+    // that thread is still using the graphics driver segfaults on the way out, so leave the OS to
+    // reclaim everything (nothing here has an exit-time side effect).
+    #[cfg(not(feature = "web"))]
+    std::process::exit(0);
 }
 
 /// Point `config` at `ip:port`, or just `ip` keeping the configured port.
