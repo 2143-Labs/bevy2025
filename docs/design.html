@@ -345,7 +345,7 @@ Click any box to jump to its row in the table.</div>
 <thead><tr><th>Event</th><th>What players see</th><th>Recovery</th></tr></thead>
 <tbody>
 <tr id="fail-temporal"><td>Temporal down</td><td><code>/play</code> returns 503 <code>temporal_unavailable</code>; new joins are refused. Players already in a game keep playing.</td><td>The worker reconnects every 10 s; workflow state is intact in temporal-db.</td></tr>
-<tr id="fail-authserver"><td>Authserver restart</td><td>Brief errors on login and Play.</td><td>None needed: the authserver is stateless, no state is lost.</td></tr>
+<tr id="fail-authserver"><td>Authserver restart</td><td>Brief errors on login, Play and new joins; players already in a game keep playing.</td><td>None needed: the authserver is stateless, no state is lost.</td></tr>
 <tr id="fail-gameserver"><td>Game server crash</td><td>Its players drop to the menu.</td><td>The pod restarts with a new <code>boot_id</code>; the coordinator clears its players, who can Play again.</td></tr>
 <tr id="fail-session"><td>Login session ended (logout, or replaced by a new login)</td><td>A late connect or join is refused: <code>409 session_ended</code> on the internal join.</td><td>Play again from the menu, which starts a new session.</td></tr>
 <tr id="fail-noservers"><td>No healthy game servers</td><td><code>/play</code> returns 503 <code>no_game_server</code>.</td><td>A slot becomes healthy again on its next heartbeat.</td></tr>
