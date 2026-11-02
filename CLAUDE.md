@@ -66,7 +66,7 @@ Three modes, all through the same `run_server` path (see `docs/architecture.html
 | Local dedicated server | `ROTS_AUTH_DISABLED=1 nix develop -c cargo run -p server`, then `nix develop -c cargo run -p client -- --play-server localhost:25555` (Play now skips login; works offline) | no |
 | Full stack | rots-authserver `nix develop -c ./scripts/dev-stack.sh`; `ROTS_AUTH_URL=http://localhost:8000 ROTS_TICKET_AUDIENCE=http://localhost:8000 ROTS_SERVER_SLOT=0 ROTS_COORDINATOR_URL=http://localhost:8001 ROTS_COORDINATOR_TOKEN=devtoken nix develop -c cargo run -p server`; `nix develop -c cargo run -p client -- --auth-url http://localhost:8000` | yes (local Temporal, UI `http://localhost:18233`) |
 
-A second local game server in full-stack mode: `GAME_SERVER_SLOTS=2` on the stack and `ROTS_SERVER_SLOT=1 ROTS_PORT=25556` on the server. The web client needs the gateway's same-origin `/auth`, so test it on a preview.
+A second local game server in full-stack mode: `GAME_SERVER_SLOTS=2` on the stack and `ROTS_SERVER_SLOT=1 ROTS_PORT=25556` on the server; 25556 is also the first server's axum port (`port + 1`), so the second server's axum and WebSocket listeners fail to bind and only its native UDP play works. The web client needs the gateway's same-origin `/auth`, so test it on a preview.
 
 ## Technical Details
 

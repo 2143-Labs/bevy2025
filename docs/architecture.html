@@ -148,7 +148,7 @@
   <a href="#c-udp"><rect x="330" y="40" width="220" height="62" rx="9" class="box"/><text x="345" y="66" class="title">UDP LoadBalancer</text><text x="345" y="86" class="muted">rots-gs-&lt;i&gt;-udp · per slot</text></a>
   <a href="#c-gateway"><rect x="330" y="130" width="220" height="62" rx="9" class="box"/><text x="345" y="156" class="title">gateway (HTTPRoute)</text><text x="345" y="176" class="muted">/auth · /ws/&lt;i&gt; · /</text></a>
 
-  <a href="#c-gameserver"><rect x="640" y="40" width="220" height="152" rx="9" class="box"/><text x="655" y="66" class="title">game server</text><text x="655" y="88" class="muted">StatefulSet, slot = pod index</text><text x="655" y="108" class="muted">UDP + WebSocket 25555</text><text x="655" y="128" class="muted">axum 25556 · tickets</text><text x="655" y="148" class="muted">FIFO coordinator link</text><text x="655" y="168" class="muted">heartbeat every 10 s</text></a>
+  <a href="#c-gameserver"><rect x="640" y="40" width="220" height="152" rx="9" class="box"/><text x="655" y="66" class="title">game server</text><text x="655" y="88" class="muted">StatefulSet, slot = pod index</text><text x="655" y="108" class="muted">UDP + WebSocket 25565</text><text x="655" y="128" class="muted">axum 25566 · tickets</text><text x="655" y="148" class="muted">FIFO coordinator link</text><text x="655" y="168" class="muted">heartbeat every 10 s</text></a>
 
   <a href="#c-authserver"><rect x="640" y="250" width="220" height="132" rx="9" class="box edge"/><text x="655" y="276" class="title">authserver</text><text x="655" y="298" class="muted">public :8000 · internal :8001</text><text x="655" y="318" class="muted">Temporal worker thread</text><text x="655" y="338" class="muted">session + ticket minting</text><text x="655" y="358" class="muted">no state of its own</text></a>
 
@@ -171,7 +171,7 @@
   <path d="M750,382 L750,430" class="wire" marker-end="url(#a1)"/><text x="758" y="410" class="muted" style="font-size:10.5px;">SQL</text>
   <path d="M640,340 C560,340 470,400 470,430" class="wire dash" marker-end="url(#a1)"/><text x="470" y="322" class="muted" style="font-size:10.5px;">OAuth / ticket check</text>
 </svg>
-<figcaption><strong>Figure 1 — components.</strong> Clients only ever talk to a game server they were assigned; game servers only ever talk to the authserver (public key at boot, internal API afterwards); Temporal is reachable only from the authserver. Click a box for its row.</figcaption>
+<figcaption><strong>Figure 1 — components.</strong> Clients only ever talk to a game server they were assigned; game servers only ever talk to the authserver (public key at boot, internal API afterwards); only the authserver is a Temporal client and worker (a hook Job creates the namespace). Click a box for its row.</figcaption>
 </figure>
 
 <table>
@@ -186,7 +186,7 @@
 <tr id="c-coordinator"><td>coordinator workflow</td><td><code>rots-authserver/src/temporal/coordinator.rs</code></td><td>Temporal, one run per environment</td><td>session workflows (presence signals); updates from the authserver</td><td>slots, boot ids, rosters, reservations</td></tr>
 <tr id="c-session"><td>session workflow</td><td><code>rots-authserver/src/temporal/session.rs</code></td><td>Temporal, one per login <code>sid</code></td><td>coordinator (assign), authserver activities (ticket minting)</td><td>assigned slot, present (slot, character) pairs, ended</td></tr>
 <tr id="c-db"><td>rots-db</td><td>CNPG cluster, <code>social.*</code> schema</td><td>Postgres</td><td>authserver</td><td>accounts, characters, sessions (token hashes)</td></tr>
-<tr id="c-gameserver"><td>game server</td><td><code>bevy2025/server</code></td><td>StatefulSet <code>rots-gameserver</code>; slot = pod index (<code>apps.kubernetes.io/pod-index</code>)</td><td>authserver public (public key at boot) and internal (join/leave/heartbeat)</td><td>the live world; nothing durable</td></tr>
+<tr id="c-gameserver"><td>game server</td><td><code>bevy2025/server</code></td><td>StatefulSet <code>rots-gameserver</code>; slot = pod index (<code>apps.kubernetes.io/pod-index</code>); UDP + WebSocket 25565, axum 25566 (a local run uses <code>config.yaml</code>'s 25555/25556)</td><td>authserver public (public key at boot) and internal (join/leave/heartbeat)</td><td>the live world; nothing durable</td></tr>
 <tr id="c-providers"><td>login providers</td><td>Steam, Discord, au.2143.me</td><td>external</td><td>authserver callbacks</td><td>identities</td></tr>
 </tbody>
 </table>
@@ -243,7 +243,7 @@
 <tr id="err-play-in-progress"><td><code>409 play_in_progress</code></td><td>a second play delivered to the session workflow while its first play is still running in the same workflow task</td><td>retry; a play that arrives mid-play in a later task simply queues and gets the same slot</td></tr>
 <tr id="err-no-game-server"><td><code>503 no_game_server</code></td><td>the coordinator knows no healthy slot (no game server reported for <code>COORDINATOR_STALE_SECS</code>)</td><td>a game server heartbeats again</td></tr>
 <tr id="err-temporal"><td><code>503 temporal_unavailable</code></td><td>authserver cannot reach Temporal, or its worker has not connected</td><td>Temporal healthy and worker polls the queue</td></tr>
-<tr id="err-internal"><td><code>500 internal</code></td><td>the ticket activity failed (character row missing, signing key wrong)</td><td>fix the data; the error is logged with the <code>sid</code></td></tr>
+<tr id="err-internal"><td><code>500 internal</code></td><td>a local activity failed: <code>assign_server</code> (coordinator update error or &gt;3 s) or <code>mint_ticket</code> (character row missing, database error); the logged <code>reason</code> names which</td><td>fix the data; the error is logged with the <code>sid</code></td></tr>
 </tbody>
 </table>
 </details>
@@ -281,30 +281,27 @@
 <li id="presence-2">The join goes out through the server's single FIFO sender with the ticket's <code>sid</code>, and waits up to 6 s.</li>
 <li id="presence-3">The authserver first checks that the <code>sid</code> is still a live session. Logging out, a newer login or a claim deletes the row, so a stale ticket cannot join.</li>
 <li id="presence-4">It sends the coordinator an <code>Update join</code>. The coordinator admits a character it does not already hold on another healthy slot.</li>
-<li id="presence-5">The coordinator signals <code>presence{slot, character_id, present:true}</code> to that session's workflow: the session is now <code>in_game</code>.</li>
+<li id="presence-5">The coordinator queues <code>presence{slot, character_id, present:true}</code> for that session's workflow and signals it when the run loop next drains the outbox — after the <code>join</code> update has already answered, so the session may still read <code>assigned</code> for a moment while the player is admitted.</li>
 <li id="presence-6">The answer decides the client: <code>200 admitted</code> → <code>admit_players</code> spawns the player; <code>409 session_ended</code> → <code>ConnectRejected "session ended"</code>; <code>409 already_on_other_server</code> → <code>"character already connected on another server"</code>; any other failure or no answer in 6 s → <code>"coordinator unavailable"</code>.</li>
-<li id="presence-7">While the player is connected the server reports its roster every 10 s, and reports a leave when the player disconnects (quit, timeout). Both are retried with 1-2-4 s backoff until accepted; the coordinator diffs rosters to notice players that vanished, and signals <code>presence{... present:false}</code>.</li>
+<li id="presence-7">While the player is connected the server reports its roster every 10 s, and reports a leave when the player disconnects (quit, timeout). Both are retried with 1-2-4 s backoff, then every 4 s until accepted; a <code>400</code> is logged and dropped (retrying cannot fix a malformed body). The coordinator diffs rosters to notice players that vanished, and signals <code>presence{... present:false}</code>.</li>
 </ol>
 
 <div class="callout warn"><p><strong>The FIFO sender is load-bearing.</strong> The coordinator learns that a player left by comparing a heartbeat's roster with the slot's recorded players, and it never re-adds players from a heartbeat of a known boot id. A heartbeat that overtook a join would therefore drop the player who had just joined, permanently. One task sends every op, one at a time, in production order — and the server's roster includes players whose join is still in flight for the same reason.</p></div>
 
-<div class="callout"><p><strong>Logins are checked at join only.</strong> A player already in game is not removed when their login ends: no kick, no ticket renewal. Their session goes <code>in_menus</code> when they disconnect, and any further connect with the old ticket is rejected as <code>session ended</code>. Presence is a lease, not a fence: a game server cut off from the authserver keeps simulating, and the coordinator forgets its players after <code>COORDINATOR_STALE_SECS</code>, so the same character can be admitted elsewhere in that window. Character state is not persisted yet; once it is, that write needs an epoch issued by the coordinator.</p></div>
+<div class="callout"><p><strong>Logins are checked at join only.</strong> A player already in game is not removed when their login ends: no kick, no ticket renewal. Their session workflow ends at <code>logout</code>; the disconnect the server still reports has no session left to update, and any further connect with the old ticket is rejected as <code>session ended</code>. Presence is a lease, not a fence: a game server cut off from the authserver keeps simulating, and the coordinator forgets its players after <code>COORDINATOR_STALE_SECS</code>, so the same character can be admitted elsewhere in that window. Character state is not persisted yet; once it is, that write needs an epoch issued by the coordinator.</p></div>
 
 <h2 id="coordinator">Coordinator state machine</h2>
 <figure>
-<svg class="diagram" viewBox="0 0 1240 430" role="img" aria-label="Two state machines: a slot is unknown, healthy, or stale; a character is absent, reserved, or present. Every state link points at its row in the transition table.">
+<svg class="diagram" viewBox="0 0 1240 430" role="img" aria-label="Two state machines: a slot is unknown or healthy, and a silent slot is deleted; a character is absent, reserved, or present. Every state link points at its row in the transition table.">
   <defs><marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrowhead"/></marker></defs>
   <text x="30" y="34" class="title">per slot</text>
   <a href="#t-unknown-healthy"><circle cx="110" cy="90" r="12" class="box"/><text x="110" y="95" text-anchor="middle" style="font-size:11px;">?</text></a>
   <a href="#st-unknown"><text x="110" y="66" class="muted" text-anchor="middle">unknown</text></a>
   <a href="#st-healthy"><rect x="330" y="62" width="140" height="56" rx="9" class="box backend"/><text x="400" y="88" class="title" text-anchor="middle">healthy</text><text x="400" y="106" class="muted" text-anchor="middle">heartbeat ≤ 30 s ago</text></a>
-  <a href="#st-stale"><rect x="640" y="62" width="150" height="56" rx="9" class="box closed"/><text x="715" y="88" class="title" text-anchor="middle">stale</text><text x="715" y="106" class="muted" text-anchor="middle">no report for 30 s</text></a>
+  <a href="#st-reaped"><rect x="640" y="62" width="150" height="56" rx="9" class="box sub"/><text x="715" y="88" class="title" text-anchor="middle">no slot</text><text x="715" y="106" class="muted" text-anchor="middle">deleted, like a new server</text></a>
   <a href="#t-unknown-healthy"><path d="M122,90 L330,90" class="wire" marker-end="url(#a4)"/><text x="152" y="66" class="muted" style="font-size:11px;">first heartbeat / join</text></a>
-  <a href="#t-healthy-stale"><path d="M470,90 L640,90" class="wire" marker-end="url(#a4)"/><text x="500" y="82" class="muted" style="font-size:11px;">reap</text></a>
-  <a href="#t-stale-healthy"><path d="M640,110 C560,150 470,150 470,110" class="wire" marker-end="url(#a4)"/><text x="556" y="164" class="muted" style="font-size:11px;" text-anchor="middle">a report arrives</text></a>
+  <a href="#t-healthy-gone"><path d="M470,90 L640,90" class="wire" marker-end="url(#a4)"/><text x="492" y="82" class="muted" style="font-size:11px;">reap if silent 30 s</text></a>
   <a href="#t-reboot"><path d="M400,62 C400,20 470,20 470,62" class="wire" marker-end="url(#a4)"/><text x="440" y="16" class="muted" style="font-size:11px;">new boot_id</text></a>
-  <a href="#t-reaped"><path d="M715,118 L715,150" class="wire" marker-end="url(#a4)"/><text x="725" y="140" class="muted" style="font-size:11px;">removed</text></a>
-  <a href="#st-reaped"><rect x="640" y="150" width="150" height="46" rx="9" class="box sub"/><text x="715" y="178" class="muted" text-anchor="middle">no slot at all</text></a>
 
   <text x="30" y="216" class="title">per character</text>
   <a href="#t-absent-reserved"><rect x="100" y="230" width="140" height="56" rx="9" class="box"/><text x="170" y="256" class="title" text-anchor="middle">absent</text><text x="170" y="274" class="muted" text-anchor="middle">not on a slot</text></a>
@@ -322,14 +319,12 @@
 <table>
 <thead><tr><th>From</th><th>Event</th><th>Guard</th><th>To</th><th>Signals emitted</th></tr></thead>
 <tbody>
-<tr id="t-unknown-healthy"><td id="st-unknown">unknown</td><td>heartbeat or join</td><td>—</td><td id="st-healthy">healthy</td><td>the first heartbeat of an unknown slot <em>adopts</em> its roster: <code>present:true</code> per player</td></tr>
-<tr id="t-healthy-stale"><td>healthy</td><td>reap, after <code>COORDINATOR_STALE_SECS</code> without a report</td><td><code>now &gt; last_report + stale</code></td><td id="st-stale">stale</td><td><code>present:false</code> for each player, roster cleared</td></tr>
-<tr id="t-stale-healthy"><td>stale (not yet reaped)</td><td>heartbeat</td><td>same <code>boot_id</code></td><td>healthy</td><td>none; it is treated as a known boot, so players missing from the roster are dropped</td></tr>
+<tr id="t-unknown-healthy"><td id="st-unknown">unknown</td><td>heartbeat or join</td><td>slot missing, or a different <code>boot_id</code></td><td id="st-healthy">healthy</td><td>the first heartbeat of an unknown slot <em>adopts</em> its roster: <code>present:true</code> per player, except characters already recorded on another healthy slot</td></tr>
+<tr id="t-healthy-gone"><td>healthy</td><td>reap, run first by every handler</td><td><code>now &gt; last_report + COORDINATOR_STALE_SECS</code></td><td id="st-reaped">no slot</td><td><code>present:false</code> for each of its players; the slot is deleted, so a late report from the same boot re-adopts it like a new server</td></tr>
 <tr id="t-reboot"><td>healthy</td><td>heartbeat or join with a different <code>boot_id</code></td><td>—</td><td>healthy (fresh)</td><td><code>present:false</code> for the old players, then <code>present:true</code> for the new roster</td></tr>
-<tr id="t-reaped"><td>stale</td><td>reap</td><td>players already cleared</td><td id="st-reaped">no slot</td><td>none; a returning server re-adopts like a new one</td></tr>
 <tr id="t-absent-reserved"><td id="st-absent">absent</td><td><code>assign</code></td><td>a healthy slot exists</td><td id="ch-reserved">reserved</td><td>none (the reservation expires after 360 s)</td></tr>
 <tr id="t-reserved-present"><td>reserved</td><td><code>join</code></td><td>character not present on another healthy slot</td><td id="ch-present">present</td><td><code>present:true</code>; the reservation is dropped</td></tr>
-<tr id="t-present-absent"><td>present</td><td>leave · heartbeat roster without the character · reap · new <code>boot_id</code></td><td>—</td><td>absent</td><td><code>present:false</code> for that (slot, character)</td></tr>
+<tr id="t-present-absent"><td>present</td><td>leave · heartbeat roster without the character · reap · new <code>boot_id</code></td><td>a leave needs the matching <code>boot_id</code>; the others need none</td><td>absent</td><td><code>present:false</code> for that (slot, character)</td></tr>
 <tr id="t-reserved-expire"><td>reserved</td><td>reap (expiry)</td><td><code>expires &le; now</code></td><td>absent</td><td>none</td></tr>
 <tr id="t-same-character-elsewhere"><td>present</td><td><code>join</code></td><td>the character is recorded on another <em>healthy</em> slot</td><td>present (unchanged)</td><td>the update answers <code>AlreadyOnOtherServer { slot }</code>; nothing is emitted</td></tr>
 </tbody>
@@ -339,7 +334,7 @@
 
 <div class="callout warn"><p><strong>Determinism.</strong> Workflow code uses <code>BTreeMap</code>/<code>BTreeSet</code> only, takes time from <code>ctx.workflow_time()</code>, does no I/O and no randomness (activities do that), and wraps any change to the command sequence — new activities, timers, signals, continue-as-new — in <code>ctx.patched("&lt;change-id&gt;")</code>, because old and new authserver pods poll the same queue during a rolling deploy.</p></div>
 
-<div class="callout"><p><strong>Ceiling.</strong> One workflow serializes every fleet event: roughly 1 event/s comfortably, a few tens/s at the 2000-event/hour limit. Production's four servers produce about 0.4 events/s. Past ~100 reporting servers, shard the coordinator by slot range or move presence out of Temporal.</p></div>
+<div class="callout"><p><strong>Ceiling.</strong> One workflow serializes every fleet event: roughly 1 event/s comfortably, a few tens/s before a run hits its cap (2000 history events or 1 h, whichever comes first). Production's four servers produce about 0.4 events/s. Past ~100 reporting servers, shard the coordinator by slot range or move presence out of Temporal.</p></div>
 
 <h2 id="session">Session state machine</h2>
 <figure>
@@ -352,39 +347,39 @@
   <a href="#s-assigned"><path d="M200,120 L330,120" class="wire" marker-end="url(#a5)"/><text x="228" y="112" class="muted" style="font-size:11px;">play ok</text></a>
   <a href="#s-in-game"><path d="M500,120 L630,120" class="wire" marker-end="url(#a5)"/><text x="530" y="112" class="muted" style="font-size:11px;">presence true</text></a>
   <a href="#s-in-menus"><path d="M715,150 C715,210 120,210 120,150" class="wire" marker-end="url(#a5)"/><text x="330" y="178" class="muted" style="font-size:11px;">presence false for the last present (slot, character)</text></a>
-  <a href="#s-ended"><path d="M250,90 C250,30 930,30 930,90" class="wire dash" marker-end="url(#a5)"/><text x="520" y="24" class="muted" style="font-size:11px;">logout · 24 h timer with nobody in game</text></a>
+  <a href="#s-ended"><path d="M250,90 C250,30 930,30 930,90" class="wire dash" marker-end="url(#a5)"/><text x="548" y="24" class="muted" style="font-size:11px;">logout (also mid-game)</text></a>
   <a href="#s-ended"><path d="M715,90 C715,40 900,50 900,90" class="wire dash" marker-end="url(#a5)"/></a>
 </svg>
-<figcaption><strong>Figure 5 — session.</strong> One workflow per login (<code>sid</code>), started by the first <code>/play</code>. Never ended while a player is connected.</figcaption>
+<figcaption><strong>Figure 5 — session.</strong> One workflow per login (<code>sid</code>), started by the first <code>/play</code>. <code>logout</code> ends it even with a player still connected; the 24 h timer completes the run without setting <code>ended</code>.</figcaption>
 </figure>
 
 <table>
 <thead><tr><th>State</th><th>Means</th><th>Entered by</th><th>Left by</th></tr></thead>
 <tbody>
 <tr id="s-in-menus"><td><code>in_menus</code></td><td>no assignment and no presence</td><td>start; <code>presence{false}</code> for the last present (slot, character)</td><td><code>play</code>, <code>presence{true}</code></td></tr>
-<tr id="s-assigned"><td><code>assigned{slot, expires_at}</code></td><td>a ticket was minted for that slot and has not expired</td><td>a successful <code>play</code></td><td><code>presence{true}</code>, a new <code>play</code>, or expiry</td></tr>
+<tr id="s-assigned"><td><code>assigned{slot, expires_at}</code></td><td>the last successful <code>play</code>'s slot and ticket expiry; the status query does not check the expiry, so <code>expires_at</code> may be in the past (only placement ignores it)</td><td>a successful <code>play</code></td><td><code>presence{true}</code> or a new <code>play</code></td></tr>
 <tr id="s-in-game"><td><code>in_game{slot}</code></td><td>at least one (slot, character) pair is present; the reported slot is the lowest</td><td><code>presence{true}</code></td><td><code>presence{false}</code> for that pair</td></tr>
-<tr id="s-ended"><td><code>ended</code></td><td><code>logout</code> signal (logout, replaced login, claim) or the 24 h timer</td><td><code>logout</code>, timer</td><td>— (run completes; the next <code>/play</code> starts a new run)</td></tr>
+<tr id="s-ended"><td><code>ended</code></td><td>the <code>logout</code> signal only — logout, or a guest session replaced by a login. A claim deletes the guest rows without signalling, so those runs idle out at 24 h; the timer itself sets no state</td><td><code>logout</code></td><td>— (run completes; the next <code>/play</code> starts a new run)</td></tr>
 </tbody>
 </table>
 
-<div class="callout"><p><strong>Presence is keyed by (slot, character), not by slot.</strong> One login may hold two characters on the same server (a later feature); one leaving must not report the other as gone. The workflow stores no character: every <code>play</code> carries the session row's current <code>character_id</code>. The run ends only when <code>ended</code> and nobody is present and no <code>play</code> is in flight; its execution timeout is 48 h, so a deleted preview closes its sessions too.</p></div>
+<div class="callout"><p><strong>Presence is keyed by (slot, character), not by slot.</strong> One login may hold two characters on the same server (a later feature); one leaving must not report the other as gone. The workflow stores no character: every <code>play</code> carries the session row's current <code>character_id</code>. The run ends after <code>logout</code> — even with a player still connected: they keep playing, and the coordinator's later <code>present:false</code> finds a closed workflow and drops it — or after 24 h once nobody is present. Either way it first waits for an in-flight <code>play</code> to answer. Its execution timeout is 48 h, so a deleted preview closes its sessions too.</p></div>
 
 <h2 id="failures">Failure modes</h2>
 <table>
 <thead><tr><th>Event</th><th>Players see</th><th>Heals by</th><th>Enforced in</th></tr></thead>
 <tbody>
 <tr id="f-temporal"><td>Temporal unreachable</td><td><code>503 temporal_unavailable</code> on <code>/play</code>; connecting players are refused <code>"coordinator unavailable"</code>; connected players keep playing</td><td>Temporal back; the worker reconnects within 10 s</td><td>temporal client calls, worker retry loop</td></tr>
-<tr id="f-authserver"><td>authserver down or restarting</td><td>new logins and plays fail; game servers retry their reports in order and keep simulating</td><td>the pod is Ready again (readiness on <code>/ready</code> waits for the Temporal worker)</td><td>Service readiness, <code>maxUnavailable: 0</code></td></tr>
+<tr id="f-authserver"><td>authserver down or restarting</td><td>new logins and plays fail, and connecting players are refused <code>"coordinator unavailable"</code>; game servers retry their reports in order and keep simulating</td><td>the pod is Ready again (readiness on <code>/ready</code> waits for the Temporal worker)</td><td>Service readiness, <code>maxUnavailable: 0</code></td></tr>
 <tr id="f-deploy"><td>authserver rolling deploy</td><td>a brief pause in <code>/play</code>; joins keep working because the old pod serves until the new one is Ready</td><td>the rollout finishes</td><td>Deployment strategy</td></tr>
 <tr id="f-crash"><td>game server crash and restart</td><td>its players disconnect; when it returns with a new <code>boot_id</code> the coordinator drops the old roster</td><td>pod restart</td><td><code>boot_id</code> in the heartbeat</td></tr>
-<tr id="f-gone"><td>game server gone (no heartbeats)</td><td>its players' sessions go <code>in_menus</code>; <code>/play</code> stops choosing the slot</td><td>the slot is reaped after <code>COORDINATOR_STALE_SECS</code></td><td>coordinator reap</td></tr>
+<tr id="f-gone"><td>game server gone (no heartbeats)</td><td>its players' sessions go <code>in_menus</code> and <code>/play</code> stops choosing the slot; both happen at the first coordinator event after <code>COORDINATOR_STALE_SECS</code> — within the stale window plus one heartbeat while another server reports, but only at the next <code>/play</code>, join, leave or report in a one-server environment</td><td>the slot is reaped by the next event</td><td>coordinator reap</td></tr>
 <tr id="f-timeout"><td>coordinator run hit its 3 h timeout</td><td>placement briefly has no cross-slot knowledge (≤10 s) until the first heartbeats rebuild it</td><td>next with-start call + adoption</td><td>coordinator run loop</td></tr>
 <tr id="f-preview"><td>preview deleted</td><td>nothing; its workers, game servers and workflows go away</td><td>3 h coordinator timeout, 48 h session timeout</td><td>Temporal run timeouts</td></tr>
 <tr id="f-logout"><td>logout while in game</td><td>the player keeps playing until they disconnect; rejoining with the old ticket is <code>"session ended"</code></td><td>they log in again</td><td><code>session_live</code> at join, <code>logout</code> signal</td></tr>
 <tr id="f-cold"><td>coordinator restarted cold</td><td>placement re-learns the fleet from heartbeats within ≤10 s</td><td>adoption on the first heartbeat of each unknown slot</td><td>coordinator <code>heartbeat</code></td></tr>
 <tr id="f-partition"><td>game server can't reach the authserver</td><td>its players keep playing; after the stale window the coordinator forgets them, so the same character can be admitted elsewhere (no fence yet)</td><td>the link reconnects and reports the roster</td><td>FIFO sender retries</td></tr>
-<tr id="f-dup"><td>same character connects twice</td><td>the second connection is refused <code>"character already connected on another server"</code>; after a crash the old connection must time out on its server first (5 missed heartbeats)</td><td>the stale connection drops</td><td>coordinator <code>join</code></td></tr>
+<tr id="f-dup"><td>same character connects twice</td><td>on the same server (including a reconnect after a crash) the second connection is refused <code>"character already connected"</code> until the old one times out — 10 missed heartbeats, about 2 s; a ticket for a <em>different</em> slot gets <code>"character already connected on another server"</code></td><td>the old connection times out or disconnects</td><td>game server for the same slot, coordinator <code>join</code> across slots</td></tr>
 </tbody>
 </table>
 
@@ -423,7 +418,7 @@ ROTS_COORDINATOR_TOKEN=devtoken nix develop -c cargo run -p server
 nix develop -c cargo run -p client -- --auth-url http://localhost:8000</code></pre></td><td>Postgres (55432), Temporal (17233, UI 18233), authserver (8000 public, 8001 internal), game server (25555), client</td><td>yes (local Temporal)</td></tr>
 </tbody>
 </table>
-<div class="callout"><p>The full stack's Temporal UI is <code>http://localhost:18233</code>; <code>temporal workflow query -n rots --address 127.0.0.1:17233 -w rots-coordinator-rots-dev --type fleet</code> shows what the coordinator believes. A second local game server needs <code>GAME_SERVER_SLOTS=2</code> on the stack and <code>ROTS_SERVER_SLOT=1 ROTS_PORT=25556</code> on the server. The web client needs the gateway's same-origin <code>/auth</code>, so test it on a preview.</p></div>
+<div class="callout"><p>The full stack's Temporal UI is <code>http://localhost:18233</code>; <code>temporal workflow query -n rots --address 127.0.0.1:17233 -w rots-coordinator-rots-dev --type fleet</code> shows what the coordinator believes. A second local game server needs <code>GAME_SERVER_SLOTS=2</code> on the stack and <code>ROTS_SERVER_SLOT=1 ROTS_PORT=25556</code> on the server — 25556 is also the first server's axum port (<code>port + 1</code>), so the second server's axum and WebSocket listeners fail to bind and only its native UDP play works. The web client needs the gateway's same-origin <code>/auth</code>, so test it on a preview.</p></div>
 
 <h2 id="code">Code map</h2>
 <table>
@@ -438,7 +433,7 @@ nix develop -c cargo run -p client -- --auth-url http://localhost:8000</code></p
 
 <h2 id="changelog">Changelog</h2>
 <ul>
-  <li><strong>2026-11-02</strong> — Coordinator + session workflows: <code>/play</code> replaces <code>/api/v1/ticket</code>, game servers are gated per join and report presence, Temporal namespaces are created by a hook Job. rots-authserver #2, argo #31, bevy2025 #12.</li>
+  <li><strong>2026-11-02</strong> — Coordinator + session workflows: <code>/play</code> replaces <code>/api/v1/ticket</code>, game servers are gated per join and report presence, Temporal namespaces are created by a hook Job. rots-authserver #2, argo #31/#32/#33, bevy2025 #13.</li>
 </ul>
 </main>
 </body>
