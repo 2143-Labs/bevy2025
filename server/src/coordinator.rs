@@ -6,8 +6,11 @@
 //!
 //! Ordering is load-bearing. One task sends every op, one at a time, in the order the server
 //! produced it, because the coordinator removes a slot's players by diffing heartbeat rosters: a
-//! heartbeat that overtook a join would report the player who had just joined as gone.
+//! heartbeat that overtook a join would report the player who had just joined as gone. At most
+//! one heartbeat waits behind the one in flight (see `CoordinatorLink::heartbeat`).
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use bevy::prelude::*;
@@ -61,6 +64,8 @@ pub enum LinkOp {
 #[derive(Resource, Clone)]
 pub struct CoordinatorLink {
     tx: mpsc::UnboundedSender<LinkOp>,
+    /// Set while a heartbeat waits in the queue; the sender clears it when it takes that heartbeat.
+    heartbeat_queued: Arc<AtomicBool>,
 }
 
 impl CoordinatorLink {
@@ -79,8 +84,18 @@ impl CoordinatorLink {
         answer
     }
 
+    /// Queue a roster, unless one is already waiting. During an outage the heartbeat in flight
+    /// retries until the authserver is back; without this a new roster would pile up every 10 s,
+    /// and after recovery every queued join would wait behind all of them past `JOIN_GIVE_UP`.
+    /// Dropping the newer roster is safe: the waiting one lists exactly the players admitted or
+    /// pending before it in the queue, and any join or leave since then is queued after it.
     pub fn heartbeat(&self, players: Vec<PlayerRef>) {
-        self.send(LinkOp::Heartbeat(players));
+        if self.heartbeat_queued.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        if !self.send(LinkOp::Heartbeat(players)) {
+            self.heartbeat_queued.store(false, Ordering::Release);
+        }
     }
 
     pub fn leave(&self, character_id: i64) {
@@ -101,8 +116,18 @@ pub fn spawn_link(
         .timeout(Duration::from_secs(5))
         .build()
         .expect("failed to build the coordinator HTTP client");
-    runtime.spawn(run_link(client, coordinator, boot_id, rx));
-    CoordinatorLink { tx }
+    let heartbeat_queued = Arc::new(AtomicBool::new(false));
+    runtime.spawn(run_link(
+        client,
+        coordinator,
+        boot_id,
+        rx,
+        heartbeat_queued.clone(),
+    ));
+    CoordinatorLink {
+        tx,
+        heartbeat_queued,
+    }
 }
 
 #[derive(Serialize)]
@@ -137,6 +162,7 @@ async fn run_link(
     coordinator: GameServerCoordinator,
     boot_id: String,
     mut rx: mpsc::UnboundedReceiver<LinkOp>,
+    heartbeat_queued: Arc<AtomicBool>,
 ) {
     while let Some(op) = rx.recv().await {
         match op {
@@ -165,6 +191,8 @@ async fn run_link(
                 let _ = reply.send(answer);
             }
             LinkOp::Heartbeat(players) => {
+                // Taken off the queue: the next roster may wait behind this one.
+                heartbeat_queued.store(false, Ordering::Release);
                 let body = HeartbeatBody {
                     slot: coordinator.slot,
                     boot_id: &boot_id,
@@ -276,11 +304,21 @@ impl Plugin for CoordinatorPlugin {
             .add_systems(
                 Update,
                 (
-                    send_heartbeat.run_if(bevy::time::common_conditions::on_timer(HEARTBEAT_EVERY)),
-                    // Before `on_player_disconnect` strips `ConnectedPlayer`, and after the
-                    // messages are written: it needs this frame's disconnects and the sid they
-                    // had while connected.
-                    report_leaves.before(crate::on_player_disconnect),
+                    // After `admit_players`, so its deferred spawns are applied first: a player
+                    // admitted this frame is no longer pending, so the roster would otherwise
+                    // miss them, and the coordinator never re-adds players from a known boot.
+                    send_heartbeat
+                        .run_if(bevy::time::common_conditions::on_timer(HEARTBEAT_EVERY))
+                        .after(crate::admit_players),
+                    // After both writers of `PlayerDisconnected`, so a disconnect is reported in
+                    // the frame it happens; before `on_player_disconnect` strips
+                    // `ConnectedPlayer`; and before `vet_connect_requests`, so a reconnect's join
+                    // is always queued after the leave of the connection it replaces.
+                    report_leaves
+                        .after(crate::check_heartbeats)
+                        .after(crate::on_disconnect_packet)
+                        .before(crate::on_player_disconnect)
+                        .before(crate::vet_connect_requests),
                 )
                     .run_if(in_state(ServerState::Running)),
             );
@@ -487,6 +525,8 @@ mod tests {
         let link = spawn_link(&runtime, coordinator(&endpoint));
 
         link.heartbeat(players());
+        // The first heartbeat is in flight, so the second one queues behind the leave.
+        wait_for(&mock, 1, Duration::from_secs(5));
         link.leave(7);
         link.heartbeat(players());
 
@@ -511,6 +551,64 @@ mod tests {
         );
         // One boot id for the whole process.
         assert_eq!(requests[0].body["boot_id"], requests[4].body["boot_id"]);
+    }
+
+    #[test]
+    fn one_heartbeat_waits_behind_the_one_in_flight() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let roster = |character_id: i64| {
+            vec![PlayerRef {
+                character_id,
+                sid: "0123456789abcdef".to_string(),
+            }]
+        };
+        // An outage: the first heartbeat is refused twice (1 s + 2 s of retries).
+        let (endpoint, mock) = start_mock(
+            &runtime,
+            vec![(503, Value::Null), (503, Value::Null), (204, Value::Null)],
+        );
+        let link = spawn_link(&runtime, coordinator(&endpoint));
+
+        link.heartbeat(roster(1));
+        wait_for(&mock, 1, Duration::from_secs(5));
+        link.heartbeat(roster(2)); // waits behind roster 1
+        link.heartbeat(roster(3)); // dropped: roster 2 is still waiting
+        link.leave(9);
+        link.heartbeat(roster(4)); // dropped: roster 2 is still waiting
+
+        wait_for(&mock, 5, Duration::from_secs(15));
+        // Nothing else was queued.
+        std::thread::sleep(Duration::from_millis(300));
+        let requests = mock.requests();
+        let summary: Vec<(String, Value)> = requests
+            .iter()
+            .map(|r| {
+                let what = if r.path.ends_with("/leave") {
+                    r.body["character_id"].clone()
+                } else {
+                    r.body["players"][0]["character_id"].clone()
+                };
+                (r.path.rsplit('/').next().unwrap().to_string(), what)
+            })
+            .collect();
+        assert_eq!(
+            summary,
+            [
+                ("heartbeat".to_string(), json!(1)),
+                ("heartbeat".to_string(), json!(1)),
+                ("heartbeat".to_string(), json!(1)),
+                ("heartbeat".to_string(), json!(2)),
+                ("leave".to_string(), json!(9)),
+            ]
+        );
+
+        // Once the waiting roster is taken, the next one queues again.
+        link.heartbeat(roster(5));
+        wait_for(&mock, 6, Duration::from_secs(5));
+        assert_eq!(mock.requests()[5].body["players"][0]["character_id"], 5);
     }
 
     #[test]
