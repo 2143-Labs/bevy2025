@@ -530,15 +530,15 @@ pub fn setup_incoming_client<TI: NetworkingEvent, TO: NetworkingEvent>(
 
 /// The address to bind or dial, as message-io wants it.
 ///
-/// A listener told to use `localhost` binds the IPv6 wildcard (dual stacked). A client told the
-/// same must *not*: a wildcard is not a destination, and message-io resolves it with
-/// `to_socket_addrs().unwrap()` (the bracketed literal does not resolve at all), which panicked
-/// every client that was handed `localhost` — e.g. by a `/play` response from a stack with
-/// `GAME_UDP_HOST=localhost`. Dial IPv4 loopback instead, which is what a server bound to
-/// `0.0.0.0` listens on.
+/// Message-io resolves both with `to_socket_addrs().unwrap()`, so whatever this returns must
+/// resolve; the bracketed literal `"[::]"` this used to produce does not, and panicked every
+/// client handed `localhost` (e.g. by a `/play` response from a stack with
+/// `GAME_UDP_HOST=localhost`). A listener told `localhost` binds the IPv6 wildcard `::`, dual
+/// stacked on Linux. A client must not dial a wildcard: it dials IPv4 loopback, which is what a
+/// server bound to `0.0.0.0` listens on.
 fn socket_address(ip: &str, port: u16, is_listener: bool) -> (String, u16) {
     let ip = match (ip, is_listener) {
-        ("localhost", true) => "[::]",
+        ("localhost", true) => "::",
         ("localhost", false) => "127.0.0.1",
         (ip, _) => ip,
     };
@@ -750,24 +750,43 @@ impl FakePingSettings {
 
 #[cfg(test)]
 mod tests {
+    use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
+
     use super::socket_address;
 
+    /// What message-io does with the address (`to_socket_addrs().unwrap()`): it must resolve.
+    fn resolve(address: (String, u16)) -> SocketAddr {
+        address
+            .to_socket_addrs()
+            .unwrap_or_else(|e| panic!("{address:?} does not resolve: {e}"))
+            .next()
+            .unwrap()
+    }
+
     #[test]
-    fn a_listener_on_localhost_binds_the_dual_stack_wildcard() {
+    fn a_listener_on_localhost_binds_the_ipv6_wildcard() {
+        let address = socket_address("localhost", 2143, true);
+        assert_eq!(address, ("::".into(), 2143));
         assert_eq!(
-            socket_address("localhost", 2143, true),
-            ("[::]".into(), 2143)
+            resolve(address),
+            SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), 2143)
         );
     }
 
     #[test]
     fn a_client_on_localhost_dials_ipv4_loopback() {
-        // A wildcard is not a destination: the bracketed literal used to reach message-io's
-        // `to_socket_addrs().unwrap()` and panic every client handed `localhost`.
+        let address = socket_address("localhost", 25555, false);
+        assert_eq!(address, ("127.0.0.1".into(), 25555));
         assert_eq!(
-            socket_address("localhost", 25555, false),
-            ("127.0.0.1".into(), 25555)
+            resolve(address),
+            SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 25555)
         );
+    }
+
+    #[test]
+    fn the_bracketed_wildcard_never_resolved() {
+        // Why the mapping exists: this is what used to reach message-io and panic.
+        assert!(("[::]".to_string(), 25555).to_socket_addrs().is_err());
     }
 
     #[test]
