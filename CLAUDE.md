@@ -55,6 +55,12 @@ Note: `tokio` and `reqwest` are unconditional dependencies on native targets (`c
 - **Assets**: `client/src/assets.rs` declares `AssetCollection`s loaded during `GameState::AssetLoading`. A missing or mis-cased path silently stalls that state, because the loading state has no failure transition — asset paths must match the files under `client/assets/` exactly.
 - **Physics**: terrain uses a trimesh collider built from the generated mesh; characters use capsule colliders with a kinematic controller.
 
+## Design doc
+
+- `docs/design.html` is the living design doc, served at `/design.html` by the web image (`flake.nix`, `wasmOptAsServer`). PR previews show it at `https://rots-<PR>.john2143.com/design.html`.
+- Update it in the same change as any code change to connections, ports, flows or state rules; when the doc's design changes, change the code to match in the same PR.
+- Keep it script-free and self-contained, and keep every `href="#…"` resolving: `python3 scripts/check-design-doc.py` (CI runs it).
+
 ## Technical Details
 
 - Requires graphics libraries (Vulkan, Wayland, ALSA) on Linux; the flake provides them.

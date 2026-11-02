@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ROTS — living design doc</title>
+<style>
+  :root {
+    --bg:#fbfaf7; --fg:#1d1d1f; --muted:#5f6368; --line:#d9d6cf; --panel:#f1efe9;
+    --code:#ece9e1; --accent:#2457c5; --ok:#1f7a4d; --warn:#9a5800; --bad:#b3261e; --info:#5b3fb0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#141517; --fg:#e6e6e3; --muted:#a3a3a0; --line:#34363b; --panel:#1c1e22;
+      --code:#23262b; --accent:#7aa2ff; --ok:#5cc28e; --warn:#e0a34a; --bad:#f2766d; --info:#b49cff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 72rem; margin: 0 auto; padding: 2.5rem 1.5rem 6rem; }
+  h1 { font-size:2rem; line-height:1.2; margin:0 0 .4rem; }
+  h2 { font-size:1.45rem; margin:3rem 0 .8rem; padding-top:.6rem; border-top:1px solid var(--line); }
+  p, li { max-width: 62rem; }
+  a { color: var(--accent); }
+  code { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size:.88em;
+         background:var(--code); padding:.08em .35em; border-radius:4px; }
+  table { border-collapse:collapse; width:100%; margin:.8rem 0 1.2rem; font-size:.93rem; }
+  th, td { border:1px solid var(--line); padding:.45rem .6rem; vertical-align:top; text-align:left; }
+  th { background:var(--panel); font-weight:600; }
+  tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--panel) 45%, transparent); }
+  tr:target td { background: color-mix(in srgb, var(--accent) 18%, transparent) !important; }
+  .meta { color:var(--muted); font-size:.95rem; margin-bottom:1.5rem; }
+  .lede { font-size:1.15rem; max-width:60rem; }
+  .callout { border-left:4px solid var(--accent); background:var(--panel); padding:.8rem 1rem; border-radius:0 8px 8px 0; margin:1rem 0; }
+  .callout.warn { border-color:var(--warn); }
+  nav.toc { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:.8rem 1.2rem; }
+  nav.toc ol { margin:0; padding-left:1.4rem; columns: 2 16rem; }
+  figure { margin:1.2rem 0; }
+  figcaption { color:var(--muted); font-size:.9rem; margin-top:.4rem; }
+  svg.diagram { width:100%; height:auto; display:block; }
+  svg .box { fill:var(--panel); stroke:var(--line); stroke-width:1.5; }
+  svg .box.edge { stroke:var(--accent); }
+  svg .box.state { stroke:var(--info); }
+  svg .box.sub { fill:var(--bg); stroke:var(--info); }
+  svg .box.none { fill:none; stroke:var(--muted); stroke-dasharray:6 4; }
+  svg text { fill:var(--fg); font:13px system-ui, sans-serif; }
+  svg text.title { font-weight:700; font-size:14px; }
+  svg text.muted { fill:var(--muted); font-size:12px; }
+  svg text.lbl { fill:var(--muted); font-size:12px; }
+  svg text.pend { fill:var(--warn); font-size:12px; font-weight:600; }
+  svg .wire { stroke:var(--fg); stroke-width:1.6; fill:none; }
+  svg .pending { stroke:var(--warn); stroke-width:2; stroke-dasharray:7 5; fill:none; }
+  svg .life { stroke:var(--line); stroke-width:1.5; stroke-dasharray:4 4; }
+  svg .arrowhead { fill:var(--fg); }
+  svg .arrowhead.pend { fill:var(--warn); }
+  svg a:hover .box, svg a:focus .box { stroke:var(--accent); stroke-width:2.5; }
+  svg a { cursor:pointer; }
+  html { scroll-behavior:smooth; }
+  h2, tr, figure { scroll-margin-top:4.2rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>ROTS — design doc</h1>
+<p class="meta">Living design doc — updated in the same PR as any change it describes. Build: served by the web image of this commit.</p>
+
+<nav class="toc" aria-label="Contents">
+<ol>
+  <li><a href="#overview">Game overview</a></li>
+  <li><a href="#connections">Systems &amp; connections</a></li>
+  <li><a href="#play-flow">Enter the game</a></li>
+  <li><a href="#state">State machines</a></li>
+  <li><a href="#failures">Failure behaviour</a></li>
+  <li><a href="#maintaining">How this doc stays current</a></li>
+</ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="overview">1. Game overview</h2>
+<p class="lede">ROTS is a Bevy 0.20 multiplayer game with a native client (Steam) and a web/WASM client.
+Players log in with Steam, Discord or au.2143.me, or play as a guest. This page is its living design doc:
+it starts with how the systems connect, and gameplay and systems sections get added here over time.</p>
+
+<!-- ============================================================ -->
+<h2 id="connections">2. Systems &amp; connections</h2>
+
+<div class="callout warn"><strong>Legend.</strong> Solid arrows are live today. <span style="color:var(--warn);font-weight:600">Dashed orange arrows</span>
+land with the bevy2025 coordinator PR: the authserver side is deployed, the game client and game server side are not yet in <code>main</code>.
+Click any box to jump to its row in the table.</div>
+
+<figure id="fig-connections">
+<svg class="diagram" viewBox="0 0 1200 720" role="img" aria-label="Component map: native and web clients reach the gateway and UDP load balancers; the gateway routes to the web pod, game servers and authserver; the authserver uses rots-db, login providers and Temporal, which hosts the coordinator and session workflows and persists to temporal-db; there are no caches">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+    <marker id="arrp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path class="arrowhead pend" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- wires (drawn first, under the boxes) -->
+  <path class="wire" d="M160,90 L160,168" marker-end="url(#arr)"/>
+  <text class="lbl" x="170" y="135">UDP + game ticket</text>
+  <path class="wire" d="M160,250 L160,328" marker-end="url(#arr)"/>
+  <path class="wire" d="M460,90 L460,168" marker-end="url(#arr)"/>
+  <text class="lbl" x="470" y="125">HTTPS /, /auth</text>
+  <text class="lbl" x="470" y="141">WSS /ws/{N}</text>
+  <path class="wire" d="M280,72 L338,180" marker-end="url(#arr)"/>
+  <text class="lbl" x="296" y="105">HTTPS /auth</text>
+  <path class="wire" d="M640,210 L698,210" marker-end="url(#arr)"/>
+  <text class="lbl" x="652" y="200">/</text>
+  <path class="wire" d="M380,250 L300,328" marker-end="url(#arr)"/>
+  <text class="lbl" x="240" y="296">WSS /ws/{N} → :80</text>
+  <path class="wire" d="M540,250 L560,318" marker-end="url(#arr)"/>
+  <text class="lbl" x="460" y="292">/auth → :8000</text>
+  <path class="pending" d="M620,250 L660,318" marker-end="url(#arrp)"/>
+  <text class="pend" x="648" y="276">POST /play → {ticket, server}</text>
+  <path class="wire" d="M340,360 L498,360" marker-end="url(#arr)"/>
+  <text class="lbl" x="350" y="352">GET /ticket/public-key</text>
+  <path class="pending" d="M340,412 L498,412" marker-end="url(#arrp)"/>
+  <text class="pend" x="350" y="404">:8001 internal API</text>
+  <text class="pend" x="350" y="432">join · leave · heartbeat</text>
+  <path class="wire" d="M860,375 L938,375" marker-end="url(#arr)"/>
+  <text class="lbl" x="868" y="366">Postgres</text>
+  <path class="wire" d="M820,320 L1010,92" marker-end="url(#arr)"/>
+  <text class="lbl" x="905" y="200">OpenID / OAuth</text>
+  <path class="wire" d="M680,452 L680,498" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <text class="lbl" x="690" y="480">gRPC 7233: worker + updates/signals</text>
+  <path class="wire" d="M940,605 L978,605" marker-end="url(#arr)"/>
+
+  <!-- clients -->
+  <a href="#row-client-native"><rect class="box" x="40" y="20" width="240" height="70" rx="10"/>
+  <text class="title" x="60" y="48">Native client</text>
+  <text class="muted" x="60" y="70">Steam build · UDP</text></a>
+
+  <a href="#row-client-web"><rect class="box" x="340" y="20" width="240" height="70" rx="10"/>
+  <text class="title" x="360" y="48">Web client</text>
+  <text class="muted" x="360" y="70">WASM · WebSocket · /auth cookie</text></a>
+
+  <a href="#row-providers"><rect class="box" x="940" y="20" width="230" height="70" rx="10"/>
+  <text class="title" x="960" y="48">Login providers</text>
+  <text class="muted" x="960" y="70">Steam · Discord · au.2143.me</text></a>
+
+  <!-- edge -->
+  <a href="#row-udp-lb"><rect class="box edge" x="40" y="170" width="240" height="80" rx="10"/>
+  <text class="title" x="60" y="196">UDP LoadBalancers</text>
+  <text class="muted" x="60" y="216">rots-gs-{N}-udp</text>
+  <text class="muted" x="60" y="236">.6.32:36000-3 · previews .6.33</text></a>
+
+  <a href="#row-gateway"><rect class="box edge" x="340" y="170" width="300" height="80" rx="10"/>
+  <text class="title" x="360" y="196">Gateway / HTTPRoute</text>
+  <text class="muted" x="360" y="216">rots.john2143.com</text>
+  <text class="muted" x="360" y="236">/auth · /ws/{N} · / (KEDA interceptor)</text></a>
+
+  <a href="#row-web"><rect class="box" x="700" y="170" width="200" height="80" rx="10"/>
+  <text class="title" x="720" y="196">Web pod</text>
+  <text class="muted" x="720" y="216">python3 http.server</text>
+  <text class="muted" x="720" y="236">WASM · assets · this page</text></a>
+
+  <!-- core -->
+  <a href="#row-gameserver"><rect class="box" x="40" y="330" width="300" height="100" rx="10"/>
+  <text class="title" x="60" y="356">Game servers</text>
+  <text x="60" y="380">rots-gameserver-0..3 (StatefulSet)</text>
+  <text class="muted" x="60" y="400">slot = pod index</text>
+  <text class="muted" x="60" y="418">UDP game port + WebSocket :80</text></a>
+
+  <a href="#row-authserver"><rect class="box" x="500" y="320" width="360" height="130" rx="10"/>
+  <text class="title" x="520" y="346">Authserver (rots-authserver)</text>
+  <text x="520" y="370">public :8000 — login, /api/v1/play,</text>
+  <text x="520" y="388">  /api/v1/ticket/public-key</text>
+  <text x="520" y="410">internal :8001 — /internal/v1/servers/*</text>
+  <text class="muted" x="520" y="432">hosts the Temporal worker · stateless</text></a>
+
+  <a href="#row-db"><rect class="box" x="940" y="330" width="230" height="90" rx="10"/>
+  <text class="title" x="960" y="356">rots-db</text>
+  <text class="muted" x="960" y="378">CNPG Postgres</text>
+  <text class="muted" x="960" y="398">social.accounts / characters</text>
+  <text class="muted" x="960" y="414">/ sessions</text></a>
+
+  <a href="#row-caches"><rect class="box none" x="40" y="540" width="300" height="100" rx="10"/>
+  <text class="title" x="60" y="566">Caches: none</text>
+  <text class="muted" x="60" y="588">no Redis / memcache anywhere</text>
+  <text class="muted" x="60" y="606">all services stateless; state lives</text>
+  <text class="muted" x="60" y="624">in Temporal or Postgres</text></a>
+
+  <a href="#row-temporal"><rect class="box state" x="420" y="500" width="520" height="200" rx="10"/>
+  <text class="title" x="440" y="526">Temporal</text>
+  <text class="muted" x="520" y="526">frontend :7233 · namespace rots / rots-preview</text></a>
+
+  <a href="#row-coordinator"><rect class="box sub" x="440" y="545" width="230" height="95" rx="8"/>
+  <text class="title" x="455" y="570">Coordinator workflow</text>
+  <text class="muted" x="455" y="590">one per environment</text>
+  <text class="muted" x="455" y="608">slots · presence</text>
+  <text class="muted" x="455" y="626">reservations</text></a>
+
+  <a href="#row-session"><rect class="box sub" x="690" y="545" width="230" height="95" rx="8"/>
+  <text class="title" x="705" y="570">Session workflow</text>
+  <text class="muted" x="705" y="590">one per login</text>
+  <text class="muted" x="705" y="608">in_menus · assigned</text>
+  <text class="muted" x="705" y="626">in_game · ended</text></a>
+
+  <path class="wire" d="M672,582 L688,582" marker-end="url(#arr)"/>
+  <path class="wire" d="M688,604 L672,604" marker-end="url(#arr)"/>
+  <text class="lbl" x="440" y="664">session → coordinator: update assign</text>
+  <text class="lbl" x="440" y="684">coordinator → session: signal presence</text>
+
+  <a href="#row-temporal-db"><rect class="box" x="980" y="560" width="190" height="90" rx="10"/>
+  <text class="title" x="1000" y="586">temporal-db</text>
+  <text class="muted" x="1000" y="608">CNPG Postgres</text>
+  <text class="muted" x="1000" y="626">namespace default</text></a>
+</svg>
+<figcaption>Figure 1 — every runtime component and how it connects. Boxes link to the table below.</figcaption>
+</figure>
+
+<table>
+<thead><tr><th>Component</th><th>Runs as</th><th>Talks to (protocol/port)</th><th>Holds state?</th><th>Source</th></tr></thead>
+<tbody>
+<tr id="row-client-native"><td>Native client</td><td>Steam desktop build</td><td>Authserver via <code>HTTPS /auth</code>; game server via UDP (LoadBalancer)</td><td>Local session file only</td><td><code>bevy2025/client/src</code></td></tr>
+<tr id="row-client-web"><td>Web client</td><td>WASM in the browser</td><td><code>HTTPS /auth</code> with a same-origin cookie; game server via <code>WSS /ws/{N}</code></td><td>Cookie only</td><td><code>bevy2025/client/src</code>, <code>bevy2025/web/index.html</code></td></tr>
+<tr id="row-gateway"><td>Gateway / HTTPRoute</td><td>Gateway API route for <code>rots.john2143.com</code> (previews <code>rots-&lt;PR&gt;.john2143.com</code>)</td><td><code>/auth</code> → authserver :80→8000; <code>/ws/{N}</code> → <code>rots-gs-{N}</code> :80; <code>/</code> → web pod via the KEDA HTTP interceptor</td><td>No</td><td><code>argo/workloads/rots-web/templates/httproute.yaml</code></td></tr>
+<tr id="row-udp-lb"><td>UDP LoadBalancers</td><td>Service <code>rots-gs-{N}-udp</code> per slot</td><td>Prod <code>192.168.6.32</code> ports 36000-36003; previews <code>192.168.6.33</code> port <code>31000+4*(N%1000)</code>; forwarded on the MikroTik router</td><td>No</td><td><code>argo/workloads/rots-web/templates/</code></td></tr>
+<tr id="row-web"><td>Web pod</td><td><code>python3 -m http.server 8000</code> over the Nix-built web folder; scales to zero</td><td>Serves HTTP only</td><td>No</td><td><code>bevy2025/flake.nix</code> (<code>wasmOptAsServer</code>, <code>staticWebserver</code>)</td></tr>
+<tr id="row-gameserver"><td>Game servers</td><td>StatefulSet <code>rots-gameserver-0..3</code>; slot = pod index</td><td>Clients via UDP and WebSocket; authserver <code>GET /api/v1/ticket/public-key</code> (verifies tickets offline); <em>pending:</em> authserver :8001 join / leave / heartbeat</td><td>Live game world only (in memory)</td><td><code>bevy2025/server/src/lib.rs</code></td></tr>
+<tr id="row-authserver"><td>Authserver</td><td>Deployment <code>rots-authserver</code>; public :8000, internal :8001 (bearer <code>COORDINATOR_TOKEN</code>), Temporal worker in-process</td><td>rots-db (Postgres); login providers (HTTPS); Temporal (gRPC 7233)</td><td>No — stateless</td><td><code>rots-authserver/src/{api,internal}.rs</code></td></tr>
+<tr id="row-temporal"><td>Temporal</td><td><code>temporal-frontend.default.svc:7233</code>; namespace <code>rots</code> (prod) / <code>rots-preview</code></td><td>Authserver worker and client; temporal-db</td><td>Workflow state</td><td><code>rots-authserver/src/temporal/</code></td></tr>
+<tr id="row-coordinator"><td>Coordinator workflow</td><td><code>rots-coordinator-{queue}</code>, one per environment</td><td>Updates from sessions (<code>assign</code>); signals from the internal API; signals sessions (<code>presence</code>)</td><td>Fleet: slots, presence, reservations</td><td><code>rots-authserver/src/temporal/coordinator.rs</code></td></tr>
+<tr id="row-session"><td>Session workflow</td><td><code>rots-session-{queue}-{sid}</code>, one per login</td><td>Update <code>play</code> from the authserver; asks the coordinator to assign; mints the ticket</td><td>One login's play state</td><td><code>rots-authserver/src/temporal/session.rs</code></td></tr>
+<tr id="row-db"><td>rots-db</td><td>CNPG Postgres</td><td>Read and written only by the authserver</td><td><code>social.accounts</code>, <code>characters</code>, <code>sessions</code></td><td><code>rots-authserver/migrations/</code></td></tr>
+<tr id="row-temporal-db"><td>Temporal persistence</td><td>CNPG <code>temporal-db</code> in namespace <code>default</code></td><td>Temporal only</td><td>Workflow histories</td><td>cluster infra (argo)</td></tr>
+<tr id="row-providers"><td>Login providers</td><td>External</td><td>Steam OpenID and Steam session tickets, Discord OAuth, au.2143.me</td><td>External accounts</td><td><code>rots-authserver/src/</code></td></tr>
+<tr id="row-caches"><td>Caches</td><td>None</td><td>—</td><td>No Redis or memcache anywhere. Services are stateless; state lives in Temporal (workflows) or Postgres.</td><td>—</td></tr>
+</tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="play-flow">3. Enter the game</h2>
+
+<figure id="fig-play">
+<svg class="diagram" viewBox="0 0 1200 560" role="img" aria-label="Sequence: the client calls play on the authserver, which updates the session workflow; the session asks the coordinator to assign a slot, mints a ticket and returns it; the client connects to the game server, which asks the authserver to join">
+  <defs>
+    <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+    <marker id="arr2p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path class="arrowhead pend" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+  <line class="life" x1="120" y1="70" x2="120" y2="540"/>
+  <line class="life" x1="360" y1="70" x2="360" y2="540"/>
+  <line class="life" x1="600" y1="70" x2="600" y2="540"/>
+  <line class="life" x1="840" y1="70" x2="840" y2="540"/>
+  <line class="life" x1="1080" y1="70" x2="1080" y2="540"/>
+  <a href="#row-client-web"><rect class="box" x="40" y="20" width="160" height="46" rx="10"/><text class="title" x="120" y="48" text-anchor="middle">Client</text></a>
+  <a href="#row-authserver"><rect class="box" x="280" y="20" width="160" height="46" rx="10"/><text class="title" x="360" y="48" text-anchor="middle">Authserver</text></a>
+  <a href="#row-session"><rect class="box sub" x="520" y="20" width="160" height="46" rx="10"/><text class="title" x="600" y="48" text-anchor="middle">Session wf</text></a>
+  <a href="#row-coordinator"><rect class="box sub" x="760" y="20" width="160" height="46" rx="10"/><text class="title" x="840" y="48" text-anchor="middle">Coordinator wf</text></a>
+  <a href="#row-gameserver"><rect class="box" x="1000" y="20" width="160" height="46" rx="10"/><text class="title" x="1080" y="48" text-anchor="middle">Game server</text></a>
+
+  <path class="pending" d="M120,110 L358,110" marker-end="url(#arr2p)"/>
+  <text class="pend" x="130" y="102">1. POST /auth/api/v1/play</text>
+  <path class="wire" d="M360,165 L598,165" marker-end="url(#arr2)"/>
+  <text x="370" y="157">2. update-with-start play</text>
+  <path class="wire" d="M600,220 L838,220" marker-end="url(#arr2)"/>
+  <text x="610" y="212">3. update assign</text>
+  <text class="lbl" x="610" y="240">presence-first → preferred → least-loaded; reserve 360 s</text>
+  <path class="wire" d="M600,275 C 650,275 650,315 602,315" marker-end="url(#arr2)"/>
+  <text x="660" y="300">4. mint EdDSA ticket, srv = slot, 300 s</text>
+  <path class="pending" d="M598,365 L122,365" marker-end="url(#arr2p)"/>
+  <text class="pend" x="140" y="357">5. {ticket, expires_at, character_id, kind, server:{slot, udp, ws_path}}</text>
+  <path class="pending" d="M120,420 L1078,420" marker-end="url(#arr2p)"/>
+  <text class="pend" x="400" y="412">6. connect to that slot (UDP or WSS) — ticket verified offline with the public key</text>
+  <path class="pending" d="M1080,470 L362,470" marker-end="url(#arr2p)"/>
+  <text class="pend" x="560" y="462">7. :8001 join → admitted or refused (already_on_other_server)</text>
+  <path class="wire" d="M840,520 L602,520" marker-end="url(#arr2)"/>
+  <text x="650" y="512">signal presence → in_game</text>
+</svg>
+<figcaption>Figure 2 — "Play now". Dashed steps need the bevy2025 coordinator PR; today's client still calls the removed <code>/api/v1/ticket</code>.</figcaption>
+</figure>
+
+<ol>
+  <li>The client calls <code>POST /auth/api/v1/play</code> with its session cookie or token.</li>
+  <li>The authserver sends the update-with-start <code>play</code> to that login's session workflow (10 s bound).</li>
+  <li>The session asks the coordinator to <code>assign</code> a slot: the slot the character is already present on, else the preferred one, else the least loaded. The pick is reserved for 360 s.</li>
+  <li>The session mints an EdDSA ticket with <code>srv</code> = slot, valid 300 s.</li>
+  <li>The response is <code>{ticket, expires_at, character_id, kind, server:{slot, udp, ws_path}}</code>.</li>
+  <li>The client connects to that slot. The game server verifies the ticket offline with the public key and checks <code>srv</code>.</li>
+  <li>The game server calls <code>join</code> on :8001 and the player is admitted or refused (<code>already_on_other_server</code>). The coordinator signals the session <code>present</code>.</li>
+</ol>
+
+<!-- ============================================================ -->
+<h2 id="state">4. State machines</h2>
+
+<figure id="session">
+<svg class="diagram" viewBox="0 0 1200 230" role="img" aria-label="Session workflow states: in_menus to assigned to in_game and back to in_menus; ended after logout or 24 hours idle">
+  <defs>
+    <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+  <a href="#row-session">
+  <rect class="box state" x="40" y="70" width="180" height="56" rx="28"/><text class="title" x="130" y="103" text-anchor="middle">in_menus</text>
+  <rect class="box state" x="360" y="70" width="180" height="56" rx="28"/><text class="title" x="450" y="103" text-anchor="middle">assigned</text>
+  <rect class="box state" x="680" y="70" width="180" height="56" rx="28"/><text class="title" x="770" y="103" text-anchor="middle">in_game</text>
+  <rect class="box" x="980" y="70" width="180" height="56" rx="28"/><text class="title" x="1070" y="103" text-anchor="middle">ended</text>
+  </a>
+  <path class="wire" d="M220,98 L358,98" marker-end="url(#arr3)"/><text class="lbl" x="232" y="88">play (ticket)</text>
+  <path class="wire" d="M540,98 L678,98" marker-end="url(#arr3)"/><text class="lbl" x="552" y="88">presence: joined</text>
+  <path class="wire" d="M770,126 C 770,200 130,200 130,128" marker-end="url(#arr3)"/>
+  <text class="lbl" x="370" y="196">leave · reservation expired · server gone</text>
+  <path class="wire" d="M860,98 L978,98" marker-end="url(#arr3)"/><text class="lbl" x="872" y="88">logout / 24 h idle</text>
+  <text class="muted" x="40" y="40">A second Play while one is in flight → 409 play_in_progress. Any state can end on logout or 24 h idle.</text>
+</svg>
+<figcaption>Figure 3 — session workflow, one per login (<code>rots-authserver/src/temporal/session.rs</code>).</figcaption>
+</figure>
+
+<figure id="coordinator">
+<svg class="diagram" viewBox="0 0 1200 230" role="img" aria-label="Coordinator per-character states: absent to reserved for 360 seconds to present; present to absent on leave, missing from heartbeat, slot stale 30 seconds, or new boot id">
+  <defs>
+    <marker id="arr4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+  <a href="#row-coordinator">
+  <rect class="box state" x="120" y="70" width="200" height="56" rx="28"/><text class="title" x="220" y="103" text-anchor="middle">absent</text>
+  <rect class="box state" x="500" y="70" width="200" height="56" rx="28"/><text class="title" x="600" y="103" text-anchor="middle">reserved (360 s)</text>
+  <rect class="box state" x="880" y="70" width="200" height="56" rx="28"/><text class="title" x="980" y="103" text-anchor="middle">present</text>
+  </a>
+  <path class="wire" d="M320,98 L498,98" marker-end="url(#arr4)"/><text class="lbl" x="335" y="88">assign</text>
+  <path class="wire" d="M700,98 L878,98" marker-end="url(#arr4)"/><text class="lbl" x="715" y="88">join admitted</text>
+  <path class="wire" d="M600,126 C 600,160 220,160 220,128" marker-end="url(#arr4)"/><text class="lbl" x="350" y="172">reservation expired</text>
+  <path class="wire" d="M980,126 C 980,215 220,215 220,128" marker-end="url(#arr4)"/>
+  <text class="lbl" x="440" y="212">leave · missing from heartbeat · slot stale 30 s · new boot_id</text>
+  <text class="muted" x="40" y="40">Per character, inside the one coordinator workflow per environment. A join on a second slot is refused: already_on_other_server.</text>
+</svg>
+<figcaption>Figure 4 — coordinator presence per character (<code>rots-authserver/src/temporal/coordinator.rs</code>).</figcaption>
+</figure>
+
+<!-- ============================================================ -->
+<h2 id="failures">5. Failure behaviour</h2>
+<table>
+<thead><tr><th>Event</th><th>What players see</th><th>Recovery</th></tr></thead>
+<tbody>
+<tr id="fail-temporal"><td>Temporal down</td><td><code>/play</code> returns 503 <code>temporal_unavailable</code>; new joins are refused. Players already in a game keep playing.</td><td>The worker reconnects every 10 s; workflow state is intact in temporal-db.</td></tr>
+<tr id="fail-authserver"><td>Authserver restart</td><td>Brief errors on login and Play.</td><td>None needed: the authserver is stateless, no state is lost.</td></tr>
+<tr id="fail-gameserver"><td>Game server crash</td><td>Its players drop to the menu.</td><td>The pod restarts with a new <code>boot_id</code>; the coordinator clears its players, who can Play again.</td></tr>
+<tr id="fail-noservers"><td>No healthy game servers</td><td><code>/play</code> returns 503 <code>no_game_server</code>.</td><td>A slot becomes healthy again on its next heartbeat.</td></tr>
+</tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="maintaining">6. How this doc stays current</h2>
+<ul>
+  <li>Any PR that changes a flow, port, service or state rule updates this page in the same PR. A design change made here first is implemented in code in the same PR.</li>
+  <li>The reviewer checks the page on the PR preview at <code>https://rots-&lt;PR&gt;.john2143.com/design.html</code>.</li>
+  <li>Dashed arrows become solid when their PR lands.</li>
+  <li>CI runs <code>scripts/check-design-doc.py</code>: every in-page link must resolve, and the page must stay script-free.</li>
+</ul>
+
+</main>
+</body>
+</html>

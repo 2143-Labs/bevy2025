@@ -150,6 +150,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check design doc
+        run: nix shell nixpkgs#python3 -c python3 scripts/check-design-doc.py
+
 
       - name: Build container with Nix
         run: nix build .#staticWebserver
