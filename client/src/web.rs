@@ -18,15 +18,16 @@ use crate::game_state::NetworkGameState;
 /// `SocketAddr`. Web traffic goes over the WebSocket from [`game_server_url`].
 const WEB_STUB_ADDR: (&str, u16) = ("127.0.0.1", 1);
 
-/// Game server pod 0 on the page's own host, through the gateway's `/ws/0` route.
-pub fn game_server_url() -> String {
+/// The game server the authserver assigned (its `ws_path`), on the page's own host, through the
+/// gateway. Falls back to pod 0 when nothing has been assigned yet.
+pub fn game_server_url(ws_path: &str) -> String {
     let location = web_sys::window().expect("no window").location();
     let scheme = match location.protocol().as_deref() {
         Ok("http:") => "ws",
         _ => "wss",
     };
     let host = location.host().expect("no location host");
-    format!("{scheme}://{host}/ws/0")
+    format!("{scheme}://{host}{ws_path}")
 }
 
 impl Plugin for WebPlugin {
@@ -143,7 +144,11 @@ fn send_messages_over_websocket(
     let _ = ws_res.websocket.send_with_u8_array(&data);
 }
 
-fn setup(mut commands: Commands, net_res: Res<ClientNetworkingResources>) {
+fn setup(
+    mut commands: Commands,
+    net_res: Res<ClientNetworkingResources>,
+    assigned: Option<Res<crate::auth::AssignedServer>>,
+) {
     // `setup_incoming_client` inserted a UDP endpoint for the stub; on web everything goes over
     // this WebSocket instead. The address is only a key for the outgoing queue.
     let ws_endpoint = WebSocketEndpoint {
@@ -153,7 +158,10 @@ fn setup(mut commands: Commands, net_res: Res<ClientNetworkingResources>) {
     };
     commands.insert_resource(MainServerEndpoint(EndpointGeneral::WebSocket(ws_endpoint)));
 
-    let url = game_server_url();
+    let ws_path = assigned
+        .as_ref()
+        .map_or("/ws/0", |assigned| assigned.ws_path.as_str());
+    let url = game_server_url(ws_path);
     info!("Connecting to game server at {url}");
     let ws = web_sys::WebSocket::new(&url).unwrap();
     let magic_ws = MagicWebSocketPointer::new(ws);

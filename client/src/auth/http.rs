@@ -70,28 +70,61 @@ impl AuthHttp<'_> {
     ) -> HttpSlot {
         let out = HttpSlot::default();
         let url = format!("{}{path}", self.base.0);
+        let what = format!(
+            "{} {url}",
+            match method {
+                Method::Get => "GET",
+                Method::Post => "POST",
+            }
+        );
         #[cfg(not(target_arch = "wasm32"))]
-        spawn_native(&self.runtime, method, url, body, bearer, out.clone());
+        spawn_native(&self.runtime, method, url, what, body, bearer, out.clone());
         #[cfg(target_arch = "wasm32")]
-        spawn_web(method, url, body, bearer, out.clone());
+        spawn_web(method, url, what, body, bearer, out.clone());
         out
     }
 }
 
 /// Turn a status + body into the slot result.
-fn parse_response(status: u16, text: &str) -> HttpResult {
+///
+/// `what` is the request ("POST /api/v1/play"); it goes into every message that is not the
+/// authserver's own error code, so a stale client or a proxy error names the call that failed
+/// instead of leaving a bare `HTTP 404`. Callers match on the codes (`no_session`, ...), so those
+/// are returned unchanged.
+fn parse_response(status: u16, text: &str, what: &str) -> HttpResult {
     let json = if text.trim().is_empty() {
         Value::Null
     } else {
-        serde_json::from_str(text).map_err(|e| format!("bad response ({status}): {e}"))?
+        serde_json::from_str(text).map_err(|e| {
+            format!(
+                "{what}: bad response ({status}): {e} (body: {})",
+                snippet(text)
+            )
+        })?
     };
     if status >= 400 {
-        return Err(json
-            .get("error")
-            .and_then(Value::as_str)
-            .map_or_else(|| format!("HTTP {status}"), str::to_string));
+        if let Some(code) = json.get("error").and_then(Value::as_str) {
+            debug!("{what}: {code}");
+            return Err(code.to_string());
+        }
+        let body = if text.trim().is_empty() {
+            String::new()
+        } else {
+            format!(" (body: {})", snippet(text))
+        };
+        return Err(format!("{what}: HTTP {status}{body}"));
     }
     Ok(json)
+}
+
+/// First part of a response body, on one line: a proxy's plain-text error is the useful part.
+fn snippet(text: &str) -> String {
+    const LIMIT: usize = 120;
+    let flat: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    match flat.char_indices().nth(LIMIT) {
+        Some((cut, _)) => format!("{}…", &flat[..cut]),
+        None => flat,
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -99,6 +132,7 @@ fn spawn_native(
     rt: &AuthRuntime,
     method: Method,
     url: String,
+    what: String,
     body: Option<Value>,
     bearer: Option<String>,
     out: HttpSlot,
@@ -115,10 +149,10 @@ fn spawn_native(
     }
     rt.runtime.spawn(async move {
         let result = async {
-            let resp = req.send().await.map_err(|e| e.to_string())?;
+            let resp = req.send().await.map_err(|e| format!("{what}: {e}"))?;
             let status = resp.status().as_u16();
-            let text = resp.text().await.map_err(|e| e.to_string())?;
-            parse_response(status, &text)
+            let text = resp.text().await.map_err(|e| format!("{what}: {e}"))?;
+            parse_response(status, &text, &what)
         }
         .await;
         *out.lock() = Some(result);
@@ -129,6 +163,7 @@ fn spawn_native(
 fn spawn_web(
     method: Method,
     url: String,
+    what: String,
     body: Option<Value>,
     bearer: Option<String>,
     out: HttpSlot,
@@ -163,7 +198,8 @@ fn spawn_web(
             }
             init.set_headers(&headers);
 
-            let request = web_sys::Request::new_with_str_and_init(&url, &init).map_err(js_err)?;
+            let request = web_sys::Request::new_with_str_and_init(&url, &init)
+                .map_err(|e| format!("{what}: {}", js_err(e)))?;
             let window = web_sys::window().ok_or_else(|| "no window".to_string())?;
             let resp: web_sys::Response = JsFuture::from(window.fetch_with_request(&request))
                 .await
@@ -175,7 +211,7 @@ fn spawn_web(
                 .map_err(js_err)?
                 .as_string()
                 .unwrap_or_default();
-            parse_response(resp.status(), &text)
+            parse_response(resp.status(), &text, &what)
         }
         .await;
         *out.lock() = Some(result);

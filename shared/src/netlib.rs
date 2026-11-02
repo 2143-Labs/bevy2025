@@ -528,9 +528,26 @@ pub fn setup_incoming_client<TI: NetworkingEvent, TO: NetworkingEvent>(
     setup_incoming_shared::<TI, TO>(commands, &config.ip, config.port, false, fake_ping);
 }
 
+/// The address to bind or dial, as message-io wants it.
+///
+/// Message-io resolves both with `to_socket_addrs().unwrap()`, so whatever this returns must
+/// resolve; the bracketed literal `"[::]"` this used to produce does not, and panicked every
+/// client handed `localhost` (e.g. by a `/play` response from a stack with
+/// `GAME_UDP_HOST=localhost`). A listener told `localhost` binds the IPv6 wildcard `::`, dual
+/// stacked on Linux. A client must not dial a wildcard: it dials IPv4 loopback, which is what a
+/// server bound to `0.0.0.0` listens on.
+fn socket_address(ip: &str, port: u16, is_listener: bool) -> (String, u16) {
+    let ip = match (ip, is_listener) {
+        ("localhost", true) => "::",
+        ("localhost", false) => "127.0.0.1",
+        (ip, _) => ip,
+    };
+    (ip.to_string(), port)
+}
+
 fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     mut commands: Commands,
-    mut ip: &str,
+    ip: &str,
     port: u16,
     is_listener: bool,
     fake_ping: Option<Res<FakePingSettings>>,
@@ -544,10 +561,7 @@ fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
         std::any::type_name::<NetworkingResources::<TI, TO>>()
     );
 
-    if ip == "localhost" {
-        ip = "[::]";
-    }
-    let con_str = (ip.to_string(), port);
+    let con_str = socket_address(ip, port, is_listener);
     if is_listener {
         let (_, udp_addr) = handler
             .network()
@@ -731,5 +745,61 @@ impl FakePingSettings {
         };
 
         self.to_server_ms + jitter
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
+
+    use super::socket_address;
+
+    /// What message-io does with the address (`to_socket_addrs().unwrap()`): it must resolve.
+    fn resolve(address: (String, u16)) -> SocketAddr {
+        address
+            .to_socket_addrs()
+            .unwrap_or_else(|e| panic!("{address:?} does not resolve: {e}"))
+            .next()
+            .unwrap()
+    }
+
+    #[test]
+    fn a_listener_on_localhost_binds_the_ipv6_wildcard() {
+        let address = socket_address("localhost", 2143, true);
+        assert_eq!(address, ("::".into(), 2143));
+        assert_eq!(
+            resolve(address),
+            SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), 2143)
+        );
+    }
+
+    #[test]
+    fn a_client_on_localhost_dials_ipv4_loopback() {
+        let address = socket_address("localhost", 25555, false);
+        assert_eq!(address, ("127.0.0.1".into(), 25555));
+        assert_eq!(
+            resolve(address),
+            SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 25555)
+        );
+    }
+
+    #[test]
+    fn the_bracketed_wildcard_never_resolved() {
+        // Why the mapping exists: this is what used to reach message-io and panic.
+        assert!(("[::]".to_string(), 25555).to_socket_addrs().is_err());
+    }
+
+    #[test]
+    fn every_other_address_passes_through() {
+        for is_listener in [true, false] {
+            assert_eq!(
+                socket_address("0.0.0.0", 25555, is_listener),
+                ("0.0.0.0".into(), 25555)
+            );
+            assert_eq!(
+                socket_address("rots.john2143.com", 36000, is_listener),
+                ("rots.john2143.com".into(), 36000)
+            );
+        }
     }
 }

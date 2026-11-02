@@ -25,9 +25,14 @@ pub fn spawn_connecting_menu_and_connect(
     mut commands: Commands,
     config: Res<Config>,
     auth_state: Res<State<AuthState>>,
+    #[cfg(feature = "web")] assigned: Option<Res<crate::auth::AssignedServer>>,
 ) {
     #[cfg(feature = "web")]
-    let server_display = crate::web::game_server_url();
+    let server_display = crate::web::game_server_url(
+        assigned
+            .as_ref()
+            .map_or("/ws/0", |assigned| assigned.ws_path.as_str()),
+    );
     #[cfg(not(feature = "web"))]
     let server_display = format!("{}:{}", config.ip, config.port);
     let username_display = config.name.clone().unwrap_or_else(|| "Player".to_string());
