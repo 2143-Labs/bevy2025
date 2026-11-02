@@ -6,7 +6,7 @@
 //! session's character.
 //!
 //! Platform backends add login methods and the base URL; they are registered in `main.rs` only:
-//! - `native`: tokio runtime, `--auth-url`, session token in `rots_session.json`.
+//! - `native`: tokio runtime, `--auth-url`, session token kept in memory only.
 //! - `steam`: "Login with Steam" through a Steamworks Web API ticket.
 //! - `web`: same-origin `/auth`, cookie session, OAuth redirects.
 
@@ -61,7 +61,7 @@ pub struct AuthSession {
     pub character_id: Option<i64>,
     pub display_name: Option<String>,
     pub claim_code: Option<String>,
-    /// Bearer session token. Native only; web relies on the `rots_session` cookie.
+    /// Bearer session token, in memory only (native). Web relies on the `rots_session` cookie.
     pub native_token: Option<String>,
 }
 
@@ -152,62 +152,12 @@ impl Plugin for AuthPlugin {
     }
 }
 
-/// Where native builds keep the session token between runs.
-#[cfg(not(target_arch = "wasm32"))]
-const SESSION_FILE: &str = "rots_session.json";
-
-#[cfg(not(target_arch = "wasm32"))]
-fn session_file() -> Option<std::path::PathBuf> {
-    std::env::current_dir()
-        .ok()
-        .map(|dir| dir.join(SESSION_FILE))
-}
-
-fn save_native_token(token: &str) {
-    #[cfg(not(target_arch = "wasm32"))]
-    if let Some(path) = session_file()
-        && let Err(e) = std::fs::write(&path, json!({ "session_token": token }).to_string())
-    {
-        warn!("could not write {}: {e}", path.display());
+/// Startup (web only): the browser may already hold a session cookie; ask `/me` about it.
+/// Native builds start without a session (Steam builds log in from `auth::steam`).
+fn load_session(http: AuthHttp, mut pending: ResMut<PendingAuth>) {
+    if cfg!(target_arch = "wasm32") {
+        pending.0.push((Op::Me, http.get("/api/v1/me", None)));
     }
-    #[cfg(target_arch = "wasm32")]
-    let _ = token;
-}
-
-fn load_native_token() -> Option<String> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let text = std::fs::read_to_string(session_file()?).ok()?;
-        let json: Value = serde_json::from_str(&text).ok()?;
-        json.get("session_token")?.as_str().map(str::to_string)
-    }
-    #[cfg(target_arch = "wasm32")]
-    None
-}
-
-fn clear_native_token() {
-    #[cfg(not(target_arch = "wasm32"))]
-    if let Some(path) = session_file()
-        && path.exists()
-        && let Err(e) = std::fs::remove_file(&path)
-    {
-        warn!("could not delete {}: {e}", path.display());
-    }
-}
-
-/// Startup: pick up an existing session (native token file or web cookie) and ask `/me` about it.
-fn load_session(
-    http: AuthHttp,
-    mut session: ResMut<AuthSession>,
-    mut pending: ResMut<PendingAuth>,
-) {
-    session.native_token = load_native_token();
-    if cfg!(not(target_arch = "wasm32")) && session.native_token.is_none() {
-        return;
-    }
-    pending
-        .0
-        .push((Op::Me, http.get("/api/v1/me", session.native_token.clone())));
 }
 
 fn handle_auth_requests(
@@ -247,7 +197,6 @@ fn handle_auth_requests(
                 pending
                     .0
                     .push((Op::Logout, http.post("/api/v1/logout", json!({}), token)));
-                clear_native_token();
                 *session = AuthSession::default();
                 commands.remove_resource::<GameTicket>();
                 auth_state.set(AuthState::Idle);
@@ -314,9 +263,6 @@ fn poll_auth_responses(
         match (op, result) {
             (Op::Guest, Ok(body)) => {
                 let token = str_field(&body, "session_token");
-                if let Some(token) = &token {
-                    save_native_token(token);
-                }
                 *session = AuthSession {
                     kind: Some("guest".to_string()),
                     character_id: body.get("character_id").and_then(Value::as_i64),
@@ -345,7 +291,6 @@ fn poll_auth_responses(
                 Err(e),
             ) if e == "no_session" => {
                 info!("Session expired, continuing as a new guest");
-                clear_native_token();
                 *session = AuthSession::default();
                 pending.0.push((
                     Op::Guest,
@@ -363,8 +308,7 @@ fn poll_auth_responses(
                 };
             }
             (Op::Me, Err(e)) if e == "no_session" => {
-                info!("Stored session is no longer valid");
-                clear_native_token();
+                info!("Session is no longer valid");
                 *session = AuthSession::default();
             }
             (Op::Me, Err(e)) => warn!("Could not load session: {e}"),
@@ -384,7 +328,6 @@ fn poll_auth_responses(
             #[cfg(feature = "steam")]
             (Op::SteamLogin, Ok(body)) => match str_field(&body, "session_token") {
                 Some(token) => {
-                    save_native_token(&token);
                     session.native_token = Some(token);
                     pending
                         .0

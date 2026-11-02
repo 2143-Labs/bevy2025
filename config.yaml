@@ -1,7 +1,6 @@
 ip: 127.0.0.1
 host_ip: 0.0.0.0
 port: 25555
-name: John
 player_color_hue: 120.0
 sens: 0.003
 qe_sens: 3.0

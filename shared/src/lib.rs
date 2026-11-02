@@ -14,6 +14,7 @@ use crate::netlib::Tick;
 pub mod character_controller;
 pub mod decimal;
 pub mod event;
+pub mod gym;
 pub mod items;
 pub mod net_components;
 pub mod netlib;

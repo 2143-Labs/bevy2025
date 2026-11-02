@@ -124,4 +124,48 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=src/event/server.rs");
     println!("cargo:rerun-if-changed=src/event/client.rs");
+
+    emit_build_hash();
+}
+
+fn emit_build_hash() {
+    println!("cargo:rerun-if-env-changed=ROTS_BUILD_HASH");
+    let hash = env::var("ROTS_BUILD_HASH")
+        .ok()
+        .filter(|h| !h.is_empty())
+        .or_else(git_short_hash)
+        .unwrap_or_else(|| "unknown".to_string());
+    println!("cargo:rustc-env=ROTS_BUILD_HASH={hash}");
+}
+
+fn git(args: &[&str]) -> Option<String> {
+    let out = std::process::Command::new("git").args(args).output().ok()?;
+    let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (out.status.success() && !text.is_empty()).then_some(text)
+}
+
+/// HEAD's short hash; also asks cargo to rerun when HEAD moves (commit, checkout, rebase).
+fn git_short_hash() -> Option<String> {
+    let hash = git(&["rev-parse", "--short=12", "HEAD"])?;
+    if let Some(dirs) = git(&[
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-dir",
+        "--git-common-dir",
+    ]) {
+        let mut lines = dirs.lines();
+        let (git_dir, common) = (lines.next(), lines.next());
+        let watch = [
+            git_dir.map(|d| format!("{d}/HEAD")),
+            common.map(|d| format!("{d}/refs/heads")),
+            common.map(|d| format!("{d}/packed-refs")),
+        ];
+        for path in watch.into_iter().flatten() {
+            // A rerun-if-changed path that does not exist reruns every build.
+            if Path::new(&path).exists() {
+                println!("cargo:rerun-if-changed={path}");
+            }
+        }
+    }
+    Some(hash)
 }

@@ -12,7 +12,7 @@ pub struct ConnectRequest {
     pub name: Option<String>,
     pub my_location: Transform,
     pub color_hue: f32,
-    /// Game ticket (EdDSA JWT from rots-authserver). Empty for singleplayer.
+    /// Game ticket (EdDSA JWT from rots-authserver). Empty for the local test server.
     pub ticket: String,
 }
 

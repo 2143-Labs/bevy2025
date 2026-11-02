@@ -10,7 +10,7 @@ const TICKET_ISSUER: &str = "rots-authserver";
 
 #[derive(Resource, Clone)]
 pub enum TicketVerifier {
-    /// Accept every connection with a random `PlayerId`. Used by singleplayer and
+    /// Accept every connection with a random `PlayerId`. Used by the local test server and
     /// `ROTS_AUTH_DISABLED=1`.
     Disabled,
     Ed25519 {

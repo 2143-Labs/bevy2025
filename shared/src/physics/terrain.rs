@@ -23,6 +23,8 @@ pub struct TerrainParams {
     pub plane_size: f32,
     pub subdivisions: u32,
     pub max_height_delta: f32,
+    /// Spawn the water plane and its buoyancy level. The gym map has none.
+    pub water: bool,
 }
 
 impl Default for TerrainParams {
@@ -33,6 +35,7 @@ impl Default for TerrainParams {
             plane_size: 200.0,
             subdivisions: 300,
             max_height_delta: 1.0,
+            water: true,
         }
     }
 }
@@ -193,6 +196,17 @@ fn standard_density(x: f32, y: f32, z: f32, perlin: &Perlin) -> f32 {
 }
 
 impl TerrainParams {
+    /// Flat map hosted by "Enter testing".
+    pub fn gym() -> Self {
+        Self {
+            seed: 0,
+            plane_size: 200.0,
+            subdivisions: 300,
+            max_height_delta: 0.0,
+            water: false,
+        }
+    }
+
     pub fn perlin(&self) -> TerrainPerlin {
         TerrainPerlin {
             perlin_continentalness: Perlin::new(self.seed),

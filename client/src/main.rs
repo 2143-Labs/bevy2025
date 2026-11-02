@@ -7,6 +7,8 @@ mod character_controller_client;
 mod debug;
 pub mod game_state;
 mod grass;
+#[cfg(feature = "testing")]
+mod gym_discovery;
 mod network;
 pub mod notification;
 mod physics;
@@ -20,7 +22,7 @@ mod water;
 #[cfg(feature = "web")]
 mod web;
 
-use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
+use bevy::prelude::*;
 
 use assets::AssetsPlugin;
 use camera::CameraPlugin;
@@ -41,8 +43,6 @@ struct ClapArgs {
     print_binds: bool,
     #[clap(long)]
     print_config: bool,
-    #[clap(long)]
-    autoconnect: Option<String>,
     /// Authserver base URL (rots-authserver behind `/auth`)
     #[cfg(not(feature = "web"))]
     #[clap(long, default_value = "https://rots.john2143.com/auth")]
@@ -85,7 +85,7 @@ fn main() {
 }
 
 fn main_client(#[cfg(not(feature = "web"))] runtime: std::sync::Arc<tokio::runtime::Runtime>) {
-    let mut args = ClapArgs::parse();
+    let args = ClapArgs::parse();
 
     if args.print_binds {
         println!("{:?}", Config::load_from_main_dir().keybindings);
@@ -95,11 +95,6 @@ fn main_client(#[cfg(not(feature = "web"))] runtime: std::sync::Arc<tokio::runti
     if args.print_config {
         println!("{}", Config::default_config_str());
         return;
-    }
-
-    // If we are building a static release, then just add the autoconnect argument by default
-    if args.autoconnect.is_none() && std::option_env!("BUILD_CTX") == Some("action") {
-        args.autoconnect = Some("main".to_string());
     }
 
     let mut app = App::new();
@@ -127,6 +122,8 @@ fn main_client(#[cfg(not(feature = "web"))] runtime: std::sync::Arc<tokio::runti
     });
     #[cfg(feature = "web")]
     app.add_plugins(auth::web::WebAuthPlugin);
+    #[cfg(feature = "testing")]
+    app.add_plugins(gym_discovery::GymDiscoveryPlugin);
 
     app.add_plugins((
         game_state::StatePlugin,
@@ -147,7 +144,6 @@ fn main_client(#[cfg(not(feature = "web"))] runtime: std::sync::Arc<tokio::runti
     ))
     .add_plugins((
         GrassPlugin,
-        LogDiagnosticsPlugin::default(),
         shared::event::client::NetworkEventPlugin,
         shared::character_controller::CharacterControllerPlugin,
         character_controller_client::ClientCharacterControllerPlugin,
@@ -155,20 +151,20 @@ fn main_client(#[cfg(not(feature = "web"))] runtime: std::sync::Arc<tokio::runti
         projectile::ProjectilePlugin,
     ))
     .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue
-    .insert_resource(args)
-    .add_systems(Startup, check_all_clap_args);
+    .insert_resource(args);
 
     app.run();
-}
 
-/// This looks for the clap args like autoconnect and modifys the config if neede
-fn check_all_clap_args(mut config: ResMut<Config>, args: Res<ClapArgs>) {
-    if let Some(ip_and_port) = &args.autoconnect {
-        apply_server_addr(&mut config, ip_and_port);
-    }
+    // "Enter testing" hosts a gym on a thread that never returns, with its own bevy app, wgpu
+    // device and tokio runtime. Tearing the client's app, runtime and process globals down while
+    // that thread is still using the graphics driver segfaults on the way out, so leave the OS to
+    // reclaim everything (nothing here has an exit-time side effect).
+    #[cfg(not(feature = "web"))]
+    std::process::exit(0);
 }
 
 /// Point `config` at `ip:port`, or just `ip` keeping the configured port.
+#[cfg(not(feature = "web"))]
 fn apply_server_addr(config: &mut Config, addr: &str) {
     let mut parts = addr.split(':');
     let ip_as_str = parts.next();

@@ -323,11 +323,10 @@ fn despawn_skill_bind_overlay(
     mut commands: Commands,
     query: Query<Entity, With<SkillBindOverlay>>,
 ) {
-    let Ok(overlay_entity) = query.single() else {
-        error!("No SkillBindOverlay found when despawning skill bind overlay");
-        return;
-    };
-    commands.entity(overlay_entity).despawn();
+    // Also runs on entering Inactive at startup, when there is no overlay yet.
+    for entity in &query {
+        commands.entity(entity).despawn();
+    }
     commands.remove_resource::<ChompInputs>();
 }
 

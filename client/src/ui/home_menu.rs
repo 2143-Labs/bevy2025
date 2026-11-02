@@ -15,14 +15,10 @@ pub struct HomeMenu;
 #[derive(Component)]
 pub struct PlayNowButton;
 
-/// Marker for the Singleplayer button (in-process server)
-#[cfg(feature = "singleplayer")]
+/// Marker for the Enter testing button (host the testing gym on this machine, or join it)
+#[cfg(feature = "testing")]
 #[derive(Component)]
-pub struct SingleplayerButton;
-
-/// Marker for the Multiplayer button (go to multiplayer setup)
-#[derive(Component)]
-pub struct MultiplayerButton;
+pub struct EnterTestingButton;
 
 #[derive(Component)]
 pub struct LoginButton(pub LoginMethod);
@@ -121,9 +117,8 @@ fn build_home_menu(
             });
 
             spawn_menu_button(parent, "Play now", PlayNowButton);
-            #[cfg(feature = "singleplayer")]
-            spawn_menu_button(parent, "Singleplayer", SingleplayerButton);
-            spawn_menu_button(parent, "Multiplayer", MultiplayerButton);
+            #[cfg(feature = "testing")]
+            spawn_menu_button(parent, "Enter testing", EnterTestingButton);
 
             if !session.is_account() && !methods.0.is_empty() {
                 parent.spawn(wrapping_row()).with_children(|row| {
@@ -180,7 +175,7 @@ fn spawn_menu_button(parent: &mut ChildSpawnerCommands, label: &str, marker: imp
         });
 }
 
-/// Same shape as the multiplayer menu's username input.
+/// Text input sized like a menu button.
 fn spawn_claim_input(parent: &mut ChildSpawnerCommands) {
     const PLACEHOLDER: &str = "XXXXX-XXXXX";
     parent
@@ -221,10 +216,9 @@ pub fn despawn_home_menu(mut commands: Commands, menu_query: Query<Entity, With<
     }
 }
 
-/// Handle Play now / Multiplayer
+/// Handle Play now
 pub fn handle_home_buttons(
     play_query: Query<(), (Added<Pressed>, With<PlayNowButton>)>,
-    multiplayer_query: Query<(), (Added<Pressed>, With<MultiplayerButton>)>,
     session: Res<AuthSession>,
     mut auth_requests: MessageWriter<AuthRequest>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
@@ -240,41 +234,90 @@ pub fn handle_home_buttons(
         crate::apply_server_addr(&mut config, &args.play_server);
         next_menu_state.set(MenuState::Connecting);
     }
-
-    // Multiplayer button - go to multiplayer setup
-    for () in multiplayer_query.iter() {
-        info!("Multiplayer button pressed");
-        next_menu_state.set(MenuState::Multiplayer);
-    }
 }
 
-/// Singleplayer - in-process server with ticket verification disabled, so no authserver round
-/// trip: an empty ticket is ready immediately.
-#[cfg(feature = "singleplayer")]
-pub fn handle_singleplayer_button(
-    singleplayer_query: Query<(), (Added<Pressed>, With<SingleplayerButton>)>,
+/// Connect to a testing gym. Gyms accept any ticket, so an empty one is ready immediately.
+#[cfg(feature = "testing")]
+pub(crate) fn connect_to_gym(
+    ip: String,
+    port: u16,
+    commands: &mut Commands,
+    config: &mut crate::Config,
+    next_auth_state: &mut NextState<crate::auth::AuthState>,
+    next_menu_state: &mut NextState<MenuState>,
+) {
+    config.ip = ip;
+    config.port = port;
+    config.host_ip = None;
+    commands.insert_resource(crate::auth::GameTicket(String::new()));
+    next_auth_state.set(crate::auth::AuthState::Ready);
+    next_menu_state.set(MenuState::Connecting);
+}
+
+/// Enter testing - host the gym on port 2143, or join it if this machine already hosts one.
+#[cfg(feature = "testing")]
+pub fn handle_enter_testing_button(
+    testing_query: Query<(), (Added<Pressed>, With<EnterTestingButton>)>,
+    session: Res<AuthSession>,
     mut commands: Commands,
     mut config: ResMut<crate::Config>,
     mut next_auth_state: ResMut<NextState<crate::auth::AuthState>>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
 ) {
-    for () in singleplayer_query.iter() {
-        info!("Singleplayer button pressed - starting local server");
-        use shared::netlib::NetworkConnectionTarget;
-        let port = rand::random_range(20000..60000);
-        config.port = port;
-        config.ip = "127.0.0.1".to_string();
-        config.host_ip = None;
-        std::thread::spawn(move || {
-            // TODO exit
-            server::call_from_client_for_singleplayer(NetworkConnectionTarget {
-                ip: "127.0.0.1".to_string(),
-                port,
-            });
-        });
-        commands.insert_resource(crate::auth::GameTicket(String::new()));
-        next_auth_state.set(crate::auth::AuthState::Ready);
-        next_menu_state.set(MenuState::Connecting);
+    use shared::gym::GYM_GAME_PORT;
+    for () in testing_query.iter() {
+        match std::net::UdpSocket::bind(("0.0.0.0", GYM_GAME_PORT)) {
+            Ok(probe) => {
+                drop(probe);
+                info!(
+                    "Enter testing pressed - hosting gym on port {}",
+                    GYM_GAME_PORT
+                );
+                // The name other players see in the LAN gym list.
+                let host_name = session
+                    .display_name
+                    .clone()
+                    .filter(|_| session.is_account())
+                    .unwrap_or_else(|| {
+                        let user = std::env::var("USER")
+                            .or_else(|_| std::env::var("USERNAME"))
+                            .unwrap_or_else(|_| "player".to_string());
+                        format!("{user}@{}", gethostname::gethostname().to_string_lossy())
+                    });
+                std::thread::spawn(move || {
+                    // The client owns the window, event loop and global logger; the server must
+                    // not create its own, so it runs on a plain schedule loop instead.
+                    let plugins = DefaultPlugins
+                        .build()
+                        .disable::<bevy::log::LogPlugin>()
+                        .disable::<bevy::winit::WinitPlugin>()
+                        .set(bevy::window::WindowPlugin {
+                            primary_window: None,
+                            exit_condition: bevy::window::ExitCondition::DontExit,
+                            close_when_requested: false,
+                            ..default()
+                        })
+                        .add(bevy::app::ScheduleRunnerPlugin::run_loop(
+                            server::SERVER_LOOP_WAIT,
+                        ));
+                    // The gym thread never returns: main() ends the process without tearing it
+                    // down (see main_client), so the gym is not signalled to stop.
+                    server::host_testing_server(plugins, host_name);
+                });
+            }
+            Err(e) => info!(
+                "Enter testing pressed - port {} busy ({e}), joining the local gym",
+                GYM_GAME_PORT
+            ),
+        }
+        connect_to_gym(
+            "127.0.0.1".to_string(),
+            GYM_GAME_PORT,
+            &mut commands,
+            &mut config,
+            &mut next_auth_state,
+            &mut next_menu_state,
+        );
     }
 }
 
