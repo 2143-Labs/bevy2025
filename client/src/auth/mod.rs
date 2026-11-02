@@ -284,6 +284,13 @@ fn poll_auth_responses(
                     claim_code: str_field(&body, "claim_code"),
                     native_token: token,
                 };
+                if let Some(code) = &session.claim_code {
+                    // The only way to keep a guest character: log in later and enter this.
+                    info!(
+                        "Guest claim code: {code} (log in later and enter it to keep this character)"
+                    );
+                    notif.write(Notification(format!("Guest claim code: {code}")));
+                }
                 pending.0.push((
                     Op::Play {
                         retry_as_guest: false,
