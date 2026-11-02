@@ -528,9 +528,26 @@ pub fn setup_incoming_client<TI: NetworkingEvent, TO: NetworkingEvent>(
     setup_incoming_shared::<TI, TO>(commands, &config.ip, config.port, false, fake_ping);
 }
 
+/// The address to bind or dial, as message-io wants it.
+///
+/// A listener told to use `localhost` binds the IPv6 wildcard (dual stacked). A client told the
+/// same must *not*: a wildcard is not a destination, and message-io resolves it with
+/// `to_socket_addrs().unwrap()` (the bracketed literal does not resolve at all), which panicked
+/// every client that was handed `localhost` — e.g. by a `/play` response from a stack with
+/// `GAME_UDP_HOST=localhost`. Dial IPv4 loopback instead, which is what a server bound to
+/// `0.0.0.0` listens on.
+fn socket_address(ip: &str, port: u16, is_listener: bool) -> (String, u16) {
+    let ip = match (ip, is_listener) {
+        ("localhost", true) => "[::]",
+        ("localhost", false) => "127.0.0.1",
+        (ip, _) => ip,
+    };
+    (ip.to_string(), port)
+}
+
 fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
     mut commands: Commands,
-    mut ip: &str,
+    ip: &str,
     port: u16,
     is_listener: bool,
     fake_ping: Option<Res<FakePingSettings>>,
@@ -544,10 +561,7 @@ fn setup_incoming_shared<TI: NetworkingEvent, TO: NetworkingEvent>(
         std::any::type_name::<NetworkingResources::<TI, TO>>()
     );
 
-    if ip == "localhost" {
-        ip = "[::]";
-    }
-    let con_str = (ip.to_string(), port);
+    let con_str = socket_address(ip, port, is_listener);
     if is_listener {
         let (_, udp_addr) = handler
             .network()
@@ -731,5 +745,42 @@ impl FakePingSettings {
         };
 
         self.to_server_ms + jitter
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::socket_address;
+
+    #[test]
+    fn a_listener_on_localhost_binds_the_dual_stack_wildcard() {
+        assert_eq!(
+            socket_address("localhost", 2143, true),
+            ("[::]".into(), 2143)
+        );
+    }
+
+    #[test]
+    fn a_client_on_localhost_dials_ipv4_loopback() {
+        // A wildcard is not a destination: the bracketed literal used to reach message-io's
+        // `to_socket_addrs().unwrap()` and panic every client handed `localhost`.
+        assert_eq!(
+            socket_address("localhost", 25555, false),
+            ("127.0.0.1".into(), 25555)
+        );
+    }
+
+    #[test]
+    fn every_other_address_passes_through() {
+        for is_listener in [true, false] {
+            assert_eq!(
+                socket_address("0.0.0.0", 25555, is_listener),
+                ("0.0.0.0".into(), 25555)
+            );
+            assert_eq!(
+                socket_address("rots.john2143.com", 36000, is_listener),
+                ("rots.john2143.com".into(), 36000)
+            );
+        }
     }
 }
