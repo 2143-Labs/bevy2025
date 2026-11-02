@@ -105,6 +105,7 @@
             mkdir -p build
             wasm-opt -Os --output opt.wasm ${packages.wasmBase}/bin/client.wasm
             cp ${./web/index.html} build/index.html
+            cp ${./docs/design.html} build/design.html
             echo "Running wasm-bindgen..."
             wasm-bindgen --out-name bevy2025 --target web --out-dir build/ opt.wasm
 

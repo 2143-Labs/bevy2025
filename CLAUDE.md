@@ -68,6 +68,13 @@ Three modes, all through the same `run_server` path (see `docs/architecture.html
 
 A second local game server in full-stack mode: `GAME_SERVER_SLOTS=2` on the stack and `ROTS_SERVER_SLOT=1 ROTS_PORT=25556` on the server; 25556 is also the first server's axum port (`port + 1`), so the second server's axum and WebSocket listeners fail to bind and only its native UDP play works. The web client needs the gateway's same-origin `/auth`, so test it on a preview.
 
+## Design doc
+
+- `docs/design.html` is the living design doc, served at `/design.html` by the web image (`flake.nix`, `wasmOptAsServer`). PR previews show it at `https://rots-<PR>.john2143.com/design.html`.
+- Update it in the same change as any code change to connections, ports, flows or state rules; when the doc's design changes, change the code to match in the same PR.
+- Keep it script-free and self-contained, and keep every `href="#…"` resolving: `python3 scripts/check-design-doc.py` (CI runs it).
+- Diagrams live beside it: `docs/architecture.html` (components, `/play` and presence sequences, coordinator and session state machines) is what a flow change must update.
+
 ## Technical Details
 
 - Requires graphics libraries (Vulkan, Wayland, ALSA) on Linux; the flake provides them.
