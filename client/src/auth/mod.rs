@@ -85,6 +85,18 @@ impl AuthSession {
 #[derive(Resource, Clone)]
 pub struct GameTicket(pub String);
 
+/// Where the authserver placed this session's character. Native clients connect to `udp`, web
+/// clients to `ws_path` on the page's own host.
+#[derive(Resource, Clone)]
+pub struct AssignedServer {
+    /// `host:port` native clients connect to.
+    #[allow(dead_code, reason = "web connects over `ws_path` instead")]
+    pub udp: String,
+    /// Path on the page's own host that web clients connect to.
+    #[allow(dead_code, reason = "native connects to `udp` instead")]
+    pub ws_path: String,
+}
+
 /// Progress of the most recent ticket request. `Ready` means a fresh [`GameTicket`] is waiting to
 /// be used by the connecting menu.
 #[derive(States, Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
@@ -115,7 +127,8 @@ pub enum AuthRequest {
 #[derive(Clone, Copy)]
 enum Op {
     Guest,
-    Ticket {
+    /// Ask the authserver to place the session's character (`/api/v1/play`).
+    Play {
         /// A 401 means our session is gone: retry once as a fresh guest.
         retry_as_guest: bool,
     },
@@ -174,7 +187,7 @@ fn handle_auth_requests(
                 // The connecting menu waits on this state; a ticket already on its way (repeated
                 // clicks, or one left over from a cancelled attempt) is shared, not duplicated.
                 auth_state.set(AuthState::Requesting);
-                if pending.has(|op| matches!(op, Op::Guest | Op::Ticket { .. })) {
+                if pending.has(|op| matches!(op, Op::Guest | Op::Play { .. })) {
                     continue;
                 }
                 let slot = if matches!(request, AuthRequest::PlayNow) {
@@ -184,10 +197,10 @@ fn handle_auth_requests(
                     )
                 } else {
                     (
-                        Op::Ticket {
+                        Op::Play {
                             retry_as_guest: true,
                         },
-                        http.post("/api/v1/ticket", json!({}), session.native_token.clone()),
+                        http.post("/api/v1/play", json!({}), session.native_token.clone()),
                     )
                 };
                 pending.0.push(slot);
@@ -246,6 +259,7 @@ fn poll_auth_responses(
     mut auth_state: ResMut<NextState<AuthState>>,
     mut notif: MessageWriter<Notification>,
     mut commands: Commands,
+    #[cfg(not(feature = "web"))] mut config: ResMut<crate::Config>,
 ) {
     if pending.0.is_empty() {
         return;
@@ -271,21 +285,37 @@ fn poll_auth_responses(
                     native_token: token,
                 };
                 pending.0.push((
-                    Op::Ticket {
+                    Op::Play {
                         retry_as_guest: false,
                     },
-                    http.post("/api/v1/ticket", json!({}), session.native_token.clone()),
+                    http.post("/api/v1/play", json!({}), session.native_token.clone()),
                 ));
             }
-            (Op::Ticket { .. }, Ok(body)) => match str_field(&body, "ticket") {
-                Some(ticket) => {
-                    commands.insert_resource(GameTicket(ticket));
-                    auth_state.set(AuthState::Ready);
+            (Op::Play { .. }, Ok(body)) => {
+                let assigned = str_field(&body, "ticket").zip(body.get("server")).and_then(
+                    |(ticket, server)| {
+                        Some((
+                            ticket,
+                            str_field(server, "udp")?,
+                            str_field(server, "ws_path")?,
+                        ))
+                    },
+                );
+                match assigned {
+                    Some((ticket, udp, ws_path)) => {
+                        commands.insert_resource(GameTicket(ticket));
+                        // Native connects straight to the assigned address; web keeps using
+                        // `ws_path` on the page's own host (see `web::game_server_url`).
+                        #[cfg(not(feature = "web"))]
+                        crate::apply_server_addr(&mut config, &udp);
+                        commands.insert_resource(AssignedServer { udp, ws_path });
+                        auth_state.set(AuthState::Ready);
+                    }
+                    None => fail(&mut notif, &mut auth_state, "play response missing fields"),
                 }
-                None => fail(&mut notif, &mut auth_state, "ticket missing from response"),
-            },
+            }
             (
-                Op::Ticket {
+                Op::Play {
                     retry_as_guest: true,
                 },
                 Err(e),
@@ -335,7 +365,7 @@ fn poll_auth_responses(
                 }
                 None => notify_login_failed(&mut notif, "session_token missing from response"),
             },
-            (Op::Guest | Op::Ticket { .. }, Err(e)) => fail(&mut notif, &mut auth_state, &e),
+            (Op::Guest | Op::Play { .. }, Err(e)) => fail(&mut notif, &mut auth_state, &e),
             #[cfg(feature = "steam")]
             (Op::SteamLogin, Err(e)) => notify_login_failed(&mut notif, &e),
         }

@@ -47,10 +47,11 @@ struct ClapArgs {
     #[cfg(not(feature = "web"))]
     #[clap(long, default_value = "https://rots.john2143.com/auth")]
     auth_url: String,
-    /// Game server used by "Play now", as `host:port` or `host`
+    /// Dev: "Play now" connects straight to this `host:port` (or `host`) with an empty ticket,
+    /// skipping login and the coordinator. The server must run with ROTS_AUTH_DISABLED=1.
     #[cfg(not(feature = "web"))]
-    #[clap(long, default_value = "rots.john2143.com:36000")]
-    play_server: String,
+    #[clap(long)]
+    play_server: Option<String>,
     /// If set, will simulate a fake ping to the server with the given ms delay. See also
     /// --fake-ping-inbound, --fake-ping-outbound, --fake-ping-jitter
     #[clap(long, short = 'p')]
@@ -152,6 +153,11 @@ fn main_client(#[cfg(not(feature = "web"))] runtime: std::sync::Arc<tokio::runti
     ))
     .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Sky blue
     .insert_resource(args);
+
+    #[cfg(not(feature = "web"))]
+    if let Some(addr) = app.world().resource::<ClapArgs>().play_server.clone() {
+        warn!("--play-server {addr}: Play now skips login and connects without a ticket");
+    }
 
     app.run();
 

@@ -222,16 +222,26 @@ pub fn handle_home_buttons(
     session: Res<AuthSession>,
     mut auth_requests: MessageWriter<AuthRequest>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
+    #[cfg(not(feature = "web"))] mut commands: Commands,
     #[cfg(not(feature = "web"))] mut config: ResMut<crate::Config>,
     #[cfg(not(feature = "web"))] args: Res<crate::ClapArgs>,
+    #[cfg(not(feature = "web"))] mut next_auth_state: ResMut<NextState<crate::auth::AuthState>>,
 ) {
-    // Play now - get a ticket (as a new guest if needed) and join the default server
+    // Play now - get placed by the authserver (as a new guest if needed) and connect where it
+    // says; the address arrives with the ticket (`auth::AssignedServer`).
     for () in play_query.iter() {
         info!("Play now pressed");
-        auth_requests.write(session.ticket_request());
-        // Web builds always connect to /ws/0 on the page's host.
+        // Dev only: connect straight to --play-server with an empty ticket, no login.
         #[cfg(not(feature = "web"))]
-        crate::apply_server_addr(&mut config, &args.play_server);
+        if let Some(addr) = &args.play_server {
+            warn!("Play now -> {addr} (--play-server: skipping login and the ticket)");
+            crate::apply_server_addr(&mut config, addr);
+            commands.insert_resource(crate::auth::GameTicket(String::new()));
+            next_auth_state.set(crate::auth::AuthState::Ready);
+            next_menu_state.set(MenuState::Connecting);
+            continue;
+        }
+        auth_requests.write(session.ticket_request());
         next_menu_state.set(MenuState::Connecting);
     }
 }
