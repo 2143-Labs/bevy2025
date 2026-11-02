@@ -104,7 +104,7 @@ Click any box to jump to its row in the table.</div>
   <!-- wires (drawn first, under the boxes) -->
   <path class="wire" d="M160,90 L160,168" marker-end="url(#arr)"/>
   <text class="lbl" x="170" y="135">UDP + game ticket</text>
-  <path class="wire" d="M160,250 L160,328" marker-end="url(#arr)"/>
+  <path class="wire" d="M160,270 L160,328" marker-end="url(#arr)"/>
   <path class="wire" d="M460,90 L460,168" marker-end="url(#arr)"/>
   <text class="lbl" x="470" y="125">HTTPS /, /auth</text>
   <text class="lbl" x="470" y="141">WSS /ws/{N}</text>
@@ -113,20 +113,20 @@ Click any box to jump to its row in the table.</div>
   <path class="wire" d="M640,210 L698,210" marker-end="url(#arr)"/>
   <text class="lbl" x="652" y="200">/</text>
   <path class="wire" d="M380,250 L300,328" marker-end="url(#arr)"/>
-  <text class="lbl" x="240" y="296">WSS /ws/{N} → :80</text>
+  <text class="lbl" x="196" y="296">WSS /ws/{N} → :80</text>
   <path class="wire" d="M540,250 L560,318" marker-end="url(#arr)"/>
   <text class="lbl" x="460" y="292">/auth → :8000</text>
   <path class="pending" d="M620,250 L660,318" marker-end="url(#arrp)"/>
   <text class="pend" x="648" y="276">POST /play → {ticket, server}</text>
   <path class="wire" d="M340,360 L498,360" marker-end="url(#arr)"/>
-  <text class="lbl" x="350" y="352">GET /ticket/public-key</text>
+  <text class="lbl" x="348" y="352">public key, verified offline</text>
   <path class="pending" d="M340,412 L498,412" marker-end="url(#arrp)"/>
   <text class="pend" x="350" y="404">:8001 internal API</text>
   <text class="pend" x="350" y="432">join · leave · heartbeat</text>
   <path class="wire" d="M860,375 L938,375" marker-end="url(#arr)"/>
   <text class="lbl" x="868" y="366">Postgres</text>
-  <path class="wire" d="M820,320 L1010,92" marker-end="url(#arr)"/>
-  <text class="lbl" x="905" y="200">OpenID / OAuth</text>
+  <path class="wire" d="M862,320 C 1000,300 1012,150 975,96" marker-end="url(#arr)"/>
+  <text class="lbl" x="1000" y="240">OpenID / OAuth</text>
   <path class="wire" d="M680,452 L680,498" marker-start="url(#arr)" marker-end="url(#arr)"/>
   <text class="lbl" x="690" y="480">gRPC 7233: worker + updates/signals</text>
   <path class="wire" d="M940,605 L978,605" marker-end="url(#arr)"/>
@@ -134,7 +134,7 @@ Click any box to jump to its row in the table.</div>
   <!-- clients -->
   <a href="#row-client-native"><rect class="box" x="40" y="20" width="240" height="70" rx="10"/>
   <text class="title" x="60" y="48">Native client</text>
-  <text class="muted" x="60" y="70">Steam build · UDP</text></a>
+  <text class="muted" x="60" y="70">desktop build · UDP</text></a>
 
   <a href="#row-client-web"><rect class="box" x="340" y="20" width="240" height="70" rx="10"/>
   <text class="title" x="360" y="48">Web client</text>
@@ -145,10 +145,11 @@ Click any box to jump to its row in the table.</div>
   <text class="muted" x="960" y="70">Steam · Discord · au.2143.me</text></a>
 
   <!-- edge -->
-  <a href="#row-udp-lb"><rect class="box edge" x="40" y="170" width="240" height="80" rx="10"/>
+  <a href="#row-udp-lb"><rect class="box edge" x="40" y="170" width="240" height="100" rx="10"/>
   <text class="title" x="60" y="196">UDP LoadBalancers</text>
   <text class="muted" x="60" y="216">rots-gs-{N}-udp</text>
-  <text class="muted" x="60" y="236">.6.32:36000-3 · previews .6.33</text></a>
+  <text class="muted" x="60" y="236">prod .6.32 : 36000-3</text>
+  <text class="muted" x="60" y="256">previews .6.33 : 31000+4N</text></a>
 
   <a href="#row-gateway"><rect class="box edge" x="340" y="170" width="300" height="80" rx="10"/>
   <text class="title" x="360" y="196">Gateway / HTTPRoute</text>
@@ -158,14 +159,14 @@ Click any box to jump to its row in the table.</div>
   <a href="#row-web"><rect class="box" x="700" y="170" width="200" height="80" rx="10"/>
   <text class="title" x="720" y="196">Web pod</text>
   <text class="muted" x="720" y="216">python3 http.server</text>
-  <text class="muted" x="720" y="236">WASM · assets · this page</text></a>
+  <text class="muted" x="720" y="236">scales 0↔1 (KEDA)</text></a>
 
   <!-- core -->
   <a href="#row-gameserver"><rect class="box" x="40" y="330" width="300" height="100" rx="10"/>
   <text class="title" x="60" y="356">Game servers</text>
-  <text x="60" y="380">rots-gameserver-0..3 (StatefulSet)</text>
-  <text class="muted" x="60" y="400">slot = pod index</text>
-  <text class="muted" x="60" y="418">UDP game port + WebSocket :80</text></a>
+  <text x="60" y="380">rots-gameserver-0..3</text>
+  <text class="muted" x="60" y="400">StatefulSet · slot = pod index</text>
+  <text class="muted" x="60" y="418">UDP :25565 + WebSocket :25565</text></a>
 
   <a href="#row-authserver"><rect class="box" x="500" y="320" width="360" height="130" rx="10"/>
   <text class="title" x="520" y="346">Authserver (rots-authserver)</text>
@@ -182,7 +183,7 @@ Click any box to jump to its row in the table.</div>
 
   <a href="#row-caches"><rect class="box none" x="40" y="540" width="300" height="100" rx="10"/>
   <text class="title" x="60" y="566">Caches: none</text>
-  <text class="muted" x="60" y="588">no Redis / memcache anywhere</text>
+  <text class="muted" x="60" y="588">no Redis or memcached for ROTS</text>
   <text class="muted" x="60" y="606">all services stateless; state lives</text>
   <text class="muted" x="60" y="624">in Temporal or Postgres</text></a>
 
@@ -218,20 +219,20 @@ Click any box to jump to its row in the table.</div>
 <table>
 <thead><tr><th>Component</th><th>Runs as</th><th>Talks to (protocol/port)</th><th>Holds state?</th><th>Source</th></tr></thead>
 <tbody>
-<tr id="row-client-native"><td>Native client</td><td>Steam desktop build</td><td>Authserver via <code>HTTPS /auth</code>; game server via UDP (LoadBalancer)</td><td>Local session file only</td><td><code>bevy2025/client/src</code></td></tr>
+<tr id="row-client-native"><td>Native client</td><td>Native desktop build (Steam or standalone)</td><td>Authserver via <code>HTTPS /auth</code>; game server via UDP (LoadBalancer)</td><td>Local session file only</td><td><code>bevy2025/client/src</code></td></tr>
 <tr id="row-client-web"><td>Web client</td><td>WASM in the browser</td><td><code>HTTPS /auth</code> with a same-origin cookie; game server via <code>WSS /ws/{N}</code></td><td>Cookie only</td><td><code>bevy2025/client/src</code>, <code>bevy2025/web/index.html</code></td></tr>
-<tr id="row-gateway"><td>Gateway / HTTPRoute</td><td>Gateway API route for <code>rots.john2143.com</code> (previews <code>rots-&lt;PR&gt;.john2143.com</code>)</td><td><code>/auth</code> → authserver :80→8000; <code>/ws/{N}</code> → <code>rots-gs-{N}</code> :80; <code>/</code> → web pod via the KEDA HTTP interceptor</td><td>No</td><td><code>argo/workloads/rots-web/templates/httproute.yaml</code></td></tr>
+<tr id="row-gateway"><td>Gateway / HTTPRoute</td><td>Gateway API route for <code>rots.john2143.com</code> (previews <code>rots-&lt;PR&gt;.john2143.com</code>)</td><td><code>/auth</code> → authserver (service :80 → container :8000); <code>/ws/{N}</code> → <code>rots-gs-{N}</code> :80 → 25565; <code>/</code> → web pod through KEDA's interceptor (<code>InterceptorRoute rots-web</code>)</td><td>No</td><td><code>argo/workloads/rots-web/templates/httproute.yaml</code></td></tr>
 <tr id="row-udp-lb"><td>UDP LoadBalancers</td><td>Service <code>rots-gs-{N}-udp</code> per slot</td><td>Prod <code>192.168.6.32</code> ports 36000-36003; previews <code>192.168.6.33</code> port <code>31000+4*(N%1000)</code>; forwarded on the MikroTik router</td><td>No</td><td><code>argo/workloads/rots-web/templates/</code></td></tr>
-<tr id="row-web"><td>Web pod</td><td><code>python3 -m http.server 8000</code> over the Nix-built web folder; scales to zero</td><td>Serves HTTP only</td><td>No</td><td><code>bevy2025/flake.nix</code> (<code>wasmOptAsServer</code>, <code>staticWebserver</code>)</td></tr>
-<tr id="row-gameserver"><td>Game servers</td><td>StatefulSet <code>rots-gameserver-0..3</code>; slot = pod index</td><td>Clients via UDP and WebSocket; authserver <code>GET /api/v1/ticket/public-key</code> (verifies tickets offline); <em>pending:</em> authserver :8001 join / leave / heartbeat</td><td>Live game world only (in memory)</td><td><code>bevy2025/server/src/lib.rs</code></td></tr>
+<tr id="row-web"><td>Web pod</td><td><code>python3 -m http.server 8000</code> over the Nix-built web folder; <code>ScaledObject</code> scales it 0↔1</td><td>Serves HTTP only</td><td>No</td><td><code>bevy2025/flake.nix</code> (<code>wasmOptAsServer</code>, <code>staticWebserver</code>)</td></tr>
+<tr id="row-gameserver"><td>Game servers</td><td>StatefulSet <code>rots-gameserver-0..3</code> (prod; one slot per preview); slot = pod index</td><td>Clients via UDP and WebSocket; authserver <code>GET /api/v1/ticket/public-key</code> (verifies tickets offline); <em>pending:</em> authserver :8001 join / leave / heartbeat</td><td>Live game world only (in memory)</td><td><code>bevy2025/server/src/lib.rs</code></td></tr>
 <tr id="row-authserver"><td>Authserver</td><td>Deployment <code>rots-authserver</code>; public :8000, internal :8001 (bearer <code>COORDINATOR_TOKEN</code>), Temporal worker in-process</td><td>rots-db (Postgres); login providers (HTTPS); Temporal (gRPC 7233)</td><td>No — stateless</td><td><code>rots-authserver/src/{api,internal}.rs</code></td></tr>
 <tr id="row-temporal"><td>Temporal</td><td><code>temporal-frontend.default.svc:7233</code>; namespace <code>rots</code> (prod) / <code>rots-preview</code></td><td>Authserver worker and client; temporal-db</td><td>Workflow state</td><td><code>rots-authserver/src/temporal/</code></td></tr>
 <tr id="row-coordinator"><td>Coordinator workflow</td><td><code>rots-coordinator-{queue}</code>, one per environment</td><td>Updates from sessions (<code>assign</code>); signals from the internal API; signals sessions (<code>presence</code>)</td><td>Fleet: slots, presence, reservations</td><td><code>rots-authserver/src/temporal/coordinator.rs</code></td></tr>
 <tr id="row-session"><td>Session workflow</td><td><code>rots-session-{queue}-{sid}</code>, one per login</td><td>Update <code>play</code> from the authserver; asks the coordinator to assign; mints the ticket</td><td>One login's play state</td><td><code>rots-authserver/src/temporal/session.rs</code></td></tr>
-<tr id="row-db"><td>rots-db</td><td>CNPG Postgres</td><td>Read and written only by the authserver</td><td><code>social.accounts</code>, <code>characters</code>, <code>sessions</code></td><td><code>rots-authserver/migrations/</code></td></tr>
+<tr id="row-db"><td>rots-db</td><td>CNPG Postgres</td><td>Read and written only by the authserver</td><td><code>social.accounts</code>, <code>characters</code>, <code>sessions</code>, plus <code>account_identities</code> and <code>oauth_states</code></td><td><code>rots-authserver/migrations/</code></td></tr>
 <tr id="row-temporal-db"><td>Temporal persistence</td><td>CNPG <code>temporal-db</code> in namespace <code>default</code></td><td>Temporal only</td><td>Workflow histories</td><td>cluster infra (argo)</td></tr>
 <tr id="row-providers"><td>Login providers</td><td>External</td><td>Steam OpenID and Steam session tickets, Discord OAuth, au.2143.me</td><td>External accounts</td><td><code>rots-authserver/src/</code></td></tr>
-<tr id="row-caches"><td>Caches</td><td>None</td><td>—</td><td>No Redis or memcache anywhere. Services are stateless; state lives in Temporal (workflows) or Postgres.</td><td>—</td></tr>
+<tr id="row-caches"><td>Caches</td><td>None</td><td>—</td><td>No cache for ROTS: none of its services use Redis or memcached. The cluster's Redis (ArgoCD, LiteLLM) and memcached (Seafile, Loki) belong to other workloads. State lives in Temporal (workflows) or Postgres.</td><td>—</td></tr>
 </tbody>
 </table>
 
@@ -283,7 +284,7 @@ Click any box to jump to its row in the table.</div>
 <ol>
   <li>The client calls <code>POST /auth/api/v1/play</code> with its session cookie or token.</li>
   <li>The authserver sends the update-with-start <code>play</code> to that login's session workflow (10 s bound).</li>
-  <li>The session asks the coordinator to <code>assign</code> a slot: the slot the character is already present on, else the preferred one, else the least loaded. The pick is reserved for 360 s.</li>
+  <li>The session asks the coordinator to <code>assign</code> a slot: the slot the character is already present on, else the preferred one, else the least loaded. The pick is reserved for 360 s, unless the character is already on it.</li>
   <li>The session mints an EdDSA ticket with <code>srv</code> = slot, valid 300 s.</li>
   <li>The response is <code>{ticket, expires_at, character_id, kind, server:{slot, udp, ws_path}}</code>.</li>
   <li>The client connects to that slot. The game server verifies the ticket offline with the public key and checks <code>srv</code>.</li>
@@ -309,11 +310,11 @@ Click any box to jump to its row in the table.</div>
   <path class="wire" d="M220,98 L358,98" marker-end="url(#arr3)"/><text class="lbl" x="232" y="88">play (ticket)</text>
   <path class="wire" d="M540,98 L678,98" marker-end="url(#arr3)"/><text class="lbl" x="552" y="88">presence: joined</text>
   <path class="wire" d="M770,126 C 770,200 130,200 130,128" marker-end="url(#arr3)"/>
-  <text class="lbl" x="370" y="196">leave · reservation expired · server gone</text>
+  <text class="lbl" x="370" y="196">leave · slot reaped as stale (30 s)</text>
   <path class="wire" d="M860,98 L978,98" marker-end="url(#arr3)"/><text class="lbl" x="872" y="88">logout / 24 h idle</text>
-  <text class="muted" x="40" y="40">A second Play while one is in flight → 409 play_in_progress. Any state can end on logout or 24 h idle.</text>
+  <text class="muted" x="40" y="40">Two Plays admitted into the same execution → the second gets 409 play_in_progress. Logout or 24 h idle ends any state.</text>
 </svg>
-<figcaption>Figure 3 — session workflow, one per login (<code>rots-authserver/src/temporal/session.rs</code>).</figcaption>
+<figcaption>Figure 3 — session workflow, one per login (<code>rots-authserver/src/temporal/session.rs</code>). An assignment that is never joined is not cleared by the 360 s reservation expiring: <code>status</code> keeps reporting <code>assigned</code> with a past <code>expires_at</code> until the next Play. An HTTP request that arrives while an update is already open is queued by Temporal, so it usually waits and gets the same slot instead of 409.</figcaption>
 </figure>
 
 <figure id="coordinator">
@@ -346,6 +347,7 @@ Click any box to jump to its row in the table.</div>
 <tr id="fail-temporal"><td>Temporal down</td><td><code>/play</code> returns 503 <code>temporal_unavailable</code>; new joins are refused. Players already in a game keep playing.</td><td>The worker reconnects every 10 s; workflow state is intact in temporal-db.</td></tr>
 <tr id="fail-authserver"><td>Authserver restart</td><td>Brief errors on login and Play.</td><td>None needed: the authserver is stateless, no state is lost.</td></tr>
 <tr id="fail-gameserver"><td>Game server crash</td><td>Its players drop to the menu.</td><td>The pod restarts with a new <code>boot_id</code>; the coordinator clears its players, who can Play again.</td></tr>
+<tr id="fail-session"><td>Login session ended (logout, or replaced by a new login)</td><td>A late connect or join is refused: <code>409 session_ended</code> on the internal join.</td><td>Play again from the menu, which starts a new session.</td></tr>
 <tr id="fail-noservers"><td>No healthy game servers</td><td><code>/play</code> returns 503 <code>no_game_server</code>.</td><td>A slot becomes healthy again on its next heartbeat.</td></tr>
 </tbody>
 </table>
