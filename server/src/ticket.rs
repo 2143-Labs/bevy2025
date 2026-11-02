@@ -16,6 +16,9 @@ pub enum TicketVerifier {
     Ed25519 {
         key: DecodingKey,
         audience: String,
+        /// This server's slot (`ROTS_SERVER_SLOT`). Tickets carry the slot the coordinator
+        /// assigned (`srv`); a ticket for another slot is refused.
+        slot: Option<u32>,
     },
 }
 
@@ -24,27 +27,39 @@ pub struct VerifiedTicket {
     pub player_id: PlayerId,
     /// Character name, only trusted for account tickets. Guests keep the name they asked for.
     pub name: Option<String>,
+    /// The login session id (`sid`), used to check at connect time that the login still exists.
+    /// `None` when verification is disabled.
+    pub sid: Option<String>,
 }
 
 /// The claims the game server relies on. `iss`, `aud` and `exp` are checked by `Validation`; the
-/// remaining authserver claims (`sid`, `prov`, `acc`, `iat`) are ignored here.
+/// remaining authserver claims (`prov`, `acc`, `iat`) are ignored here.
 #[derive(Deserialize)]
 struct GameTicketClaims {
     sub: String,
+    sid: String,
     kind: String,
     name: String,
+    /// Slot the authserver assigned. Absent in tickets minted before the coordinator existed.
+    #[serde(default)]
+    srv: Option<u32>,
 }
 
 impl TicketVerifier {
     pub fn verify(&self, ticket: &str) -> Result<VerifiedTicket, String> {
-        let (key, audience) = match self {
+        let (key, audience, slot) = match self {
             TicketVerifier::Disabled => {
                 return Ok(VerifiedTicket {
                     player_id: PlayerId::random(),
                     name: None,
+                    sid: None,
                 });
             }
-            TicketVerifier::Ed25519 { key, audience } => (key, audience),
+            TicketVerifier::Ed25519 {
+                key,
+                audience,
+                slot,
+            } => (key, audience, slot),
         };
 
         let mut validation = Validation::new(Algorithm::EdDSA);
@@ -58,6 +73,14 @@ impl TicketVerifier {
             })?
             .claims;
 
+        // The coordinator assigns a slot; a ticket presented to a different server is refused even
+        // though the signature is valid.
+        if let Some(slot) = slot {
+            if claims.srv != Some(*slot) {
+                return Err("ticket is for another server".to_string());
+            }
+        }
+
         let player_id = PlayerId(
             claims
                 .sub
@@ -68,6 +91,7 @@ impl TicketVerifier {
         Ok(VerifiedTicket {
             player_id,
             name: (claims.kind == "account").then_some(claims.name),
+            sid: Some(claims.sid),
         })
     }
 
@@ -83,9 +107,10 @@ impl TicketVerifier {
             return TicketVerifier::Disabled;
         }
 
-        let auth_url = non_empty_env("ROTS_AUTH_URL")
-            .expect("ROTS_AUTH_URL or ROTS_AUTH_DISABLED=1 required");
-        let audience = non_empty_env("ROTS_TICKET_AUDIENCE").expect("ROTS_TICKET_AUDIENCE required");
+        let auth_url =
+            non_empty_env("ROTS_AUTH_URL").expect("ROTS_AUTH_URL or ROTS_AUTH_DISABLED=1 required");
+        let audience =
+            non_empty_env("ROTS_TICKET_AUDIENCE").expect("ROTS_TICKET_AUDIENCE required");
 
         let x = fetch_public_key(auth_url.trim_end_matches('/')).await;
         let key = DecodingKey::from_ed_components(&x)
@@ -99,7 +124,18 @@ impl TicketVerifier {
         );
 
         eprintln!("ticket verification enabled, audience {audience}");
-        TicketVerifier::Ed25519 { key, audience }
+        let slot = non_empty_env("ROTS_SERVER_SLOT").map(|v| {
+            v.parse::<u32>()
+                .expect("ROTS_SERVER_SLOT must be a non-negative integer")
+        });
+        if let Some(slot) = slot {
+            eprintln!("ticket verification: this server is slot {slot}");
+        }
+        TicketVerifier::Ed25519 {
+            key,
+            audience,
+            slot,
+        }
     }
 }
 
@@ -167,6 +203,7 @@ mod tests {
         acc: Option<i64>,
         name: String,
         iat: u64,
+        srv: Option<u32>,
         exp: u64,
     }
 
@@ -189,6 +226,7 @@ mod tests {
             acc: account.then_some(7),
             name: if account { "Steam 765" } else { "Guest-42" }.to_string(),
             iat,
+            srv: None,
             exp: iat + 300,
         }
     }
@@ -196,6 +234,11 @@ mod tests {
     /// A fresh signing key plus the verifier the game server would build from the authserver's
     /// `{"x": ...}` public key response.
     fn keypair() -> (EncodingKey, TicketVerifier) {
+        keypair_with_slot(None)
+    }
+
+    /// The same, for a server that knows its coordinator-assigned slot.
+    fn keypair_with_slot(slot: Option<u32>) -> (EncodingKey, TicketVerifier) {
         let signing_key = SigningKey::from_bytes(&rand::random::<[u8; 32]>());
         let der = signing_key.to_pkcs8_der().unwrap();
         let encoding = EncodingKey::from_ed_der(der.as_bytes());
@@ -204,6 +247,7 @@ mod tests {
         let verifier = TicketVerifier::Ed25519 {
             key: DecodingKey::from_ed_components(&x).unwrap(),
             audience: AUDIENCE.to_string(),
+            slot,
         };
         (encoding, verifier)
     }
@@ -221,6 +265,7 @@ mod tests {
             Ok(VerifiedTicket {
                 player_id: PlayerId(42),
                 name: None,
+                sid: Some("0123456789abcdef".to_string()),
             })
         );
     }
@@ -234,6 +279,7 @@ mod tests {
             Ok(VerifiedTicket {
                 player_id: PlayerId(42),
                 name: Some("Steam 765".to_string()),
+                sid: Some("0123456789abcdef".to_string()),
             })
         );
     }
@@ -287,10 +333,50 @@ mod tests {
     fn garbage_and_empty_tickets_are_invalid() {
         let (_, verifier) = keypair();
         assert_eq!(verifier.verify(""), Err("invalid ticket".to_string()));
+        assert_eq!(verifier.verify("a.b.c"), Err("invalid ticket".to_string()));
+    }
+
+    fn claims_with_srv(srv: Option<u32>) -> AuthserverClaims {
+        AuthserverClaims {
+            srv,
+            ..claims("guest", AUDIENCE, now())
+        }
+    }
+
+    #[test]
+    fn ticket_for_this_slot_is_accepted() {
+        let (key, verifier) = keypair_with_slot(Some(1));
+        let ticket = sign(&key, &claims_with_srv(Some(1)));
+        assert_eq!(verifier.verify(&ticket).unwrap().player_id, PlayerId(42));
+    }
+
+    #[test]
+    fn ticket_for_another_slot_is_rejected() {
+        let (key, verifier) = keypair_with_slot(Some(1));
+        let ticket = sign(&key, &claims_with_srv(Some(2)));
         assert_eq!(
-            verifier.verify("a.b.c"),
-            Err("invalid ticket".to_string())
+            verifier.verify(&ticket),
+            Err("ticket is for another server".to_string())
         );
+    }
+
+    #[test]
+    fn ticket_without_srv_is_rejected_when_the_server_has_a_slot() {
+        let (key, verifier) = keypair_with_slot(Some(0));
+        let ticket = sign(&key, &claims_with_srv(None));
+        assert_eq!(
+            verifier.verify(&ticket),
+            Err("ticket is for another server".to_string())
+        );
+    }
+
+    #[test]
+    fn server_without_a_slot_accepts_any_srv() {
+        let (key, verifier) = keypair();
+        for srv in [None, Some(0), Some(7)] {
+            let ticket = sign(&key, &claims_with_srv(srv));
+            assert!(verifier.verify(&ticket).is_ok(), "srv {srv:?}");
+        }
     }
 
     #[test]
@@ -298,6 +384,7 @@ mod tests {
         let a = TicketVerifier::Disabled.verify("").unwrap();
         let b = TicketVerifier::Disabled.verify("garbage").unwrap();
         assert_eq!(a.name, None);
+        assert_eq!(a.sid, None);
         assert_ne!(a.player_id, b.player_id);
     }
 }

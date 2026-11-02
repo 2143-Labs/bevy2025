@@ -105,6 +105,9 @@ jobs:
         uses: actions/checkout@v4
 
 
+      - name: Server tests
+        run: nix develop -c cargo test -p server
+
       - name: Build with Nix
         run: nix build
 
