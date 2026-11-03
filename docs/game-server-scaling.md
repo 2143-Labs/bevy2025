@@ -49,6 +49,7 @@ stateDiagram-v2
     Provisioning --> Ready: first heartbeat
     Provisioning --> [*]: ready timeout / unschedulable (StartFailed / ServersFull)
     Ready --> Draining: request_shutdown (idle or SIGTERM)
+    Ready --> [*]: no heartbeat for 2 × stale_secs (Lost)
     Ready --> Recovering: lease expired / server_crashed (slice B)
     Recovering --> Ready: new boot_id heartbeat
     Recovering --> [*]: ready timeout (Lost)
@@ -60,12 +61,13 @@ stateDiagram-v2
 generation, sid}`, reservations, `next_generation`, `code_seed`, the start-failure counter and the
 `full_until` / `spawn_paused_until` gates. Its interface:
 
-- update `place { character_id, sid, location }` → `Ready | Starting | NoGameServer | ServersFull`;
-- update `claim { slot, generation, character_id, sid }` → `Admitted | AlreadyOnOtherServer`;
+- update `place { character_id, sid, location }` → `Ready | Starting | Recovering | NoGameServer | ServersFull`;
+- update `claim { slot, generation, character_id, sid }` → `Admitted | AlreadyOnOtherServer |
+  ServerDraining | UnknownInstance`;
 - signal `release { slot, generation, character_id }` (the character's units left the world);
-- signal `server_ready { slot, generation, udp_port }`;
-- signal `server_status { slot, generation, paused, connected }` (only on change, plus an
-  anti-entropy report every 300 s);
+- signal `server_ready { slot, generation, udp_port, paused, connected, players }`;
+- signal `server_status` (same body; only on change, plus an anti-entropy report every 300 s;
+  an unknown instance is taken as ready);
 - signal `server_gone { slot, generation, reason }`, `reason ∈ Drained | Destroyed | Lost |
   StartFailed | ServersFull`;
 - update `request_shutdown { slot, generation, reason, players }` → `Destroy | ToMenu` (slice C
@@ -73,14 +75,21 @@ generation, sid}`, reservations, `next_generation`, `code_seed`, the start-failu
 - update `server_crashed { character_id }` → `bool` (**slice B**);
 - query `fleet`.
 
-There is no `heartbeat`, `join` or `leave` on the coordinator any more.
+There is no `heartbeat`, `join` or `leave` on the coordinator any more. A coordinator that starts
+without carried state (first start, or after it was terminated) first lists the running
+`GameServerWorkflow`s of its task queue, queries each one's `server` (slot, generation, phase,
+roster) and rebuilds its directory and index from the answers; `place` and `claim` wait for that.
 
 **GameServerWorkflow** (`rots-authserver/src/temporal/server.rs`): one per instance.
 `GameServerArgs { task_queue, slot, generation, provisioner, join_code, stale_secs,
 ready_timeout_secs, unschedulable_secs, carried }`. It receives `heartbeat`, `leave` and (slice B)
 `probe` signals, and a `join` update it answers by claiming at the coordinator through a local
-activity. It holds the lease and the roster, and it drives provisioning, the ready timeout, the
-unschedulable check and deletion. Every heartbeat names `<slot, generation>`; a report for a pair
+activity, and a `shutdown` update (the internal API's `shutdown-request`) it answers by asking the
+coordinator's `request_shutdown`. It holds the lease and the roster, sends presence to the
+sessions of the characters that join and leave, and drives provisioning, the ready timeout, the
+unschedulable check and deletion (5 s after a `destroy` grant, 15 s after `to_menu`). An instance
+with no heartbeat for two lease windows (2 × `COORDINATOR_STALE_SECS`, 60 s) is deleted and
+reported `Lost`; slice B replaces that with a probe at the first lapse. Every heartbeat names `<slot, generation>`; a report for a pair
 the workflow does not own gets `409 unknown_instance`.
 
 Both loops obey the same rules, and they are load-bearing:
@@ -242,7 +251,7 @@ that then ends would be orphaned from its parent's perspective anyway.
 | Idle | — | The server destroys its own instance and volume. |
 | Pod crash (**slice B**) | Its players reconnect: 10 s of retries against the server, then `/api/v1/my-server-crashed`, then `/play` | Probe first, then kill, then the same PVC and a restored world. |
 | Node loss (**slice B**) | as a crash | Longhorn moves the volume; the pod restarts elsewhere and restores the world. |
-| Authserver outage | Players already in a game keep playing | No instance is ever deleted for a missed heartbeat: a probe runs first, and a probe that answers 200 kills nothing. |
+| Authserver outage | Players already in a game keep playing | Shorter than 2 × 30 s: nothing happens. Longer: static servers' workflows end and restart with the next heartbeat; managed instances are deleted. Slice B probes first, and a probe that answers 200 kills nothing. |
 
 ## Event budget
 

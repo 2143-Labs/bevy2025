@@ -380,7 +380,7 @@ Click any box to jump to its row in the table.</div>
 </figure>
 
 <figure id="gameserver-workflow">
-<svg class="diagram" viewBox="0 0 1200 340" role="img" aria-label="GameServerWorkflow states: Provisioning to Ready on the first heartbeat, Ready to Draining on request_shutdown, Ready to Recovering when the lease expires or a client reports a crash (slice B, dashed), Recovering back to Ready on a new boot id, Provisioning, Draining and Recovering to gone">
+<svg class="diagram" viewBox="0 0 1200 340" role="img" aria-label="GameServerWorkflow states: Provisioning to Ready on the first heartbeat, Ready to Draining on request_shutdown, Ready to gone after two lease windows without a heartbeat, Ready to Recovering when the lease expires or a client reports a crash (slice B, dashed), Recovering back to Ready on a new boot id, Provisioning, Draining and Recovering to gone">
   <defs>
     <marker id="arr5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
@@ -404,6 +404,8 @@ Click any box to jump to its row in the table.</div>
   <text class="lbl" x="952" y="108">pod exited</text>
   <path class="wire" d="M165,146 C 165,300 980,300 1008,146" marker-end="url(#arr5)"/>
   <text class="lbl" x="380" y="322">ready timeout 120 s · Unschedulable 30 s → StartFailed / ServersFull</text>
+  <path class="wire" d="M505,90 C 505,58 1085,58 1085,88" marker-end="url(#arr5)"/>
+  <text class="lbl" x="640" y="72">no heartbeat for 2 × 30 s → Lost</text>
   <path class="pending" d="M505,146 L505,238" marker-end="url(#arr5p)"/>
   <text class="pend" x="520" y="186">lease expired</text>
   <text class="pend" x="520" y="204">· server_crashed</text>
@@ -413,7 +415,7 @@ Click any box to jump to its row in the table.</div>
   <text class="lbl" x="700" y="286">ready timeout → Lost</text>
   <text class="muted" x="40" y="40">One workflow per instance, rots-gs-&lt;queue&gt;-&lt;k&gt;-g&lt;g&gt;: it owns the lease, the roster and the Kubernetes objects, and it continues as new hourly.</text>
 </svg>
-<figcaption>Figure 5 — the instance state machine (<code>rots-authserver/src/temporal/server.rs</code>). Redrawing it as <code>Ready</code> is a heartbeat from the same generation with a new <code>boot_id</code>; a probe always runs before anything is killed (slice B).</figcaption>
+<figcaption>Figure 5 — the instance state machine (<code>rots-authserver/src/temporal/server.rs</code>). Returning to <code>Ready</code> is a heartbeat from the same generation with a new <code>boot_id</code>. Today an instance with no heartbeat for two lease windows (2 × 30 s) is deleted; slice B probes it at the first lapse and kills only a server that does not answer.</figcaption>
 </figure>
 
 <!-- ============================================================ -->
@@ -422,8 +424,8 @@ Click any box to jump to its row in the table.</div>
 <thead><tr><th>Event</th><th>What players see</th><th>Recovery</th></tr></thead>
 <tbody>
 <tr id="fail-temporal"><td>Temporal down</td><td><code>/play</code> returns 503 <code>temporal_unavailable</code>; new joins are refused. Players already in a game keep playing.</td><td>The worker reconnects every 10 s; workflow state is intact in temporal-db.</td></tr>
-<tr id="fail-authserver"><td>Authserver restart</td><td>Brief errors on login, Play and new joins; players already in a game keep playing.</td><td>None needed: the authserver is stateless, no state is lost. No instance is ever deleted for a missed heartbeat, because a probe runs before anything is killed.</td></tr>
-<tr id="fail-gameserver"><td>Game server crash</td><td>Its players drop to the menu (slice B: they reconnect into the same world).</td><td>The instance's workflow probes first, then replaces the pod on the same volume. Slice A starts a fresh world; slice B restores it from the statefile.</td></tr>
+<tr id="fail-authserver"><td>Authserver restart</td><td>Brief errors on login, Play and new joins; players already in a game keep playing.</td><td>None needed: the authserver keeps no state. A game server counts as gone only after two lease windows (2 × 30 s) without a heartbeat, so a restart shorter than that costs nothing. A longer outage ends a static server's workflow (its next heartbeat starts a new one) and deletes managed instances; slice B probes before anything is killed.</td></tr>
+<tr id="fail-gameserver"><td>Game server crash</td><td>Its players drop to the menu (slice B: they reconnect into the same world).</td><td>A crash-looping or silent instance is deleted by its workflow after 2 × 30 s without a heartbeat, and its slot is freed. Slice B probes first, then replaces the pod on the same volume and restores the world from the statefile.</td></tr>
 <tr id="fail-full"><td>Fleet full</td><td><code>503 servers_full</code>; the client shows "Servers are full, retrying…" and retries every 5 s for up to 10 min.</td><td>The ResourceQuota frees a slot when a server drains; the next Play takes it. The coordinator also holds the fleet full for 30 s after an <code>Unschedulable</code> pod.</td></tr>
 <tr id="fail-start"><td>Provisioning keeps failing</td><td><code>503 no_game_server</code> while spawning is paused.</td><td>Three consecutive start failures pause spawning for 300 s; one successful first heartbeat resets the counter. A ready timeout or an unschedulable pod deletes the instance.</td></tr>
 <tr id="fail-session"><td>Login session ended (logout, or replaced by a new login)</td><td>A late connect or join is refused: <code>409 session_ended</code> on the internal join.</td><td>Play again from the menu, which starts a new session.</td></tr>
