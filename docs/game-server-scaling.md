@@ -199,7 +199,9 @@ Ghosts — a disconnect is not a death:
 
 Forced failure: a lapse in the lease (`stale_secs = 30`, detected within 2 × stale) or a client's
 `server_crashed` report triggers `probe()`; the activity resolves the pod IP with `GET pods/<name>`
-and GETs `http://<podIP>:<health>/healthz` with a 2 s timeout. 200 means alive — nothing is killed,
+and GETs `http://<podIP>:<health>/healthz` with a 2 s timeout. `/healthz` answers 200 only while the
+game loop has run a frame in the last 10 s (`server/src/axum.rs`), so a hung loop probes dead and the
+kubelet's liveness probe restarts it too. 200 means alive — nothing is killed,
 the lease is re-armed, so an authserver outage cannot take the fleet down. No pod, no IP or a failed
 probe means dead: the workflow sets the phase `Recovering`, deletes the pod with
 `gracePeriodSeconds: 0` (at most once per `KILL_BACKOFF` = 300 s per instance), and the StatefulSet
