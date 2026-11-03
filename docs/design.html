@@ -93,7 +93,10 @@ workflow deletes what is left. Fleet capacity is a Kubernetes ResourceQuota; a f
 placement, provisioning and the event budget, is in
 <a href="https://github.com/2143-Labs/bevy2025/blob/main/docs/game-server-scaling.md">docs/game-server-scaling.md</a>.</p>
 
-<p><strong>A disconnect does not take a character out of the world.</strong> The connection ends, the
+<p><strong>A disconnect does not take a character out of the world</strong> — on a managed instance.
+It keeps its state on a volume, so its world outlives a disconnect and a restart; prod's static
+servers have nothing to restore from, so there a disconnect still removes the character's units and
+reports it to the coordinator, exactly as before. The connection ends, the
 player entity becomes a ghost and everything they were driving stays exactly where it was — other players
 can still attack and kill it, and that death is real. Reconnecting rebinds the ghost: the same character,
 the same body, the same camera. When a server process dies its StatefulSet restarts it on the same volume

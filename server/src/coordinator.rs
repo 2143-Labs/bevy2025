@@ -56,10 +56,12 @@ pub struct PlayerRef {
 
 /// Everything the link sends, in production order.
 pub enum LinkOp {
-    /// The full roster of this slot, and how many of those characters are connected.
+    /// The full roster of this slot, how many of those characters are connected, and whether the
+    /// world is paused.
     Heartbeat {
         players: Vec<PlayerRef>,
         connected: u32,
+        paused: bool,
     },
     /// Ask to admit a character; the answer arrives on `reply`.
     Join {
@@ -121,11 +123,15 @@ impl CoordinatorLink {
     /// and after recovery every queued join would wait behind all of them past `JOIN_GIVE_UP`.
     /// Dropping the newer roster is safe: the waiting one lists exactly the players admitted or
     /// pending before it in the queue, and any join or leave since then is queued after it.
-    pub fn heartbeat(&self, players: Vec<PlayerRef>, connected: u32) {
+    pub fn heartbeat(&self, players: Vec<PlayerRef>, connected: u32, paused: bool) {
         if self.heartbeat_queued.swap(true, Ordering::AcqRel) {
             return;
         }
-        if !self.send(LinkOp::Heartbeat { players, connected }) {
+        if !self.send(LinkOp::Heartbeat {
+            players,
+            connected,
+            paused,
+        }) {
             self.heartbeat_queued.store(false, Ordering::Release);
         }
     }
@@ -187,7 +193,8 @@ struct HeartbeatBody<'a> {
     /// Characters with a live connection. Ghosts (slice B) count in `players` but not here: this
     /// is what the coordinator reports, and what the server's own idle rule counts.
     connected: u32,
-    /// Slice D (pausing) reports the real value; a slice A server is never paused.
+    /// Whether the world is paused (`Restoring` after a restart, or slice D's pause): it is not
+    /// ticking, but its players may still be connected.
     paused: bool,
     /// The public UDP port this instance is reachable on, when the provisioner set one.
     udp_port: Option<u16>,
@@ -291,7 +298,11 @@ async fn run_link(
                 let answer = send_join(&client, &coordinator, &body).await;
                 let _ = reply.send(answer);
             }
-            LinkOp::Heartbeat { players, connected } => {
+            LinkOp::Heartbeat {
+                players,
+                connected,
+                paused,
+            } => {
                 // Taken off the queue: the next roster may wait behind this one.
                 heartbeat_queued.store(false, Ordering::Release);
                 let body = HeartbeatBody {
@@ -300,7 +311,7 @@ async fn run_link(
                     boot_id: &boot_id,
                     players: &players,
                     connected,
-                    paused: false,
+                    paused,
                     udp_port: coordinator.udp_port,
                 };
                 let report = send_until_accepted(
@@ -516,6 +527,8 @@ fn send_heartbeat(
         (&PlayerId, Option<&PlayerSid>, Has<ConnectedPlayer>),
         Or<(With<ConnectedPlayer>, With<DisconnectedPlayer>)>,
     >,
+    ghosts: Option<Res<crate::KeepGhosts>>,
+    paused: Res<crate::Paused>,
     pending: Res<PendingJoins>,
     ready: Res<ReadyToAdmit>,
 ) {
@@ -524,6 +537,9 @@ fn send_heartbeat(
     for (id, sid, connected) in in_world.iter() {
         if connected {
             connected_count += 1;
+        } else if ghosts.is_none() {
+            // A static server despawns a disconnected character, so only connections count.
+            continue;
         }
         // A character with no login session (an unverified connection) cannot be named to the
         // coordinator at all.
@@ -556,7 +572,7 @@ fn send_heartbeat(
             .then_with(|| a.sid.cmp(&b.sid))
     });
     players.dedup();
-    link.heartbeat(players, connected_count);
+    link.heartbeat(players, connected_count, paused.is_paused());
 }
 
 #[cfg(test)]
@@ -667,7 +683,7 @@ mod tests {
     /// Every roster in these tests has as many live connections as it lists players.
     fn hb(link: &CoordinatorLink, players: Vec<PlayerRef>) {
         let connected = players.len() as u32;
-        link.heartbeat(players, connected);
+        link.heartbeat(players, connected, false);
     }
 
     fn wait_for(mock: &Arc<Mock>, count: usize, timeout: Duration) {
@@ -873,6 +889,25 @@ mod tests {
         assert_eq!(body["connected"], 1);
         assert_eq!(body["paused"], false);
         assert_eq!(body["udp_port"], 36002);
+    }
+
+    #[test]
+    fn the_heartbeat_reports_a_paused_world() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let (endpoint, mock) = start_mock(&runtime, vec![]);
+        let link = spawn_link(&runtime, coordinator(&endpoint));
+
+        // A restoring world has nobody connected and is not ticking.
+        link.heartbeat(players(), 1, true);
+
+        wait_for(&mock, 1, Duration::from_secs(5));
+        let body = &mock.requests()[0].body;
+        assert_eq!(body["paused"], true);
+        assert_eq!(body["connected"], 1);
+        assert_eq!(body["players"], json!(players()));
     }
 
     #[test]

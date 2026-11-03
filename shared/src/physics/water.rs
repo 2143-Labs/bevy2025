@@ -25,7 +25,9 @@ impl Plugin for SharedWaterPlugin {
             Update,
             (check_water_immersion, apply_buoyancy)
                 .chain()
-                .run_if(resource_exists::<WaterLevel>),
+                .run_if(resource_exists::<WaterLevel>)
+                // Buoyancy applies forces; a paused world applies none.
+                .run_if(crate::physics_running),
         );
     }
 }

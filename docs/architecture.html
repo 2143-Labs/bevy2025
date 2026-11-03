@@ -290,7 +290,10 @@
   <a href="#presence-9"><text x="697" y="560" class="num">9</text><path d="M690,564 C740,564 740,584 690,584" class="wire" marker-end="url(#a3)"/><text x="748" y="578" class="muted" style="font-size:11px;">roster diff: adopt on a boot's first heartbeat, then only remove</text></a>
   <a href="#presence-9"><text x="400" y="608" class="num">→</text><text x="414" y="608" class="muted" style="font-size:11px;">server_status · release · server_gone · presence false</text></a>
 </svg>
-<figcaption><strong>Figure 3 — presence.</strong> Joins are gated; heartbeats and releases are fire-and-forget behind the same queue, and they go to <em>this instance's</em> workflow, not to the coordinator. A disconnect sends nothing: the character stays in the world as a ghost until its camera unit leaves it. The wire bodies are in the <a href="https://github.com/2143-Labs/rots-authserver/blob/master/README.md#internal-api">authserver README</a>.</figcaption>
+<figcaption><strong>Figure 3 — presence.</strong> Joins are gated; heartbeats and releases are fire-and-forget behind the same queue, and they go to <em>this instance's</em> workflow, not to the coordinator. A disconnect sends nothing: the character stays in the world as a ghost until its camera unit leaves
+it. Ghosts are a managed-instance behaviour — a static server (prod) has no statefile to restore a
+world from, so there a disconnect despawns the character's units and reports <code>leave</code>, as
+it always did. The wire bodies are in the <a href="https://github.com/2143-Labs/rots-authserver/blob/master/README.md#internal-api">authserver README</a>.</figcaption>
 </figure>
 
 <ol>

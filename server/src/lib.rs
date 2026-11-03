@@ -12,14 +12,14 @@ use shared::{
     event::{
         NetEntId, PlayerId, UDPacketEvent,
         client::{
-            ConnectRejected, DespawnUnit2, HeartbeatChallenge, HeartbeatResponse,
-            PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2,
+            BeginThirdpersonControllingUnit, ConnectRejected, DespawnUnit2, HeartbeatChallenge,
+            HeartbeatResponse, PlayerDisconnected, SpawnUnit2, UpdateUnit2, WorldData2,
         },
         server::{ChangeMovement, Heartbeat, HeartbeatChallengeResponse, IWantToDisconnect},
     },
     net_components::{
         ToNetComponent,
-        ents::{PlayerCamera, SendNetworkTranformUpdates},
+        ents::{Man, PlayerCamera, SendNetworkTranformUpdates},
         make_ball,
         ours::{ControlledBy, OwnedByPlayer, PlayerColor, PlayerName},
     },
@@ -339,7 +339,9 @@ fn do_app(base_plugins: bevy::app::PluginGroupBuilder, f: impl FnOnce(&mut App))
         .add_systems(
             FixedPostUpdate,
             (
-                shared::increment_ticks,
+                // A paused world does not tick; the flush below still runs (networking keeps
+                // going while a world is paused).
+                shared::increment_ticks.run_if(shared::physics_running),
                 shared::netlib::flush_outgoing_events_udp::<EventToServer, EventToClient>,
                 // The world is not ticking while paused, so neither is the tick stream.
                 add_tick_just_happened_packet.run_if(world_not_paused),
@@ -450,6 +452,15 @@ fn apply_pause(paused: Res<Paused>, mut physics: ResMut<Time<Physics>>) {
         physics.unpause();
     }
 }
+
+/// The world outlives a disconnect: a character whose player disconnects stays in the world as a
+/// ghost, keeps its units and camera, and is only released when it dies.
+///
+/// Set by [`statefile::StatefilePlugin`], so it exists on managed instances that keep their world on
+/// a volume. A static server (prod, local dev) has no statefile to restore a world from, so it
+/// behaves exactly as before: a disconnect despawns the character's units and reports `leave`.
+#[derive(Resource, Debug, Clone, Copy)]
+pub struct KeepGhosts;
 
 /// This component is added to each of the meta entities representing a connected player
 #[derive(Component)]
@@ -695,7 +706,11 @@ struct Ghost {
 }
 
 /// Find the ghost of `player_id`, if this character was left in the world by a disconnect.
+///
+/// Only a world that keeps ghosts has any: a static server despawned the character's units when it
+/// disconnected, so a returning player is admitted fresh, exactly as before.
 fn ghost_of(world: &World, player_id: PlayerId) -> Option<Ghost> {
+    world.get_resource::<KeepGhosts>()?;
     let player_entity = world
         .try_query_filtered::<(Entity, &PlayerId), With<DisconnectedPlayer>>()
         .and_then(|mut ghosts| {
@@ -716,6 +731,18 @@ fn ghost_of(world: &World, player_id: PlayerId) -> Option<Ghost> {
         player_entity,
         camera,
     })
+}
+
+/// The unit a character is driving, if they have taken control of one. A rebound player comes back
+/// in third person when they had a `Man`, instead of in freecam.
+fn controlled_man(world: &World, player_id: PlayerId) -> Option<NetEntId> {
+    world
+        .try_query_filtered::<(&NetEntId, &ControlledBy), With<Man>>()
+        .and_then(|mut men| {
+            men.iter(world)
+                .find(|(_, controller)| controller.players.contains(&player_id))
+                .map(|(net_ent_id, _)| *net_ent_id)
+        })
 }
 
 /// Everything a client needs to spawn `entity`: the per-entity component walk of [`WorldData2`],
@@ -806,6 +833,8 @@ fn admit(
                 .net_ent_id
         });
 
+    // Sent once the client has the world, so it re-enters the body it was driving.
+    let mut cam_back: Option<NetEntId> = None;
     match ghost {
         Some(Ghost {
             player_entity,
@@ -825,6 +854,7 @@ fn admit(
                 ?camera_unit_id,
                 "rebound a disconnected character"
             );
+            cam_back = controlled_man(world, new_player_id);
         }
         ghost => {
             // Rebind (the character died and lost its camera) or admit a character we have
@@ -986,6 +1016,19 @@ fn admit(
         .collect::<Vec<_>>();
 
     sr.send_outgoing_event_next_tick_batch(endpoint, &events);
+
+    // A rebound character that was driving a unit comes back in third person; the client starts
+    // every connection in freecam. Sent after the world so the unit already exists there.
+    if let Some(unit) = cam_back {
+        info!(?unit, "re-entering the unit the character was driving");
+        sr.send_outgoing_event_next_tick(
+            endpoint,
+            &EventToClient::BeginThirdpersonControllingUnit(BeginThirdpersonControllingUnit {
+                player_id: new_player_id,
+                unit: Some(unit),
+            }),
+        );
+    }
 }
 
 fn reject_connection(sr: &ServerNetworkingResources, endpoint: EndpointGeneral, reason: String) {
@@ -1082,13 +1125,17 @@ fn on_receive_ping_challenge(
     }
 }
 
-/// A disconnect ends the connection, not the character: their units stay in the world (the
-/// player entity becomes a ghost) so they can come back to where they were, and so that other
-/// players' worlds do not change under them. The character is only released to the coordinator
-/// when its camera unit leaves the world (see [`on_unit_despawn`]).
+/// A disconnect ends the connection. In a world that keeps ghosts ([`KeepGhosts`]) the character
+/// stays in it too: its units are untouched, and it is released only when it dies (see
+/// [`on_unit_despawn`]). A static server has no world to restore, so it behaves as before: the
+/// character's units leave with the connection and its `leave` is reported.
 fn on_player_disconnect(
     mut pd: MessageReader<PlayerDisconnected>,
     clients: Query<(Entity, &PlayerEndpoint, &PlayerId), With<ConnectedPlayer>>,
+    owned_units: Query<(&NetEntId, &OwnedByPlayer)>,
+    ghosts: Option<Res<KeepGhosts>>,
+    link: Option<Res<crate::coordinator::CoordinatorLink>>,
+    mut despawn_unit: MessageWriter<DespawnUnit2>,
     mut commands: Commands,
     heartbeat_mapping: Res<HeartbeatList>,
     tick: Res<CurrentTick>,
@@ -1100,10 +1147,28 @@ fn on_player_disconnect(
 
         let events = vec![EventToClient::PlayerDisconnected(player.clone())];
 
-        info!(
-            "Player {:?} disconnected: {} (their units stay in the world)",
-            player.id, player.reason
-        );
+        if ghosts.is_some() {
+            info!(
+                "Player {:?} disconnected: {} (their units stay in the world)",
+                player.id, player.reason
+            );
+        } else {
+            // Static mode: the character goes with the connection, as it did before ghosts.
+            info!(
+                "Player {:?} disconnected: {} (their units leave the world)",
+                player.id, player.reason
+            );
+            for (owned_ent_id, owner) in &owned_units {
+                if owner.player_id == player.id {
+                    despawn_unit.write(DespawnUnit2 {
+                        net_ent_id: *owned_ent_id,
+                    });
+                }
+            }
+            if let Some(link) = link.as_deref() {
+                link.leave(player.id.0 as i64);
+            }
+        }
 
         for (c_ent, net_client, player_id) in &clients {
             sr.send_outgoing_event_next_tick_batch(net_client.0, &events);
@@ -1123,6 +1188,7 @@ fn on_unit_despawn(
     mut pd: MessageReader<DespawnUnit2>,
     clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
     units: Query<(Entity, &NetEntId, Has<PlayerCamera>, Option<&OwnedByPlayer>)>,
+    ghosts: Option<Res<KeepGhosts>>,
     link: Option<Res<crate::coordinator::CoordinatorLink>>,
     mut commands: Commands,
     sr: Res<ServerNetworkingResources>,
@@ -1132,8 +1198,13 @@ fn on_unit_despawn(
         'unit: for (unit_ent, unit_net_ent_id, is_camera, owner) in &units {
             if unit_net_ent_id == &despawn.net_ent_id {
                 // A character's camera unit leaving the world is that character leaving it (its
-                // death): the coordinator may give its slot to somebody else.
-                if is_camera && let (Some(owner), Some(link)) = (owner, link.as_deref()) {
+                // death): the coordinator may give its slot to somebody else. Only a world that
+                // keeps ghosts has characters that outlive their connection; a static server
+                // reports the `leave` of a disconnect above instead.
+                if ghosts.is_some()
+                    && is_camera
+                    && let (Some(owner), Some(link)) = (owner, link.as_deref())
+                {
                     info!(
                         character_id = owner.player_id.0,
                         "character left the world: reporting release"
@@ -1326,7 +1397,10 @@ mod tests {
     }
 
     /// An app with just the connection-handling systems: no window, no physics, no state.
-    fn app() -> App {
+    ///
+    /// `keep_ghosts` is the marker [`statefile::StatefilePlugin`] inserts on an instance that keeps
+    /// its world on a volume; without it the app behaves like a static server.
+    fn app(keep_ghosts: bool) -> App {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
             .insert_resource(TerrainParams::default())
@@ -1342,6 +1416,9 @@ mod tests {
                 Update,
                 (admit_players, on_player_disconnect, on_unit_despawn).chain(),
             );
+        if keep_ghosts {
+            app.insert_resource(KeepGhosts);
+        }
         app
     }
 
@@ -1398,6 +1475,21 @@ mod tests {
         query.iter(world).count()
     }
 
+    fn queued_events(app: &mut App, endpoint: EndpointGeneral) -> Vec<EventToClient> {
+        let EndpointGeneral::WebSocket(ws) = endpoint else {
+            panic!("test endpoints are WebSockets");
+        };
+        let outgoing = app
+            .world()
+            .resource::<ServerNetworkingResources>()
+            .event_list_outgoing_websocket
+            .clone();
+        outgoing
+            .get(&ws)
+            .map(|events| events.clone())
+            .unwrap_or_default()
+    }
+
     fn queued_world_data(app: &mut App, endpoint: EndpointGeneral) -> Option<WorldData2> {
         let EndpointGeneral::WebSocket(ws) = endpoint else {
             panic!("test endpoints are WebSockets");
@@ -1421,7 +1513,7 @@ mod tests {
     /// puts the player back in the same body instead of spawning a second one.
     #[test]
     fn reconnect_rebinds_the_ghost_camera_unit() {
-        let mut app = app();
+        let mut app = app(true);
         admit_now(&mut app, request(7, endpoint(5001)));
 
         let cameras = camera_units(&mut app, 7);
@@ -1488,7 +1580,7 @@ mod tests {
     /// A character that died (its camera unit left the world) comes back with a new camera.
     #[test]
     fn reconnecting_after_death_spawns_a_new_camera() {
-        let mut app = app();
+        let mut app = app(true);
         admit_now(&mut app, request(9, endpoint(5003)));
         let camera = camera_units(&mut app, 9)[0];
 
@@ -1515,6 +1607,180 @@ mod tests {
         assert_eq!(
             players::<With<ConnectedPlayer>>(&mut app),
             vec![PlayerId(9)]
+        );
+    }
+
+    /// A character that was driving a unit comes back in it, not in freecam.
+    #[test]
+    fn a_rebound_player_is_put_back_in_the_unit_it_was_driving() {
+        let mut app = app(true);
+        admit_now(&mut app, request(11, endpoint(5007)));
+
+        // The character took control of a man before the connection dropped.
+        let man = NetEntId(4242);
+        app.world_mut().spawn((
+            man,
+            Man(3.0),
+            ControlledBy::single(PlayerId(11)),
+            OwnedByPlayer {
+                player_id: PlayerId(11),
+            },
+            Transform::from_xyz(2.0, 0.0, 2.0),
+        ));
+
+        app.world_mut().write_message(PlayerDisconnected {
+            id: PlayerId(11),
+            reason: "Player timeout".to_string(),
+        });
+        app.update();
+
+        admit_now(&mut app, request(11, endpoint(5008)));
+        let events = queued_events(&mut app, endpoint(5008));
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                EventToClient::BeginThirdpersonControllingUnit(
+                    BeginThirdpersonControllingUnit {
+                        player_id,
+                        unit: Some(unit),
+                    }
+                ) if *player_id == PlayerId(11) && *unit == man
+            )),
+            "the reconnecting client is told to take control of its unit again: {events:?}"
+        );
+    }
+
+    /// Records the paths the coordinator link posts to, so a test can assert the wire traffic.
+    #[derive(Default)]
+    struct SeenLog(std::sync::Mutex<Vec<String>>);
+
+    // `::axum`: inside this crate `axum` names the health-listener module.
+    async fn record_request(
+        ::axum::extract::State(log): ::axum::extract::State<std::sync::Arc<SeenLog>>,
+        request: ::axum::extract::Request,
+    ) -> ::axum::response::Response {
+        log.0
+            .lock()
+            .expect("seen log")
+            .push(request.uri().path().to_string());
+        ::axum::response::IntoResponse::into_response(::axum::http::StatusCode::NO_CONTENT)
+    }
+
+    /// A coordinator link pointed at a mock that accepts everything and records the paths.
+    fn link_with_mock(
+        runtime: &tokio::runtime::Runtime,
+    ) -> (crate::coordinator::CoordinatorLink, std::sync::Arc<SeenLog>) {
+        let log = std::sync::Arc::new(SeenLog::default());
+        let listener =
+            runtime.block_on(async { tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap() });
+        let address = listener.local_addr().unwrap();
+        let router = ::axum::Router::new()
+            .fallback(record_request)
+            .with_state(log.clone());
+        runtime.spawn(async move {
+            ::axum::serve(listener, router).await.unwrap();
+        });
+        let link = crate::coordinator::spawn_link(
+            runtime,
+            GameServerCoordinator {
+                endpoint: format!("http://{address}"),
+                slot: 0,
+                generation: 1,
+                udp_port: None,
+                managed: false,
+                token: "test-token".to_string(),
+            },
+        );
+        (link, log)
+    }
+
+    fn runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+    }
+
+    fn paths_seen(log: &std::sync::Arc<SeenLog>) -> Vec<String> {
+        log.0.lock().expect("seen log").clone()
+    }
+
+    fn wait_for_path(log: &std::sync::Arc<SeenLog>, suffix: &str) {
+        let start = std::time::Instant::now();
+        loop {
+            let seen = paths_seen(log);
+            if seen.iter().any(|path| path.ends_with(suffix)) {
+                return;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "waited for {suffix}, saw {seen:?}"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    /// A static server has no statefile, so it keeps slice A's disconnect semantics: the
+    /// character's units leave the world with the connection, and its `leave` is reported.
+    #[test]
+    fn a_disconnect_removes_the_character_when_ghosts_are_not_kept() {
+        let runtime = runtime();
+        let (link, seen) = link_with_mock(&runtime);
+        let mut app = app(false);
+        app.insert_resource(link);
+
+        admit_now(&mut app, request(7, endpoint(5005)));
+        assert_eq!(unit_count(&mut app), 1);
+
+        app.world_mut().write_message(PlayerDisconnected {
+            id: PlayerId(7),
+            reason: "Player timeout".to_string(),
+        });
+        app.update();
+
+        assert_eq!(
+            unit_count(&mut app),
+            0,
+            "a static server despawns the character's units"
+        );
+        assert_eq!(
+            players::<With<DisconnectedPlayer>>(&mut app),
+            vec![PlayerId(7)],
+            "the player entity is kept, as it was before ghosts"
+        );
+        wait_for_path(&seen, "/internal/v1/servers/leave");
+    }
+
+    /// A world that keeps ghosts reports nothing on a disconnect: the character is still there.
+    #[test]
+    fn a_disconnect_keeps_the_character_when_ghosts_are_kept() {
+        let runtime = runtime();
+        let (link, seen) = link_with_mock(&runtime);
+        let mut app = app(true);
+        app.insert_resource(link);
+
+        admit_now(&mut app, request(8, endpoint(5006)));
+        let camera = camera_units(&mut app, 8)[0];
+
+        app.world_mut().write_message(PlayerDisconnected {
+            id: PlayerId(8),
+            reason: "Player timeout".to_string(),
+        });
+        app.update();
+
+        assert_eq!(
+            camera_units(&mut app, 8),
+            vec![camera],
+            "a ghost keeps its camera unit"
+        );
+        assert_eq!(unit_count(&mut app), 1, "a disconnect despawns nothing");
+
+        // A leave would have been queued and sent by now; nothing is.
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(
+            paths_seen(&seen).is_empty(),
+            "a ghost is not released on disconnect: {:?}",
+            paths_seen(&seen)
         );
     }
 }

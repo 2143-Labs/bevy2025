@@ -121,7 +121,9 @@ impl Plugin for NetworkingPlugin {
             .add_systems(
                 FixedUpdate,
                 (
-                    shared::increment_ticks,
+                    // A paused world does not tick (the client has no pause yet, but the physics
+                    // clock is what defines it).
+                    shared::increment_ticks.run_if(shared::physics_running),
                     on_general_spawn_network_unit,
                     on_begin_controlling_unit,
                     try_control_unit_when_it_spawns,
@@ -241,8 +243,20 @@ pub struct CurrentThirdPersonControlledUnit;
 fn on_general_spawn_network_unit(
     mut unit_spawns: MessageReader<SpawnUnit2>,
     mut commands: Commands,
+    existing: Query<(Entity, &NetEntId)>,
 ) {
     for spawn in unit_spawns.read() {
+        // A unit is announced again when its character reconnects into it (the same ghost camera),
+        // so the entity carrying that NetEntId is replaced rather than duplicated.
+        if !spawn.net_ent_id.is_none() {
+            for (entity, net_ent_id) in &existing {
+                if *net_ent_id == spawn.net_ent_id {
+                    debug!(?net_ent_id, "replacing a unit the server announced again");
+                    commands.entity(entity).despawn();
+                }
+            }
+        }
+
         // Spawn ball with physics
         let entity = spawn.clone().spawn_entity(&mut commands);
 
@@ -854,7 +868,7 @@ enum ReconnectPhase {
 /// which is what makes the authserver probe and recover the instance — and then wait for `/play`
 /// to place the character again.
 #[derive(Resource, Debug)]
-struct Reconnect {
+pub(crate) struct Reconnect {
     phase: ReconnectPhase,
     /// Seconds in the current phase.
     phase_for: f32,

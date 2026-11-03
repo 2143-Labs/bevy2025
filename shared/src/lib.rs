@@ -362,6 +362,17 @@ impl Plugin for TickPlugin {
 #[derive(Resource, Debug)]
 pub struct CurrentTick(pub Tick);
 
+/// Run condition: the simulation is stepping.
+///
+/// A paused world pauses avian's clock (`Time<Physics>::pause()`); the systems that step the world
+/// take this condition so that a paused server — a world waiting for its players to come back, or
+/// slice D's pause — moves nothing, while networking, heartbeats and input handling keep running.
+/// It is always true on the client, whose physics clock is never paused.
+pub fn physics_running(physics_time: Option<Res<Time<avian3d::prelude::Physics>>>) -> bool {
+    use avian3d::prelude::PhysicsTime;
+    physics_time.is_none_or(|time| !time.is_paused())
+}
+
 #[derive(Resource, Debug, Clone, Serialize, Deserialize, Message)]
 pub struct ServerTPS {
     last_tick_seconds_since_start: f64,

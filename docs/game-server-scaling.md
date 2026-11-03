@@ -182,14 +182,19 @@ if this one is draining; the new process restores the world paused, and the clie
 through the reconnect path below. The lease covers the gap, so a restart that takes longer than
 `stale_secs` merely triggers a probe, which finds the new pod alive (or kills a stuck one).
 
-Ghosts — a disconnect is not a death:
+Ghosts — a disconnect is not a death. This is the behaviour of a world that keeps its state on a
+volume (`ROTS_STATE_DIR` set, i.e. every managed instance); a **static** server has no statefile to
+restore a world from and keeps slice A's semantics: a disconnect despawns the character's units and
+reports `leave`. The marker is the game server's `KeepGhosts` resource, which only the statefile
+plugin inserts.
 
 - On disconnect the server keeps the character's units and only swaps `ConnectedPlayer` for
   `DisconnectedPlayer`. Other players still see the character, and it stays attackable and
   killable; death is real. `OwnedByPlayer` marks a unit as a character's.
 - The heartbeat roster lists every character with units in the world — connected or ghost — and
   `connected` counts live connections only, which is what the idle rule and the fleet view mean by
-  "somebody is here". A disconnect sends nothing to the coordinator.
+  "somebody is here". A disconnect sends nothing to the coordinator. `paused` in that heartbeat is
+  the world's real pause state (true while a restored world waits for its players).
 - A character is released (`POST /internal/v1/servers/leave`) only when its camera unit leaves the
   world: that is its death.
 - On connect, a verified character that matches a ghost is rebound: same player entity, same
@@ -356,7 +361,9 @@ that then ends would be orphaned from its parent's perspective anyway.
   world-aware rules.
 - Carried unit bytes travel via the coordinator's reservation, not inside the ticket.
 - A disconnect keeps the character in the world as a ghost (`OwnedByPlayer` units, same camera
-  `NetEntId` on reconnect); only its camera unit leaving the world releases the character.
+  `NetEntId` on reconnect, and it re-enters the unit it was driving); only its camera unit leaving
+  the world releases the character. Static servers, which have no statefile, keep slice A's
+  behaviour: units leave with the connection and the character is reported `leave`.
 - The heartbeat roster lists ghosts and `connected` counts only live connections, so a world full of
   ghosts shuts down when it has been idle long enough.
 - A forced failure keeps the volume and the generation: probe, hard-kill, restart on the same PVC,

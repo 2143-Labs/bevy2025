@@ -25,7 +25,9 @@ use shared::{
     physics::terrain::TerrainParams,
 };
 
-use crate::{ConnectedPlayer, DisconnectedPlayer, PauseReason, Paused, PlayerSid, ServerState};
+use crate::{
+    ConnectedPlayer, DisconnectedPlayer, KeepGhosts, PauseReason, Paused, PlayerSid, ServerState,
+};
 
 /// The snapshot format this server writes. A file with any other version is unusable.
 pub const VERSION: u16 = 1;
@@ -253,7 +255,12 @@ pub struct StatefilePlugin {
 impl StatefilePlugin {
     /// `None` when `ROTS_STATE_DIR` is not set: a static server keeps no state.
     pub fn from_env() -> Option<Self> {
-        Some(Self { dir: state_dir()? })
+        Some(Self::new(state_dir()?))
+    }
+
+    /// The plugin for a given volume, which is what the tests use.
+    pub fn new(dir: PathBuf) -> Self {
+        Self { dir }
     }
 }
 
@@ -287,6 +294,8 @@ impl Plugin for StatefilePlugin {
         }
 
         app.insert_resource(RestoredWorld(restored))
+            // A world on a volume outlives a disconnect: its characters stay in it as ghosts.
+            .insert_resource(KeepGhosts)
             .insert_resource(Statefile {
                 dir: self.dir.clone(),
                 since_write: 0.0,
@@ -298,7 +307,12 @@ impl Plugin for StatefilePlugin {
             .add_systems(Startup, restore_world)
             .add_systems(
                 Update,
-                (unpause_when_restored, capture_pending, write_pending)
+                (
+                    tick_write_timer,
+                    unpause_when_restored,
+                    capture_pending,
+                    write_pending,
+                )
                     .chain()
                     .run_if(in_state(ServerState::Running)),
             );
@@ -377,18 +391,22 @@ fn unpause_when_restored(
     paused.unpause();
 }
 
-/// Take the world every few seconds, or at once when SIGTERM asked for the final snapshot.
-fn capture_pending(
-    world: &World,
-    time: Res<Time<Real>>,
-    statefile: Res<Statefile>,
-    pending: Res<PendingSnapshot>,
-) {
+/// Advance the write clock. Its own system because [`capture_pending`] takes `&World`, which may not
+/// be combined with `ResMut<Statefile>`.
+fn tick_write_timer(time: Res<Time<Real>>, mut statefile: ResMut<Statefile>) {
     if statefile.frozen {
         return;
     }
-    if !statefile.final_requested && statefile.since_write + time.delta_secs() < SNAPSHOT_EVERY_SECS
-    {
+    statefile.since_write += time.delta_secs();
+}
+
+/// Take the world once the interval has passed, or at once when SIGTERM asked for the final
+/// snapshot.
+fn capture_pending(world: &World, statefile: Res<Statefile>, pending: Res<PendingSnapshot>) {
+    if statefile.frozen {
+        return;
+    }
+    if !statefile.final_requested && statefile.since_write < SNAPSHOT_EVERY_SECS {
         return;
     }
     *pending.0.lock().expect("snapshot slot") = Some(capture(world));
@@ -522,6 +540,68 @@ mod tests {
             Loaded::Unusable(reason) => assert!(reason.contains("version"), "{reason}"),
             other => panic!("expected an unusable statefile, got {other:?}"),
         }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The write clock is what makes the file periodic; a world that never writes has nothing to
+    /// restore from.
+    #[test]
+    fn the_world_is_written_every_five_seconds() {
+        let dir = temp_dir("periodic");
+        let mut app = App::new();
+        // `App::new()` has no state machinery of its own: without this, `ServerState` never
+        // reaches `Running` and nothing below sends a heartbeat or writes the world.
+        app.add_plugins(bevy::state::app::StatesPlugin)
+            .init_state::<ServerState>()
+            .insert_resource(Time::<Real>::default())
+            .insert_resource(CurrentTick(shared::netlib::Tick(0)))
+            .init_resource::<Paused>()
+            .insert_resource(TerrainParams::default())
+            .add_plugins(StatefilePlugin::new(dir.clone()));
+        app.world_mut()
+            .resource_mut::<NextState<ServerState>>()
+            .set(ServerState::Running);
+        app.update();
+        assert!(
+            !dir.join(FILE).exists(),
+            "nothing is written before the first interval"
+        );
+
+        app.world_mut()
+            .resource_mut::<Time<Real>>()
+            .advance_by(std::time::Duration::from_secs(4));
+        app.update();
+        assert!(
+            !dir.join(FILE).exists(),
+            "four seconds is not the interval yet"
+        );
+
+        app.world_mut()
+            .resource_mut::<Time<Real>>()
+            .advance_by(std::time::Duration::from_secs(2));
+        app.update();
+        assert!(
+            matches!(load(&dir), Loaded::Snapshot(_)),
+            "the world goes to the volume once the interval passes"
+        );
+        assert!(
+            !dir.join(TMP).exists(),
+            "the temporary file is renamed away"
+        );
+
+        // And it keeps writing: the next interval replaces it.
+        app.world_mut().resource_mut::<CurrentTick>().0.increment();
+        app.world_mut()
+            .resource_mut::<Time<Real>>()
+            .advance_by(std::time::Duration::from_secs(6));
+        app.update();
+        match load(&dir) {
+            Loaded::Snapshot(snapshot) => {
+                assert_eq!(snapshot.tick, 1, "the second write is current")
+            }
+            other => panic!("expected a snapshot, got {other:?}"),
+        }
+
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
