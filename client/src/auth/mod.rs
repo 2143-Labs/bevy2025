@@ -19,6 +19,7 @@ pub mod steam;
 pub mod web;
 
 use bevy::prelude::*;
+use bevy::time::Real;
 use serde_json::{Value, json};
 
 use crate::notification::Notification;
@@ -95,6 +96,85 @@ pub struct AssignedServer {
     /// Path on the page's own host that web clients connect to.
     #[allow(dead_code, reason = "native connects to `udp` instead")]
     pub ws_path: String,
+    /// The tutorial instance's join code, for slice C's "join someone" box. Not shown yet.
+    #[allow(dead_code, reason = "slice C displays the join code")]
+    pub join_code: Option<String>,
+    /// A migrated world comes back paused; nothing acts on it until slice D adds pausing.
+    #[allow(dead_code, reason = "slice D unpauses")]
+    pub paused: bool,
+}
+
+/// Why `/api/v1/play` did not hand out a server yet: the fleet is starting one, or it has none to
+/// give. Both are retried rather than treated as a failed login.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlayWait {
+    /// `server_starting` / `server_recovering`: an instance for this character is coming up.
+    Starting,
+    /// `servers_full`: the fleet is at capacity; the authserver frees a slot when one drains.
+    Full,
+}
+
+impl PlayWait {
+    /// The error codes the authserver answers with while a server is not ready.
+    fn from_code(code: &str) -> Option<Self> {
+        match code {
+            "server_starting" | "server_recovering" => Some(Self::Starting),
+            "servers_full" => Some(Self::Full),
+            _ => None,
+        }
+    }
+
+    /// What the connecting menu shows while it waits.
+    pub fn status_text(self) -> &'static str {
+        match self {
+            Self::Starting => "Starting a server…",
+            Self::Full => "Servers are full, retrying…",
+        }
+    }
+
+    /// How long to wait between attempts.
+    fn retry_every(self) -> f32 {
+        match self {
+            Self::Starting => 2.0,
+            Self::Full => 5.0,
+        }
+    }
+
+    /// How long to keep trying before giving up.
+    fn give_up_after(self) -> f32 {
+        match self {
+            Self::Starting => 120.0,
+            Self::Full => 600.0,
+        }
+    }
+
+    /// What the player is told if it never becomes available.
+    fn gave_up(self) -> &'static str {
+        match self {
+            Self::Starting => "no game server became ready",
+            Self::Full => "the servers are full",
+        }
+    }
+}
+
+/// A `/play` that will be tried again: the authserver has not got a server to hand out yet.
+#[derive(Resource, Clone, Copy, Debug)]
+pub struct PlayRetry {
+    pub wait: PlayWait,
+    /// Seconds until the next attempt.
+    until_next: f32,
+    /// Seconds until the client stops trying.
+    left: f32,
+}
+
+impl PlayRetry {
+    fn new(wait: PlayWait) -> Self {
+        Self {
+            wait,
+            until_next: wait.retry_every(),
+            left: wait.give_up_after(),
+        }
+    }
 }
 
 /// Progress of the most recent ticket request. `Ready` means a fresh [`GameTicket`] is waiting to
@@ -158,7 +238,9 @@ impl Plugin for AuthPlugin {
             .init_resource::<AuthSession>()
             .init_resource::<PendingAuth>()
             .add_systems(Startup, load_session)
-            .add_systems(Update, poll_auth_responses)
+            // Chained: a response consumed by `poll_auth_responses` removes the retry before
+            // `retry_play` can fire one more request in the same frame.
+            .add_systems(Update, (poll_auth_responses, retry_play).chain())
             // PostUpdate so requests written by UI systems this frame are started before the
             // frame's state transitions run.
             .add_systems(PostUpdate, handle_auth_requests);
@@ -212,6 +294,7 @@ fn handle_auth_requests(
                     .push((Op::Logout, http.post("/api/v1/logout", json!({}), token)));
                 *session = AuthSession::default();
                 commands.remove_resource::<GameTicket>();
+                commands.remove_resource::<PlayRetry>();
                 auth_state.set(AuthState::Idle);
             }
             AuthRequest::Claim(code) => {
@@ -299,27 +382,47 @@ fn poll_auth_responses(
                 ));
             }
             (Op::Play { .. }, Ok(body)) => {
+                commands.remove_resource::<PlayRetry>();
                 let assigned = str_field(&body, "ticket").zip(body.get("server")).and_then(
                     |(ticket, server)| {
                         Some((
                             ticket,
                             str_field(server, "udp")?,
                             str_field(server, "ws_path")?,
+                            str_field(server, "join_code"),
+                            // Absent from an authserver older than slice A: not paused.
+                            server
+                                .get("paused")
+                                .and_then(Value::as_bool)
+                                .unwrap_or(false),
                         ))
                     },
                 );
                 match assigned {
-                    Some((ticket, udp, ws_path)) => {
+                    Some((ticket, udp, ws_path, join_code, paused)) => {
                         commands.insert_resource(GameTicket(ticket));
                         // Native connects straight to the assigned address; web keeps using
                         // `ws_path` on the page's own host (see `web::game_server_url`).
                         #[cfg(not(feature = "web"))]
                         crate::apply_server_addr(&mut config, &udp);
-                        commands.insert_resource(AssignedServer { udp, ws_path });
+                        commands.insert_resource(AssignedServer {
+                            udp,
+                            ws_path,
+                            join_code,
+                            paused,
+                        });
                         auth_state.set(AuthState::Ready);
                     }
                     None => fail(&mut notif, &mut auth_state, "play response missing fields"),
                 }
+            }
+            // A server is coming up, or the fleet is full: retry later instead of failing the
+            // login. `AuthState` stays `Requesting`, so the connecting menu keeps showing progress.
+            (Op::Play { .. }, Err(code)) if PlayWait::from_code(&code).is_some() => {
+                let wait = PlayWait::from_code(&code).expect("guarded above");
+                info!("no server yet ({code}): retrying");
+                notif.write(Notification(wait.status_text().to_string()));
+                commands.insert_resource(PlayRetry::new(wait));
             }
             (
                 Op::Play {
@@ -372,7 +475,10 @@ fn poll_auth_responses(
                 }
                 None => notify_login_failed(&mut notif, "session_token missing from response"),
             },
-            (Op::Guest | Op::Play { .. }, Err(e)) => fail(&mut notif, &mut auth_state, &e),
+            (Op::Guest | Op::Play { .. }, Err(e)) => {
+                commands.remove_resource::<PlayRetry>();
+                fail(&mut notif, &mut auth_state, &e);
+            }
             #[cfg(feature = "steam")]
             (Op::SteamLogin, Err(e)) => notify_login_failed(&mut notif, &e),
         }
@@ -383,6 +489,47 @@ fn poll_auth_responses(
 fn fail(notif: &mut MessageWriter<Notification>, auth_state: &mut NextState<AuthState>, e: &str) {
     notify_login_failed(notif, e);
     auth_state.set(AuthState::Failed);
+}
+
+/// Retry a `/play` that the authserver answered `server_starting`, `server_recovering` or
+/// `servers_full`, until it hands out a server or the deadline passes.
+fn retry_play(
+    time: Res<Time<Real>>,
+    http: AuthHttp,
+    retry: Option<ResMut<PlayRetry>>,
+    mut pending: ResMut<PendingAuth>,
+    session: Res<AuthSession>,
+    mut notif: MessageWriter<Notification>,
+    mut auth_state: ResMut<NextState<AuthState>>,
+    mut commands: Commands,
+) {
+    let Some(mut retry) = retry else {
+        return;
+    };
+    let delta = time.delta_secs();
+    retry.until_next -= delta;
+    retry.left -= delta;
+    if retry.left <= 0.0 {
+        let message = retry.wait.gave_up();
+        commands.remove_resource::<PlayRetry>();
+        fail(&mut notif, &mut auth_state, message);
+        return;
+    }
+    if retry.until_next > 0.0 {
+        return;
+    }
+    // A request is still in flight (slow authserver): look again shortly.
+    if pending.has(|op| matches!(op, Op::Play { .. })) {
+        retry.until_next = 0.5;
+        return;
+    }
+    pending.0.push((
+        Op::Play {
+            retry_as_guest: true,
+        },
+        http.post("/api/v1/play", json!({}), session.native_token.clone()),
+    ));
+    retry.until_next = retry.wait.retry_every();
 }
 
 fn notify_login_failed(notif: &mut MessageWriter<Notification>, e: &str) {

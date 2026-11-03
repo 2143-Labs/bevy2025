@@ -6,10 +6,10 @@ use dashmap::DashMap;
 use shared::{
     BASE_TICKS_PER_SECOND, Config,
     event::{
-        MyNetEntParentId, NetEntId, PlayerId, UDPacketEvent,
+        MigrationKind, MyNetEntParentId, NetEntId, PlayerId, UDPacketEvent,
         client::{
             BeginThirdpersonControllingUnit, ConnectRejected, HeartbeatChallenge,
-            HeartbeatResponse, SpawnUnit2, WorldData2,
+            HeartbeatResponse, HostMigration, SpawnUnit2, WorldData2,
         },
         server::{
             ChangeMovement, ConnectRequest, Heartbeat, HeartbeatChallengeResponse,
@@ -86,6 +86,7 @@ impl Plugin for NetworkingPlugin {
                 (
                     receive_world_data,
                     receive_connect_rejected,
+                    receive_host_migration,
                     shared::event::client::drain_incoming_events,
                 )
                     .run_if(
@@ -542,6 +543,28 @@ fn receive_connect_rejected(
         commands.remove_resource::<GameTicket>();
         auth_state.set(AuthState::Idle);
         network_state.set(NetworkGameState::Quit);
+    }
+}
+
+/// The server is going away (slice A: it was told to shut down). Slice C makes this a handoff to
+/// another instance; today every client goes back to the main menu.
+fn receive_host_migration(
+    mut migrations: UDPacketEvent<HostMigration>,
+    mut commands: Commands,
+    mut notif: MessageWriter<Notification>,
+    mut auth_state: ResMut<NextState<AuthState>>,
+    mut network_state: ResMut<NextState<NetworkGameState>>,
+) {
+    for migration in migrations.read() {
+        match &migration.event.kind {
+            MigrationKind::ToMenu { reason } => {
+                info!(reason, "server is shutting down: back to the menu");
+                notif.write(Notification("The server shut down".to_string()));
+                commands.remove_resource::<GameTicket>();
+                auth_state.set(AuthState::Idle);
+                network_state.set(NetworkGameState::Quit);
+            }
+        }
     }
 }
 
