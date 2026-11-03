@@ -38,7 +38,7 @@ fastrand = "2.3"
 avian3d = { version = "0.8.0", features = ["3d", "collider-from-mesh", "parallel", "parry-f32", "xpbd_joints", "serialize", "bevy_scene"], default-features = false }
 dashmap = { version = "6.1.0", features = ["rayon"] }
 rayon = "1.11.0"
-tokio = { version = "1.49.0", features = ["net", "rt-multi-thread", "time"] }
+tokio = { version = "1.49.0", features = ["net", "rt-multi-thread", "signal", "time"] }
 axum = "0.8.8"
 tokio-tungstenite = "0.28.0"
 futures-util = "0.3.32"

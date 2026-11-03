@@ -68,6 +68,7 @@ pub mod animations;
 pub mod axum;
 pub mod coordinator;
 pub mod gym_beacon;
+pub mod lifecycle;
 pub mod projectile;
 pub mod spawns;
 pub mod terrain;
@@ -78,11 +79,24 @@ use ticket::{TicketVerifier, VerifiedTicket};
 
 /// Private internal coordinator for this server (player placement, server lifecycle): the
 /// authserver's internal API. `None` = standalone server (no ticket gate, no reporting).
+///
+/// Every report names the instance it comes from, `<slot, generation>`: the coordinator's
+/// `GameServerWorkflow` for this server is `rots-gs-<queue>-<slot>-g<generation>`.
 #[derive(Resource, Clone)]
 pub struct GameServerCoordinator {
     pub endpoint: String,
     /// This server's slot, matching the `srv` claim of the tickets it accepts.
     pub slot: u32,
+    /// The instance generation (`ROTS_SERVER_GENERATION`). A static server, which no provisioner
+    /// created, reports the first generation, 1.
+    pub generation: u64,
+    /// The public UDP port this instance is reachable on (`ROTS_PUBLIC_UDP_PORT`), when the
+    /// provisioner set one.
+    pub udp_port: Option<u16>,
+    /// Set when `ROTS_SERVER_GENERATION` is present: a provisioner created this instance, so it
+    /// owns a volume and a workflow, and a report the coordinator does not recognise is fatal
+    /// rather than noise. Static servers (prod, local dev) are never in that position.
+    pub managed: bool,
     pub token: String,
 }
 
@@ -92,6 +106,9 @@ impl std::fmt::Debug for GameServerCoordinator {
         f.debug_struct("GameServerCoordinator")
             .field("endpoint", &self.endpoint)
             .field("slot", &self.slot)
+            .field("generation", &self.generation)
+            .field("udp_port", &self.udp_port)
+            .field("managed", &self.managed)
             .finish()
     }
 }
@@ -103,18 +120,33 @@ impl GameServerCoordinator {
         let endpoint = std::env::var("ROTS_COORDINATOR_URL")
             .ok()
             .filter(|v| !v.is_empty())?;
-        let slot = std::env::var("ROTS_SERVER_SLOT")
-            .expect("ROTS_SERVER_SLOT must be set with ROTS_COORDINATOR_URL")
-            .parse::<u32>()
-            .expect("ROTS_SERVER_SLOT must be a non-negative integer");
+        let slot = parse_env::<u32>("ROTS_SERVER_SLOT")
+            .expect("ROTS_SERVER_SLOT must be set with ROTS_COORDINATOR_URL");
+        let generation = parse_env::<u64>("ROTS_SERVER_GENERATION");
+        let udp_port = parse_env::<u16>("ROTS_PUBLIC_UDP_PORT");
         let token = std::env::var("ROTS_COORDINATOR_TOKEN")
             .expect("ROTS_COORDINATOR_TOKEN must be set with ROTS_COORDINATOR_URL");
         Some(Self {
             endpoint,
             slot,
+            generation: generation.unwrap_or(1),
+            udp_port,
+            managed: generation.is_some(),
             token,
         })
     }
+}
+
+/// A numeric environment variable, read as `None` when unset or empty.
+pub(crate) fn parse_env<T: std::str::FromStr>(name: &str) -> Option<T> {
+    std::env::var(name)
+        .ok()
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            value
+                .parse()
+                .unwrap_or_else(|_| panic!("{name} must be a number"))
+        })
 }
 
 /// How a server process was launched.
@@ -147,6 +179,11 @@ pub fn run_server(
         coordinator,
         lan_beacon,
     } = settings;
+    // The sentinel check has to happen before the world exists: a generation that already shut
+    // down exits here, so a StatefulSet restarting it does not bring back a dead world.
+    if let Some(c) = &coordinator {
+        lifecycle::exit_if_already_shut_down(c);
+    }
     do_app(base_plugins, |app| {
         if matches!(verifier, TicketVerifier::Disabled) {
             app.add_systems(Startup, || warn!("ticket verification disabled"));
@@ -170,6 +207,12 @@ pub fn run_server(
             Some(c) => {
                 info!("coordinator: {:?}", c);
                 app.insert_resource(coordinator::spawn_link(&link_runtime, c.clone()));
+                if c.managed {
+                    // A provisioned instance owns its own lifecycle: it destroys itself when it
+                    // is idle and migrates its players off on SIGTERM. Static servers have no
+                    // such env, so none of this exists for them (prod, local dev).
+                    app.add_plugins(lifecycle::LifecyclePlugin::new(&c, &link_runtime));
+                }
                 app.insert_resource(c);
                 app.add_plugins(coordinator::CoordinatorPlugin);
             }

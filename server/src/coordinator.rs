@@ -4,6 +4,11 @@
 //! play on this slot (which also proves the ticket's login session still exists). Leaves and
 //! heartbeats are fire-and-forget and retried until the authserver accepts them.
 //!
+//! Every report names the instance it comes from, `<slot, generation>`. A report for an instance
+//! the coordinator does not list is answered `409 unknown_instance`: the workflow that owns this
+//! server is gone, so the server has nothing to serve and exits (see
+//! [`crate::lifecycle::exit_orphaned`]).
+//!
 //! Ordering is load-bearing. One task sends every op, one at a time, in the order the server
 //! produced it, because the coordinator removes a slot's players by diffing heartbeat rosters: a
 //! heartbeat that overtook a join would report the player who had just joined as gone. At most
@@ -47,8 +52,11 @@ pub struct PlayerRef {
 
 /// Everything the link sends, in production order.
 pub enum LinkOp {
-    /// The full roster of this slot.
-    Heartbeat(Vec<PlayerRef>),
+    /// The full roster of this slot, and how many of those characters are connected.
+    Heartbeat {
+        players: Vec<PlayerRef>,
+        connected: u32,
+    },
     /// Ask to admit a character; the answer arrives on `reply`.
     Join {
         character_id: i64,
@@ -57,6 +65,25 @@ pub enum LinkOp {
     },
     /// The character is gone from this slot.
     Leave { character_id: i64 },
+    /// Ask the coordinator what to do with this instance before exiting; `reason` is `idle` or
+    /// `sigterm`. The answer arrives on `reply`.
+    ShutdownRequest {
+        reason: &'static str,
+        players: Vec<i64>,
+        reply: oneshot::Sender<Result<ShutdownPlan, String>>,
+    },
+}
+
+/// What the coordinator wants a server that is shutting down to do with its players.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShutdownPlan {
+    /// Nobody to hand over: exit and let the workflow delete the instance.
+    Destroy,
+    /// Tell every client to go back to the main menu, then exit.
+    ToMenu,
+    /// Slice C: hand the players to `slot`, generation `generation`. Slice A servers have no way
+    /// to carry a world over, so they treat this like `ToMenu`.
+    Migrate { slot: u32, generation: u64 },
 }
 
 /// Handle to the sender task; dropping the last handle does not stop it (the game server holds it
@@ -89,17 +116,33 @@ impl CoordinatorLink {
     /// and after recovery every queued join would wait behind all of them past `JOIN_GIVE_UP`.
     /// Dropping the newer roster is safe: the waiting one lists exactly the players admitted or
     /// pending before it in the queue, and any join or leave since then is queued after it.
-    pub fn heartbeat(&self, players: Vec<PlayerRef>) {
+    pub fn heartbeat(&self, players: Vec<PlayerRef>, connected: u32) {
         if self.heartbeat_queued.swap(true, Ordering::AcqRel) {
             return;
         }
-        if !self.send(LinkOp::Heartbeat(players)) {
+        if !self.send(LinkOp::Heartbeat { players, connected }) {
             self.heartbeat_queued.store(false, Ordering::Release);
         }
     }
 
     pub fn leave(&self, character_id: i64) {
         self.send(LinkOp::Leave { character_id });
+    }
+
+    /// Ask what to do with this instance's players. The reply is the coordinator's plan; an `Err`
+    /// means the authserver could not be reached for long enough that the caller must decide.
+    pub fn shutdown_request(
+        &self,
+        reason: &'static str,
+        players: Vec<i64>,
+    ) -> oneshot::Receiver<Result<ShutdownPlan, String>> {
+        let (reply, answer) = oneshot::channel();
+        self.send(LinkOp::ShutdownRequest {
+            reason,
+            players,
+            reply,
+        });
+        answer
     }
 }
 
@@ -133,13 +176,22 @@ pub fn spawn_link(
 #[derive(Serialize)]
 struct HeartbeatBody<'a> {
     slot: u32,
+    generation: u64,
     boot_id: &'a str,
     players: &'a [PlayerRef],
+    /// Characters with a live connection. Ghosts (slice B) count in `players` but not here: this
+    /// is what the coordinator reports, and what the server's own idle rule counts.
+    connected: u32,
+    /// Slice D (pausing) reports the real value; a slice A server is never paused.
+    paused: bool,
+    /// The public UDP port this instance is reachable on, when the provisioner set one.
+    udp_port: Option<u16>,
 }
 
 #[derive(Serialize)]
 struct JoinBody<'a> {
     slot: u32,
+    generation: u64,
     boot_id: &'a str,
     character_id: i64,
     sid: &'a str,
@@ -148,8 +200,51 @@ struct JoinBody<'a> {
 #[derive(Serialize)]
 struct LeaveBody<'a> {
     slot: u32,
+    generation: u64,
     boot_id: &'a str,
     character_id: i64,
+}
+
+#[derive(Serialize)]
+struct ShutdownRequestBody<'a> {
+    slot: u32,
+    generation: u64,
+    boot_id: &'a str,
+    reason: &'a str,
+    players: &'a [i64],
+}
+
+/// The coordinator's answer to a shutdown request. Tagged twice: `{"plan":"destroy"}`,
+/// `{"plan":"to_menu"}`, `{"plan":"migrate","slot":k,"generation":g}`.
+#[derive(Deserialize)]
+#[serde(tag = "plan", rename_all = "snake_case")]
+enum ShutdownPlanBody {
+    Destroy,
+    ToMenu,
+    Migrate { slot: u32, generation: u64 },
+}
+
+impl From<ShutdownPlanBody> for ShutdownPlan {
+    fn from(body: ShutdownPlanBody) -> Self {
+        match body {
+            ShutdownPlanBody::Destroy => ShutdownPlan::Destroy,
+            ShutdownPlanBody::ToMenu => ShutdownPlan::ToMenu,
+            ShutdownPlanBody::Migrate { slot, generation } => {
+                ShutdownPlan::Migrate { slot, generation }
+            }
+        }
+    }
+}
+
+/// Whether a report landed, was refused for good, or named an instance the coordinator does not
+/// have.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Report {
+    Accepted,
+    /// A 400, or any other answer that retrying cannot fix.
+    Dropped,
+    /// `409 unknown_instance`: the workflow that owns this instance is gone.
+    Orphaned,
 }
 
 #[derive(Deserialize)]
@@ -183,6 +278,7 @@ async fn run_link(
                 }
                 let body = JoinBody {
                     slot: coordinator.slot,
+                    generation: coordinator.generation,
                     boot_id: &boot_id,
                     character_id,
                     sid: &sid,
@@ -190,30 +286,56 @@ async fn run_link(
                 let answer = send_join(&client, &coordinator, &body).await;
                 let _ = reply.send(answer);
             }
-            LinkOp::Heartbeat(players) => {
+            LinkOp::Heartbeat { players, connected } => {
                 // Taken off the queue: the next roster may wait behind this one.
                 heartbeat_queued.store(false, Ordering::Release);
                 let body = HeartbeatBody {
                     slot: coordinator.slot,
+                    generation: coordinator.generation,
                     boot_id: &boot_id,
                     players: &players,
+                    connected,
+                    paused: false,
+                    udp_port: coordinator.udp_port,
                 };
-                send_until_accepted(
+                let report = send_until_accepted(
                     &client,
                     &coordinator,
                     "/internal/v1/servers/heartbeat",
                     &body,
                 )
                 .await;
+                // The coordinator no longer knows this instance: nothing here is reachable any
+                // more. Static servers are never in this position (their reports start the
+                // workflow), so only a provisioned instance exits.
+                if report == Report::Orphaned && coordinator.managed {
+                    crate::lifecycle::exit_orphaned(coordinator.generation);
+                }
             }
             LinkOp::Leave { character_id } => {
                 let body = LeaveBody {
                     slot: coordinator.slot,
+                    generation: coordinator.generation,
                     boot_id: &boot_id,
                     character_id,
                 };
                 send_until_accepted(&client, &coordinator, "/internal/v1/servers/leave", &body)
                     .await;
+            }
+            LinkOp::ShutdownRequest {
+                reason,
+                players,
+                reply,
+            } => {
+                let body = ShutdownRequestBody {
+                    slot: coordinator.slot,
+                    generation: coordinator.generation,
+                    boot_id: &boot_id,
+                    reason,
+                    players: &players,
+                };
+                let answer = send_shutdown_request(&client, &coordinator, &body).await;
+                let _ = reply.send(answer);
             }
         }
     }
@@ -266,30 +388,88 @@ async fn send_join(
 }
 
 /// Retry until the authserver accepts. A 400 is a bug in the body (the slot, say): log it and
-/// drop it, since retrying cannot fix it.
+/// drop it, since retrying cannot fix it. `409 unknown_instance` means the coordinator does not
+/// list this `<slot, generation>` at all, so it is reported back to the caller.
 async fn send_until_accepted(
     client: &reqwest::Client,
     coordinator: &GameServerCoordinator,
     path: &str,
     body: &impl Serialize,
-) {
+) -> Report {
     let mut delay = Duration::from_secs(1);
     let mut attempt = 0;
     loop {
         attempt += 1;
         let failure = match post(client, coordinator, path, body).await {
-            Ok(response) if response.status().is_success() => return,
+            Ok(response) if response.status().is_success() => return Report::Accepted,
+            Ok(response) if response.status() == StatusCode::CONFLICT => {
+                let error = match response.json::<ErrorBody>().await {
+                    Ok(body) => body.error,
+                    Err(_) => String::new(),
+                };
+                if error == "unknown_instance" {
+                    warn!("coordinator {path}: unknown instance (attempt {attempt})");
+                    return Report::Orphaned;
+                }
+                error
+            }
             Ok(response) if response.status() == StatusCode::BAD_REQUEST => {
                 error!(
                     "coordinator {path} rejected the request (attempt {attempt}): {} (not retrying)",
                     response.status()
                 );
-                return;
+                return Report::Dropped;
             }
             Ok(response) => response.status().to_string(),
             Err(e) => e.to_string(),
         };
         error!("coordinator {path} failed (attempt {attempt}): {failure}");
+        tokio::time::sleep(delay).await;
+        delay = (delay * 2).min(MAX_RETRY_DELAY);
+    }
+}
+
+/// Ask what to do with this instance's players. Retried like a heartbeat, except that a refusal
+/// (4xx) is answered immediately: the caller is on its way out and must not wait for a plan it
+/// will never get.
+async fn send_shutdown_request(
+    client: &reqwest::Client,
+    coordinator: &GameServerCoordinator,
+    body: &ShutdownRequestBody<'_>,
+) -> Result<ShutdownPlan, String> {
+    let mut delay = Duration::from_secs(1);
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
+        let failure = match post(
+            client,
+            coordinator,
+            "/internal/v1/servers/shutdown-request",
+            body,
+        )
+        .await
+        {
+            Ok(response) if response.status().is_success() => {
+                return response
+                    .json::<ShutdownPlanBody>()
+                    .await
+                    .map(ShutdownPlan::from)
+                    .map_err(|e| format!("unreadable shutdown plan: {e}"));
+            }
+            Ok(response) if response.status().is_client_error() => {
+                let status = response.status();
+                let error = response
+                    .json::<ErrorBody>()
+                    .await
+                    .map(|body| body.error)
+                    .unwrap_or_default();
+                error!("coordinator shutdown-request refused: {status} {error}");
+                return Err(format!("{status} {error}"));
+            }
+            Ok(response) => response.status().to_string(),
+            Err(e) => e.to_string(),
+        };
+        error!("coordinator shutdown-request failed (attempt {attempt}): {failure}");
         tokio::time::sleep(delay).await;
         delay = (delay * 2).min(MAX_RETRY_DELAY);
     }
@@ -342,6 +522,9 @@ fn send_heartbeat(
             sid: sid.0.clone(),
         })
         .collect();
+    // The roster below also lists joins in flight; `connected` counts only live connections, which
+    // is what the fleet view and the server's own idle rule mean by "somebody is here".
+    let connected_count = players.len() as u32;
     players.extend(
         pending
             .0
@@ -364,7 +547,7 @@ fn send_heartbeat(
             .then_with(|| a.sid.cmp(&b.sid))
     });
     players.dedup();
-    link.heartbeat(players);
+    link.heartbeat(players, connected_count);
 }
 
 /// Report players that left (quit, timed out) to the coordinator, which signals their session
@@ -485,6 +668,11 @@ mod tests {
         GameServerCoordinator {
             endpoint: endpoint.to_string(),
             slot: 2,
+            generation: 3,
+            udp_port: Some(36002),
+            // Static: the orphan path would exit the process, which is the right thing for a
+            // managed instance and a hangover for a test.
+            managed: false,
             token: TOKEN.to_string(),
         }
     }
@@ -494,6 +682,12 @@ mod tests {
             character_id: 7,
             sid: "0123456789abcdef".to_string(),
         }]
+    }
+
+    /// Every roster in these tests has as many live connections as it lists players.
+    fn hb(link: &CoordinatorLink, players: Vec<PlayerRef>) {
+        let connected = players.len() as u32;
+        link.heartbeat(players, connected);
     }
 
     fn wait_for(mock: &Arc<Mock>, count: usize, timeout: Duration) {
@@ -524,11 +718,11 @@ mod tests {
         );
         let link = spawn_link(&runtime, coordinator(&endpoint));
 
-        link.heartbeat(players());
+        hb(&link, players());
         // The first heartbeat is in flight, so the second one queues behind the leave.
         wait_for(&mock, 1, Duration::from_secs(5));
         link.leave(7);
-        link.heartbeat(players());
+        hb(&link, players());
 
         wait_for(&mock, 5, Duration::from_secs(15));
         let requests = mock.requests();
@@ -547,7 +741,12 @@ mod tests {
         assert_eq!(requests[2].body["slot"], 2);
         assert_eq!(
             requests[3].body,
-            json!({"slot": 2, "boot_id": requests[3].body["boot_id"], "character_id": 7})
+            json!({
+                "slot": 2,
+                "generation": 3,
+                "boot_id": requests[3].body["boot_id"],
+                "character_id": 7,
+            })
         );
         // One boot id for the whole process.
         assert_eq!(requests[0].body["boot_id"], requests[4].body["boot_id"]);
@@ -572,12 +771,12 @@ mod tests {
         );
         let link = spawn_link(&runtime, coordinator(&endpoint));
 
-        link.heartbeat(roster(1));
+        hb(&link, roster(1));
         wait_for(&mock, 1, Duration::from_secs(5));
-        link.heartbeat(roster(2)); // waits behind roster 1
-        link.heartbeat(roster(3)); // dropped: roster 2 is still waiting
+        hb(&link, roster(2)); // waits behind roster 1
+        hb(&link, roster(3)); // dropped: roster 2 is still waiting
         link.leave(9);
-        link.heartbeat(roster(4)); // dropped: roster 2 is still waiting
+        hb(&link, roster(4)); // dropped: roster 2 is still waiting
 
         wait_for(&mock, 5, Duration::from_secs(15));
         // Nothing else was queued.
@@ -606,7 +805,7 @@ mod tests {
         );
 
         // Once the waiting roster is taken, the next one queues again.
-        link.heartbeat(roster(5));
+        hb(&link, roster(5));
         wait_for(&mock, 6, Duration::from_secs(5));
         assert_eq!(mock.requests()[5].body["players"][0]["character_id"], 5);
     }
@@ -639,6 +838,7 @@ mod tests {
             mock.requests()[0].body,
             json!({
                 "slot": 2,
+                "generation": 3,
                 "boot_id": mock.requests()[0].body["boot_id"],
                 "character_id": 7,
                 "sid": "0123456789abcdef",
@@ -668,12 +868,96 @@ mod tests {
             reply,
         });
         drop(answer);
-        link.heartbeat(vec![]);
+        hb(&link, vec![]);
 
         wait_for(&mock, 1, Duration::from_secs(5));
         let requests = mock.requests();
         assert_eq!(requests.len(), 1);
         assert_eq!(requests[0].path, "/internal/v1/servers/heartbeat");
+    }
+
+    #[test]
+    fn the_heartbeat_names_the_instance_and_its_connections() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let (endpoint, mock) = start_mock(&runtime, vec![]);
+        let link = spawn_link(&runtime, coordinator(&endpoint));
+
+        hb(&link, players());
+        wait_for(&mock, 1, Duration::from_secs(5));
+        let body = &mock.requests()[0].body;
+        assert_eq!(body["slot"], 2);
+        assert_eq!(body["generation"], 3);
+        assert_eq!(body["connected"], 1);
+        assert_eq!(body["paused"], false);
+        assert_eq!(body["udp_port"], 36002);
+    }
+
+    #[test]
+    fn shutdown_request_maps_the_coordinators_plans() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let (endpoint, mock) = start_mock(
+            &runtime,
+            vec![
+                (200, json!({"plan": "destroy"})),
+                (200, json!({"plan": "to_menu"})),
+                (200, json!({"plan": "migrate", "slot": 4, "generation": 9})),
+                (409, json!({"error": "unknown_instance"})),
+            ],
+        );
+        let link = spawn_link(&runtime, coordinator(&endpoint));
+
+        let ask = |reason: &'static str, players: Vec<i64>| {
+            runtime
+                .block_on(link.shutdown_request(reason, players))
+                .unwrap()
+        };
+        assert_eq!(ask("idle", vec![]), Ok(ShutdownPlan::Destroy));
+        assert_eq!(
+            mock.requests()[0].body,
+            json!({
+                "slot": 2,
+                "generation": 3,
+                "boot_id": mock.requests()[0].body["boot_id"],
+                "reason": "idle",
+                "players": [],
+            })
+        );
+        assert_eq!(ask("sigterm", vec![7]), Ok(ShutdownPlan::ToMenu));
+        assert_eq!(mock.requests()[1].body["reason"], "sigterm");
+        assert_eq!(mock.requests()[1].body["players"], json!([7]));
+        assert_eq!(
+            ask("sigterm", vec![7]),
+            Ok(ShutdownPlan::Migrate {
+                slot: 4,
+                generation: 9
+            })
+        );
+        // A refusal is not retried: the caller is on its way out.
+        assert!(ask("sigterm", vec![]).is_err());
+        assert_eq!(mock.len(), 4);
+    }
+
+    #[test]
+    fn an_unknown_instance_is_not_retried() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let (endpoint, mock) =
+            start_mock(&runtime, vec![(409, json!({"error": "unknown_instance"}))]);
+        let link = spawn_link(&runtime, coordinator(&endpoint));
+
+        hb(&link, players());
+        wait_for(&mock, 1, Duration::from_secs(5));
+        // A retryable failure would have produced a second request within 1 s.
+        std::thread::sleep(Duration::from_millis(1500));
+        assert_eq!(mock.len(), 1);
     }
 
     #[test]
@@ -689,7 +973,7 @@ mod tests {
         assert!(!debug.contains(TOKEN), "{debug}");
 
         let link = spawn_link(&runtime, coordinator);
-        link.heartbeat(players());
+        hb(&link, players());
         wait_for(&mock, 1, Duration::from_secs(5));
         assert_eq!(
             mock.requests()[0].auth.as_deref(),
