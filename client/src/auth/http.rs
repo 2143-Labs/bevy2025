@@ -29,7 +29,9 @@ pub struct AuthRuntime {
 impl AuthRuntime {
     pub fn new(runtime: Arc<tokio::runtime::Runtime>) -> Self {
         let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
+            // The authserver scales to zero; the KEDA interceptor holds the first request for
+            // up to 30 s while it cold-starts.
+            .timeout(std::time::Duration::from_secs(30))
             .build()
             .expect("failed to build auth HTTP client");
         Self { runtime, client }
