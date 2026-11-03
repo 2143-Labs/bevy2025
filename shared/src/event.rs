@@ -13,6 +13,16 @@ pub mod server;
 #[derive(Debug, Clone, Copy, Component, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct NetEntId(pub u64);
 
+/// Why a server is handing its clients off ([`client::HostMigration`]).
+///
+/// Declared here, not in `client.rs`: `shared/build.rs` turns every type declared in that file
+/// into an `EventToClient` variant, and this is payload, not an event.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MigrationKind {
+    /// The server is shutting down: return to the main menu and show `reason` to the player.
+    ToMenu { reason: String },
+}
+
 /// Every unique player gets a unique PlayerId.
 #[derive(
     Debug, Clone, Copy, Component, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord,

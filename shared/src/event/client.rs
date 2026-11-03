@@ -1,7 +1,7 @@
 //!This is for events that are sent FROM the server TO the client.
 use std::collections::HashMap;
 
-use crate::event::PlayerId;
+use crate::event::{MigrationKind, PlayerId};
 use crate::items::{Inventory, Item, ItemId, ItemInInventory, ItemPlacement, SkillFromSkillSource};
 use crate::net_components::PlayerConnectionInfo;
 use crate::netlib::{NetworkingResources, Tick};
@@ -136,6 +136,13 @@ pub struct CastSkillUpdateToClient {
 #[derive(Debug, Clone, Serialize, Deserialize, Message)]
 pub struct TickHappened {
     pub tick: Tick,
+}
+
+/// The server is going away and every client must leave it. Slice A sends `ToMenu` when a server
+/// is told to shut down; slice C adds the handoff kind that moves players to another instance.
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct HostMigration {
+    pub kind: MigrationKind,
 }
 
 /// Sent instead of `WorldData2` when the server refuses a `ConnectRequest`.
