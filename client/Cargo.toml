@@ -43,7 +43,9 @@ parking_lot = "0.12.5"
 # main.rs drives every non-web build with a tokio runtime, so tokio has to be
 # present on native targets regardless of which networking features are enabled.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { version = "1.49.0" }
+# `rt-multi-thread` explicitly: a build without the `udp` feature gets no tokio from `shared`,
+# so feature unification no longer supplies it and main.rs could not build its runtime.
+tokio = { version = "1.49.0", features = ["rt-multi-thread"] }
 # Auth HTTP client (client/src/auth/http.rs); web builds use window.fetch instead.
 reqwest = { version = "0.13.2", default-features = false, features = ["rustls", "json"] }
 

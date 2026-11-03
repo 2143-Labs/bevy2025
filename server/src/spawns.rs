@@ -10,7 +10,7 @@ use shared::{
     },
     net_components::{
         ToNetComponent, make_man, make_small_loot,
-        ours::{ControlledBy, Dead, DespawnOnPlayerDisconnect, HasInventory},
+        ours::{ControlledBy, Dead, HasInventory, OwnedByPlayer},
     },
     netlib::{EventToClient, ServerNetworkingResources},
 };
@@ -24,7 +24,9 @@ impl Plugin for SpawnPlugin {
             Update,
             (on_circle_spawn, on_man_spawn, on_unit_die)
                 //.run_if(on_timer(Duration::from_millis(10)))
-                .run_if(in_state(ServerState::Running)),
+                .run_if(in_state(ServerState::Running))
+                // Spawning and dying are part of the world stepping; a paused world does neither.
+                .run_if(crate::world_not_paused),
         );
 
         app.add_message::<UnitDie>();
@@ -109,7 +111,7 @@ fn on_circle_spawn(
             );
         }
         let unit_ent = unit.clone().spawn_entity(&mut commands);
-        commands.entity(unit_ent).insert(DespawnOnPlayerDisconnect {
+        commands.entity(unit_ent).insert(OwnedByPlayer {
             player_id: *player_id_of_spawner,
         });
 
@@ -167,7 +169,7 @@ fn on_man_spawn(
         );
 
         let unit_ent = unit.clone().spawn_entity(&mut commands);
-        commands.entity(unit_ent).insert(DespawnOnPlayerDisconnect {
+        commands.entity(unit_ent).insert(OwnedByPlayer {
             player_id: *player_id_of_spawner,
         });
 

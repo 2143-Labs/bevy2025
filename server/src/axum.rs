@@ -12,6 +12,8 @@ pub struct AxumServerPlugin;
 impl Plugin for AxumServerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(ServerState::Running), setup_shared_axum_server);
+        // Ungated: a paused or restoring world still runs frames.
+        app.add_systems(First, stamp_frame);
         app.add_systems(
             Update,
             (respond_to_get_players_request,)
@@ -45,11 +47,35 @@ pub struct BevyAxumReplyGetPlayers {
 
 use dashmap::DashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Resource, Clone, Default)]
 pub struct AxumServerResource {
     pub get_players_requests: Arc<DashMap<AxumRequestId, BevyAxumRequestGetPlayers>>,
     pub get_players_replys: Arc<DashMap<AxumRequestId, BevyAxumReplyGetPlayers>>,
+    /// Unix seconds of the last frame, read by `/healthz`.
+    pub last_frame: Arc<AtomicU64>,
+}
+
+/// `/healthz` fails once the game loop has not run a frame for this long, so a hung loop
+/// (heartbeats stop, the tokio side still answers) is probed dead by the authserver and
+/// restarted by the kubelet's liveness probe.
+const FRAME_STALL_SECS: u64 = 10;
+
+fn unix_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+fn stamp_frame(axum_server_res: Res<AxumServerResource>) {
+    axum_server_res
+        .last_frame
+        .store(unix_secs(), Ordering::Relaxed);
+}
+
+fn loop_alive(last_frame: u64, now: u64) -> bool {
+    now.saturating_sub(last_frame) < FRAME_STALL_SECS
 }
 
 #[derive(Clone)]
@@ -73,7 +99,7 @@ fn setup_shared_axum_server(
 
     let router = Router::new()
         .route("/gshealthz", axum::routing::get(|| async { "OK" }))
-        .route("/healthz", axum::routing::get(|| async { "OK" }))
+        .route("/healthz", axum::routing::get(healthz))
         .route("/", axum::routing::get(|| async { "Hello, World!" }))
         .route("/players", axum::routing::get(get_players_endpoint))
         .with_state(state);
@@ -92,6 +118,18 @@ fn setup_shared_axum_server(
 
         error!("Axum server died.");
     });
+}
+
+async fn healthz(state: axum::extract::State<AxumState>) -> (axum::http::StatusCode, &'static str) {
+    let last = state.axum_bevy_queues.last_frame.load(Ordering::Relaxed);
+    if loop_alive(last, unix_secs()) {
+        (axum::http::StatusCode::OK, "OK")
+    } else {
+        (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            "game loop stalled",
+        )
+    }
 }
 
 async fn get_players_endpoint(
@@ -142,5 +180,19 @@ fn respond_to_get_players_request(
     }
     for key in key_to_remove {
         axum_server_res.get_players_requests.remove(&key);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn healthz_fails_once_the_loop_stalls() {
+        assert!(loop_alive(100, 100));
+        assert!(loop_alive(100, 100 + FRAME_STALL_SECS - 1));
+        assert!(!loop_alive(100, 100 + FRAME_STALL_SECS));
+        // Never stamped yet (no frame since start) counts as stalled.
+        assert!(!loop_alive(0, 1_700_000_000));
     }
 }

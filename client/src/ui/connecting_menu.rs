@@ -161,11 +161,16 @@ pub fn handle_connecting_buttons(
     cancel_query: Query<(), (Added<Pressed>, With<CancelButton>)>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
     mut next_network_state: ResMut<NextState<NetworkGameState>>,
+    mut next_auth_state: ResMut<NextState<AuthState>>,
+    mut commands: Commands,
 ) {
     for () in cancel_query.iter() {
         info!("Cancel button pressed - returning to home menu");
         // Disconnect if connecting
         next_network_state.set(NetworkGameState::Disconnected);
+        // Stop waiting for a server the player no longer wants.
+        commands.remove_resource::<crate::auth::PlayRetry>();
+        next_auth_state.set(AuthState::Idle);
         // Return to home menu
         next_menu_state.set(MenuState::Home);
     }
@@ -175,10 +180,14 @@ pub fn handle_connecting_buttons(
 pub fn monitor_connection_status(
     network_state: Res<State<NetworkGameState>>,
     auth_state: Res<State<AuthState>>,
+    retry: Option<Res<crate::auth::PlayRetry>>,
     mut next_game_state: ResMut<NextState<GameState>>,
     mut status_text_query: Query<&mut Text, With<ConnectionStatusText>>,
 ) {
-    if !network_state.is_changed() && !auth_state.is_changed() {
+    if !network_state.is_changed()
+        && !auth_state.is_changed()
+        && !retry.as_ref().is_some_and(|retry| retry.is_changed())
+    {
         return;
     }
 
@@ -187,8 +196,10 @@ pub fn monitor_connection_status(
         match network_state.get() {
             // Not connecting yet (left over from a previous session): waiting on the ticket.
             NetworkGameState::Disconnected | NetworkGameState::Quit => {
-                text.0 = match auth_state.get() {
-                    AuthState::Failed => "Login failed",
+                text.0 = match (auth_state.get(), retry.as_deref()) {
+                    (AuthState::Failed, _) => "Login failed",
+                    // The authserver has no server for us yet; it says why.
+                    (_, Some(retry)) => retry.wait.status_text(),
                     _ => "Getting ticket...",
                 }
                 .to_string();
@@ -204,6 +215,9 @@ pub fn monitor_connection_status(
                 // Transition to Playing state
                 info!("Successfully connected - transitioning to Playing");
                 next_game_state.set(GameState::Playing);
+            }
+            NetworkGameState::Reconnecting => {
+                text.0 = "Reconnecting…".to_string();
             }
             NetworkGameState::Paused => {
                 text.0 = "Connection paused".to_string();

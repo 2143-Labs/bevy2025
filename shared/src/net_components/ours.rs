@@ -35,8 +35,13 @@ pub struct PlayerColor {
     pub hue: f32,
 }
 
+/// Marks a unit as a character's: the camera unit they drive, or something they spawned.
+///
+/// A character's units stay in the world when the player disconnects — only the connection is
+/// gone, not the character. On reconnect the server rebinds them (see `admit_players`), and the
+/// camera unit keeps its `NetEntId`, so the player comes back exactly where they left off.
 #[derive(Serialize, Deserialize, Component, Debug, PartialEq, Clone)]
-pub struct DespawnOnPlayerDisconnect {
+pub struct OwnedByPlayer {
     pub player_id: PlayerId,
 }
 
@@ -63,7 +68,7 @@ pub enum NetComponentOurs {
     Health(Health),
     PlayerName(PlayerName),
     ControlledBy(ControlledBy),
-    DespawnOnPlayerDisconnect(DespawnOnPlayerDisconnect),
+    OwnedByPlayer(OwnedByPlayer),
     PlayerColor(PlayerColor),
     HasInventory(HasInventory),
     MovementAction(MovementAction),
@@ -95,7 +100,7 @@ impl NetComponentOurs {
             NetComponentOurs::ControlledBy(c) => {
                 entity.insert(c);
             }
-            NetComponentOurs::DespawnOnPlayerDisconnect(c) => {
+            NetComponentOurs::OwnedByPlayer(c) => {
                 entity.insert(c);
             }
             NetComponentOurs::HasInventory(c) => {
@@ -160,9 +165,9 @@ impl NetComponentOurs {
             Some(NetComponentOurs::ControlledBy(
                 unsafe { ptr.deref::<ControlledBy>() }.clone(),
             ))
-        } else if type_id == std::any::TypeId::of::<DespawnOnPlayerDisconnect>() {
-            Some(NetComponentOurs::DespawnOnPlayerDisconnect(
-                unsafe { ptr.deref::<DespawnOnPlayerDisconnect>() }.clone(),
+        } else if type_id == std::any::TypeId::of::<OwnedByPlayer>() {
+            Some(NetComponentOurs::OwnedByPlayer(
+                unsafe { ptr.deref::<OwnedByPlayer>() }.clone(),
             ))
         } else if type_id == std::any::TypeId::of::<HasInventory>() {
             Some(NetComponentOurs::HasInventory(
@@ -246,9 +251,9 @@ impl ToNetComponent for ControlledBy {
     }
 }
 
-impl ToNetComponent for DespawnOnPlayerDisconnect {
+impl ToNetComponent for OwnedByPlayer {
     fn to_net_component(self) -> super::NetComponent {
-        super::NetComponent::Ours(NetComponentOurs::DespawnOnPlayerDisconnect(self))
+        super::NetComponent::Ours(NetComponentOurs::OwnedByPlayer(self))
     }
 }
 
@@ -358,8 +363,8 @@ impl ControlledBy {
     }
 }
 
-impl DespawnOnPlayerDisconnect {
+impl OwnedByPlayer {
     pub fn new(player_id: PlayerId) -> Self {
-        DespawnOnPlayerDisconnect { player_id }
+        OwnedByPlayer { player_id }
     }
 }

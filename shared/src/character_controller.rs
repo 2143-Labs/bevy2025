@@ -22,7 +22,10 @@ impl Plugin for CharacterControllerPlugin {
                     movement,
                     apply_movement_damping,
                 )
-                    .chain(),
+                    .chain()
+                    // The controller integrates gravity and acceleration into velocities, so it
+                    // steps with the world: a paused world does not move its characters.
+                    .run_if(crate::physics_running),
             )
             // TODO make this a cli argument
             .add_systems(
