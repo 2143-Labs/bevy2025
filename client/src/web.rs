@@ -53,6 +53,12 @@ impl Plugin for WebPlugin {
         }));
 
         app.add_systems(OnEnter(NetworkGameState::ClientSendRequestPacket), setup);
+        app.add_systems(
+            Update,
+            reopen_closed_websocket
+                .run_if(in_state(NetworkGameState::ClientSendRequestPacket))
+                .run_if(resource_exists::<WebSocketResource>),
+        );
         //while in ClientConencting, run
         app.add_systems(
             Update,
@@ -142,6 +148,34 @@ fn send_messages_over_websocket(
 
     // don't check result
     let _ = ws_res.websocket.send_with_u8_array(&data);
+}
+
+/// How long a closed socket waits before it is opened again.
+const REOPEN_AFTER_SECS: f32 = 1.0;
+
+/// Opens the WebSocket again while the client still waits for the world and the socket has
+/// closed: the gateway refuses `/ws/<slot>` until the instance's endpoint is ready, which can
+/// trail the `/play` that handed it out. `ConnectRequest` is resent every second, so the next
+/// one goes out on the new socket.
+fn reopen_closed_websocket(
+    mut commands: Commands,
+    time: Res<Time<Real>>,
+    mut closed_for: Local<f32>,
+    ws_res: Res<WebSocketResource>,
+    net_res: Res<ClientNetworkingResources>,
+    assigned: Option<Res<crate::auth::AssignedServer>>,
+) {
+    if ws_res.websocket.ready_state() != web_sys::WebSocket::CLOSED {
+        *closed_for = 0.0;
+        return;
+    }
+    *closed_for += time.delta_secs();
+    if *closed_for < REOPEN_AFTER_SECS {
+        return;
+    }
+    *closed_for = 0.0;
+    info!("WebSocket closed before the server answered: reopening");
+    setup(commands.reborrow(), net_res, assigned);
 }
 
 fn setup(
