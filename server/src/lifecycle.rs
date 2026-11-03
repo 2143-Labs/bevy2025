@@ -12,8 +12,15 @@
 //! holding *its own* generation exits immediately. A successor cloned from that volume has a
 //! different generation, so it deletes the sentinel and runs.
 //!
-//! Slice A only knows `ToMenu`: every client goes back to the main menu and the world dies with
-//! the instance. Slice C replaces SIGTERM with a handoff to a successor instance.
+//! Two shutdowns, two shapes:
+//! - idle (and any SIGTERM on an instance without `ROTS_STATE_DIR`): ask the coordinator for a
+//!   plan, tell the clients to go back to the main menu, write the sentinel, exit. The world dies
+//!   with the instance.
+//! - SIGTERM with a statefile (slice B): pause the world, write the final snapshot, exit 0 with
+//!   *no* sentinel and no shutdown request. The StatefulSet restarts the pod on the same volume and
+//!   the world comes back paused until its players return (see [`crate::statefile`]).
+//!
+//! Slice C replaces the `ToMenu` SIGTERM with a handoff to a successor instance.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -28,8 +35,10 @@ use shared::{
 use tokio::sync::oneshot;
 
 use crate::{
-    ConnectedPlayer, GameServerCoordinator, PlayerEndpoint, PlayerId, ServerState,
+    ConnectedPlayer, GameServerCoordinator, PauseReason, Paused, PlayerEndpoint, PlayerId,
+    ServerState,
     coordinator::{CoordinatorLink, ShutdownPlan},
+    statefile::Statefile,
 };
 
 /// The sentinel's name inside `ROTS_STATE_DIR`.
@@ -380,14 +389,18 @@ impl Plugin for LifecyclePlugin {
 }
 
 /// Nobody connected for `ROTS_IDLE_SECS`: ask the coordinator to destroy this instance.
+///
+/// A restored world is exempt until it has finished restoring: it is supposed to have nobody
+/// connected while its players reconnect, and idle counting only starts once it unpauses.
 fn ask_when_idle(
     time: Res<Time<Real>>,
     mut idle: ResMut<IdleTimer>,
     players: Query<(), With<ConnectedPlayer>>,
+    paused: Res<Paused>,
     link: Res<CoordinatorLink>,
     mut shutdown: ResMut<Shutdown>,
 ) {
-    if shutdown.is_running() {
+    if shutdown.is_running() || paused.reason() == Some(PauseReason::Restoring) {
         return;
     }
     let connected = players.iter().count();
@@ -399,18 +412,34 @@ fn ask_when_idle(
     shutdown.ask("idle", reply);
 }
 
-/// SIGTERM: ask the coordinator what to do with the players on this server.
+/// SIGTERM: either save the world for the restart, or ask the coordinator what to do with the
+/// players on this server.
 fn ask_on_sigterm(
     sigterm: Res<Sigterm>,
     settings: Res<InstanceSettings>,
     link: Res<CoordinatorLink>,
     players: Query<&PlayerId, With<ConnectedPlayer>>,
+    statefile: Option<ResMut<Statefile>>,
+    mut paused: ResMut<Paused>,
     mut shutdown: ResMut<Shutdown>,
 ) {
     if !sigterm.0.swap(false, Ordering::AcqRel) {
         return;
     }
     let players: Vec<i64> = players.iter().map(|id| id.0 as i64).collect();
+    if let Some(mut statefile) = statefile {
+        // The world outlives this process: no sentinel, no shutdown request, no migration. Take
+        // the final snapshot and exit; the pod restarts on this volume and restores it.
+        info!(
+            players = players.len(),
+            "SIGTERM: saving the world for the restart instead of migrating players"
+        );
+        // Nothing may move between the snapshot and the exit; the restarted world starts paused
+        // anyway (`PauseReason::Restoring`).
+        paused.pause(PauseReason::Restoring);
+        crate::statefile::request_final_snapshot(&mut statefile);
+        return;
+    }
     let reply = link.shutdown_request("sigterm", players);
     if !shutdown.ask("sigterm", reply) {
         // A second SIGTERM means somebody wants this pod gone now. Still write the sentinel, so

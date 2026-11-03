@@ -1,8 +1,12 @@
 //! The game server's link to the authserver's coordinator, over the authserver's internal API.
 //!
 //! Joins are gated: a connect request is only admitted once the coordinator says the character may
-//! play on this slot (which also proves the ticket's login session still exists). Leaves and
+//! play on this slot (which also proves the ticket's login session still exists). Releases and
 //! heartbeats are fire-and-forget and retried until the authserver accepts them.
+//!
+//! A disconnect is *not* reported: the character stays in the world as a ghost, and the roster
+//! keeps listing it until its camera unit leaves the world (its death), which is what a release
+//! means.
 //!
 //! Every report names the instance it comes from, `<slot, generation>`. A report for an instance
 //! the coordinator does not list is answered `409 unknown_instance`: the workflow that owns this
@@ -63,7 +67,8 @@ pub enum LinkOp {
         sid: String,
         reply: oneshot::Sender<Result<(), String>>,
     },
-    /// The character is gone from this slot.
+    /// The character's units left this world (its camera unit was despawned): the coordinator may
+    /// release its slot. A mere disconnect does not do this.
     Leave { character_id: i64 },
     /// Ask the coordinator what to do with this instance before exiting; `reason` is `idle` or
     /// `sigterm`. The answer arrives on `reply`.
@@ -483,48 +488,52 @@ impl Plugin for CoordinatorPlugin {
         app.add_systems(OnEnter(ServerState::Running), send_heartbeat)
             .add_systems(
                 Update,
-                (
-                    // After `admit_players`, so its deferred spawns are applied first: a player
-                    // admitted this frame is no longer pending, so the roster would otherwise
-                    // miss them, and the coordinator never re-adds players from a known boot.
-                    send_heartbeat
-                        .run_if(bevy::time::common_conditions::on_timer(HEARTBEAT_EVERY))
-                        .after(crate::admit_players),
-                    // After both writers of `PlayerDisconnected`, so a disconnect is reported in
-                    // the frame it happens; before `on_player_disconnect` strips
-                    // `ConnectedPlayer`; and before `vet_connect_requests`, so a reconnect's join
-                    // is always queued after the leave of the connection it replaces.
-                    report_leaves
-                        .after(crate::check_heartbeats)
-                        .after(crate::on_disconnect_packet)
-                        .before(crate::on_player_disconnect)
-                        .before(crate::vet_connect_requests),
-                )
+                // After `admit_players`, so its deferred spawns are applied first: a player
+                // admitted this frame is no longer pending, so the roster would otherwise miss
+                // them. A first heartbeat of a boot both removes unlisted characters and adopts
+                // the listed ones, so a restored world's ghosts are re-adopted here.
+                send_heartbeat
+                    .run_if(bevy::time::common_conditions::on_timer(HEARTBEAT_EVERY))
+                    .after(crate::admit_players)
                     .run_if(in_state(ServerState::Running)),
             );
     }
 }
 
-/// The roster is the connected players, plus the ones whose join is in flight. The second and
-/// third groups matter: a join leaves `PendingJoins` the moment it is answered and only becomes a
-/// `ConnectedPlayer` when `admit_players` runs, so a heartbeat taken inside that gap would report
-/// the player as gone, and the coordinator never re-adds players from a known `boot_id`.
+/// The roster is every character with units in this world — connected or a ghost — plus the ones
+/// whose join is in flight.
+///
+/// The in-flight group matters: a join leaves `PendingJoins` the moment it is answered and only
+/// becomes a `ConnectedPlayer` when `admit_players` runs, so a heartbeat taken inside that gap
+/// would report the player as gone.
+///
+/// The ghosts matter just as much: their units are still in the world, so the coordinator must
+/// keep them bound to this instance. They are not `connected`, which is what the fleet view and
+/// this server's own idle rule mean by "somebody is here".
 fn send_heartbeat(
     link: Res<CoordinatorLink>,
-    connected: Query<(&PlayerId, &PlayerSid), With<ConnectedPlayer>>,
+    in_world: Query<
+        (&PlayerId, Option<&PlayerSid>, Has<ConnectedPlayer>),
+        Or<(With<ConnectedPlayer>, With<DisconnectedPlayer>)>,
+    >,
     pending: Res<PendingJoins>,
     ready: Res<ReadyToAdmit>,
 ) {
-    let mut players: Vec<PlayerRef> = connected
-        .iter()
-        .map(|(id, sid)| PlayerRef {
-            character_id: id.0 as i64,
-            sid: sid.0.clone(),
-        })
-        .collect();
-    // The roster below also lists joins in flight; `connected` counts only live connections, which
-    // is what the fleet view and the server's own idle rule mean by "somebody is here".
-    let connected_count = players.len() as u32;
+    let mut players: Vec<PlayerRef> = vec![];
+    let mut connected_count = 0u32;
+    for (id, sid, connected) in in_world.iter() {
+        if connected {
+            connected_count += 1;
+        }
+        // A character with no login session (an unverified connection) cannot be named to the
+        // coordinator at all.
+        if let Some(sid) = sid {
+            players.push(PlayerRef {
+                character_id: id.0 as i64,
+                sid: sid.0.clone(),
+            });
+        }
+    }
     players.extend(
         pending
             .0
@@ -548,35 +557,6 @@ fn send_heartbeat(
     });
     players.dedup();
     link.heartbeat(players, connected_count);
-}
-
-/// Report players that left (quit, timed out) to the coordinator, which signals their session
-/// workflow so the session leaves `in_game`.
-fn report_leaves(
-    mut disconnects: MessageReader<shared::event::client::PlayerDisconnected>,
-    // `DisconnectedPlayer` as well as `ConnectedPlayer`: `on_player_disconnect` may already have
-    // run for this frame's messages, but it keeps the entity (and its sid) around.
-    players: Query<(&PlayerId, &PlayerSid), Or<(With<ConnectedPlayer>, With<DisconnectedPlayer>)>>,
-    link: Res<CoordinatorLink>,
-) {
-    let mut leaves: Vec<i64> = disconnects
-        .read()
-        .filter_map(|player| {
-            players
-                .iter()
-                .find(|(id, _)| id.0 == player.id.0)
-                .map(|(id, _)| id.0 as i64)
-        })
-        .collect();
-    if leaves.is_empty() {
-        return;
-    }
-    leaves.sort_unstable();
-    leaves.dedup();
-    for character_id in leaves {
-        info!(character_id, "reporting leave to the coordinator");
-        link.leave(character_id);
-    }
 }
 
 #[cfg(test)]

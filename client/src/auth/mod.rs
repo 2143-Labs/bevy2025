@@ -201,6 +201,9 @@ pub enum AuthRequest {
     Login(LoginMethod),
     Logout,
     Claim(String),
+    /// Tell the authserver a character's game server stopped answering (`/api/v1/my-server-crashed`),
+    /// which makes the coordinator probe and, if it is dead, recover the instance.
+    ReportServerCrashed,
 }
 
 /// What to do with a finished request.
@@ -215,6 +218,7 @@ enum Op {
     Me,
     Claim,
     Logout,
+    ServerCrashed,
     #[cfg(feature = "steam")]
     SteamLogin,
 }
@@ -296,6 +300,19 @@ fn handle_auth_requests(
                 commands.remove_resource::<GameTicket>();
                 commands.remove_resource::<PlayRetry>();
                 auth_state.set(AuthState::Idle);
+            }
+            // A crash report is fire-and-forget: the authserver answers 202, and the reconnect
+            // keeps polling `/play` regardless.
+            AuthRequest::ReportServerCrashed => {
+                info!("reporting a crashed game server to the authserver");
+                pending.0.push((
+                    Op::ServerCrashed,
+                    http.post(
+                        "/api/v1/my-server-crashed",
+                        json!({}),
+                        session.native_token.clone(),
+                    ),
+                ));
             }
             AuthRequest::Claim(code) => {
                 pending.0.push((
@@ -465,6 +482,8 @@ fn poll_auth_responses(
             }
             (Op::Logout, Ok(_)) => {}
             (Op::Logout, Err(e)) => warn!("Logout request failed: {e}"),
+            (Op::ServerCrashed, Ok(_)) => info!("the authserver accepted the crash report"),
+            (Op::ServerCrashed, Err(e)) => warn!("Crash report failed: {e}"),
             #[cfg(feature = "steam")]
             (Op::SteamLogin, Ok(body)) => match str_field(&body, "session_token") {
                 Some(token) => {

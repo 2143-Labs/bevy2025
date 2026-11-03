@@ -93,6 +93,14 @@ workflow deletes what is left. Fleet capacity is a Kubernetes ResourceQuota; a f
 placement, provisioning and the event budget, is in
 <a href="https://github.com/2143-Labs/bevy2025/blob/main/docs/game-server-scaling.md">docs/game-server-scaling.md</a>.</p>
 
+<p><strong>A disconnect does not take a character out of the world.</strong> The connection ends, the
+player entity becomes a ghost and everything they were driving stays exactly where it was — other players
+can still attack and kill it, and that death is real. Reconnecting rebinds the ghost: the same character,
+the same body, the same camera. When a server process dies its StatefulSet restarts it on the same volume
+and the world is restored from the statefile the server writes every 5 s. A restored world stays paused
+until its players are back, or for 30 s, whichever comes first; after that an absent character is live and
+killable like any other.</p>
+
 <!-- ============================================================ -->
 <h2 id="connections">2. Systems &amp; connections</h2>
 
@@ -130,7 +138,7 @@ Click any box to jump to its row in the table.</div>
   <text class="lbl" x="648" y="276">POST /play → {ticket, server}</text>
   <path class="wire" d="M340,375 L498,375" marker-end="url(#arr)"/>
   <text class="lbl" x="330" y="306">public key, verified offline</text>
-  <text class="lbl" x="346" y="366">:8001 heartbeat · join · leave</text>
+  <text class="lbl" x="346" y="366">:8001 heartbeat · join · release</text>
   <text class="lbl" x="346" y="392">shutdown-request</text>
   <path class="wire" d="M340,430 C 380,430 380,690 438,690" marker-end="url(#arr)"/>
   <text class="lbl" x="120" y="486">reports go to this instance's workflow</text>
@@ -249,7 +257,7 @@ Click any box to jump to its row in the table.</div>
 <tr id="row-gateway"><td>Gateway / HTTPRoute</td><td>Gateway API route for <code>rots.john2143.com</code> (previews <code>rots-&lt;PR&gt;.john2143.com</code>)</td><td><code>/auth</code> → authserver (service :80 → container :8000); <code>/ws/{N}</code> → <code>rots-gs-{N}</code> :80 → 25565; <code>/</code> → web pod through KEDA's interceptor (<code>InterceptorRoute rots-web</code>)</td><td>No</td><td><code>argo/workloads/rots-web/templates/httproute.yaml</code></td></tr>
 <tr id="row-udp-lb"><td>UDP LoadBalancers</td><td>Service <code>rots-gs-{N}-udp</code> per slot, <code>allocateLoadBalancerNodePorts: false</code>, shared VIP</td><td>Prod <code>192.168.6.32</code> ports <b>36000-36400</b> (slots 0-399, 36400 spare); previews <code>192.168.6.33</code> port <code>31000+4*(N%1000)</code>; forwarded on the MikroTik router</td><td>No</td><td><code>argo/workloads/rots-web/templates/gameserver.yaml</code></td></tr>
 <tr id="row-web"><td>Web pod</td><td><code>python3 -m http.server 8000</code> over the Nix-built web folder; <code>ScaledObject</code> scales it 0↔1</td><td>Serves HTTP only</td><td>No</td><td><code>bevy2025/flake.nix</code> (<code>wasmOptAsServer</code>, <code>staticWebserver</code>)</td></tr>
-<tr id="row-gameserver"><td>Game servers</td><td>One-replica StatefulSet <code>rots-gs-&lt;k&gt;-g&lt;g&gt;</code> with its own PVC, created at runtime by the authserver (prod still runs the static <code>rots-gameserver-0..3</code> until #122); slot = the network lease</td><td>Clients via UDP and WebSocket; authserver <code>GET /api/v1/ticket/public-key</code> (verifies tickets offline); authserver :8001 heartbeat / join / leave / shutdown-request</td><td>Live game world in memory; a statefile on its volume in slice B</td><td><code>bevy2025/server/src/{lib,coordinator,lifecycle}.rs</code></td></tr>
+<tr id="row-gameserver"><td>Game servers</td><td>One-replica StatefulSet <code>rots-gs-&lt;k&gt;-g&lt;g&gt;</code> with its own PVC, created at runtime by the authserver (prod still runs the static <code>rots-gameserver-0..3</code> until #122); slot = the network lease</td><td>Clients via UDP and WebSocket; authserver <code>GET /api/v1/ticket/public-key</code> (verifies tickets offline); authserver :8001 heartbeat / join / leave / shutdown-request</td><td>Live game world in memory, checkpointed to <code>state.bin</code> on its volume (<code>ROTS_STATE_DIR</code>) every 5 s and once on SIGTERM</td><td><code>bevy2025/server/src/{lib,coordinator,lifecycle,statefile}.rs</code></td></tr>
 <tr id="row-gameserver-workflow"><td>GameServerWorkflow</td><td><code>rots-gs-{queue}-{k}-g{g}</code>, one per instance</td><td>Signals <code>heartbeat</code> / <code>leave</code> (and slice B's <code>probe</code>) from the internal API; the <code>join</code> update; local activities that claim at the coordinator, signal it and call the Kubernetes API</td><td>Its lease, roster, boot id and phase (Provisioning → Ready → Draining → gone)</td><td><code>rots-authserver/src/temporal/server.rs</code></td></tr>
 <tr id="row-authserver"><td>Authserver</td><td>Deployment <code>rots-authserver</code>; public :8000, internal :8001 (bearer <code>COORDINATOR_TOKEN</code>), Temporal worker in-process; ServiceAccount <code>rots-authserver</code> in managed mode</td><td>rots-db (Postgres); login providers (HTTPS); Kubernetes API (StatefulSet, PVC, Service, ResourceQuota); Temporal (gRPC 7233)</td><td>No — stateless</td><td><code>rots-authserver/src/{api,internal,k8s}.rs</code></td></tr>
 <tr id="row-temporal"><td>Temporal</td><td><code>temporal-frontend.default.svc:7233</code>; namespace <code>rots</code> (prod) / <code>rots-preview</code></td><td>Authserver worker and client; temporal-db</td><td>Workflow state</td><td><code>rots-authserver/src/temporal/</code></td></tr>
@@ -331,6 +339,23 @@ Click any box to jump to its row in the table.</div>
   <li>A character that already has an instance skips 4–8: <code>place</code> answers <code>Ready</code> straight from the character index or an unexpired reservation.</li>
 </ol>
 
+<h3 id="play-reconnect">Coming back after a disconnect</h3>
+<p>Ten seconds without a server heartbeat is a disconnect: the client does not quit, because the character
+is still in the world. It reconnects instead, in this order:</p>
+<ol>
+  <li><code>POST /api/v1/play</code> once for a fresh ticket — the old one may have expired, and game servers
+      check <code>exp</code>. The client keeps resending <code>ConnectRequest</code> with the new ticket to the
+      address it was on, once a second for up to 10 s.</li>
+  <li>Still not connected: <code>POST /api/v1/my-server-crashed</code> (always <code>202</code>) tells the
+      coordinator to probe that character's instance.</li>
+  <li><code>/play</code> is polled every 2 s for up to 120 s; <code>503 server_recovering</code> and
+      <code>503 server_starting</code> keep the client waiting, and a 200 carries the ticket and address to
+      connect with.</li>
+  <li>Nothing worked after that: the client returns to the main menu with
+      <em>"Lost connection to the server"</em>.</li>
+</ol>
+<p>The player sees <em>"Reconnecting…"</em> throughout, on native (UDP) and on web (WebSocket) alike.</p>
+
 <!-- ============================================================ -->
 <h2 id="state">4. State machines</h2>
 
@@ -380,7 +405,7 @@ Click any box to jump to its row in the table.</div>
 </figure>
 
 <figure id="gameserver-workflow">
-<svg class="diagram" viewBox="0 0 1200 340" role="img" aria-label="GameServerWorkflow states: Provisioning to Ready on the first heartbeat, Ready to Draining on request_shutdown, Ready to gone after two lease windows without a heartbeat, Ready to Recovering when the lease expires or a client reports a crash (slice B, dashed), Recovering back to Ready on a new boot id, Provisioning, Draining and Recovering to gone">
+<svg class="diagram" viewBox="0 0 1200 340" role="img" aria-label="GameServerWorkflow states: Provisioning to Ready on the first heartbeat, Ready to Draining on request_shutdown, Ready to Recovering when the lease lapses or a client reports a crash, Recovering back to Ready on a new boot id, Provisioning, Draining and Recovering to gone">
   <defs>
     <marker id="arr5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
@@ -393,7 +418,7 @@ Click any box to jump to its row in the table.</div>
   <rect class="box state" x="60" y="90" width="210" height="56" rx="28"/><text class="title" x="165" y="123" text-anchor="middle">Provisioning</text>
   <rect class="box state" x="400" y="90" width="210" height="56" rx="28"/><text class="title" x="505" y="123" text-anchor="middle">Ready</text>
   <rect class="box state" x="740" y="90" width="210" height="56" rx="28"/><text class="title" x="845" y="123" text-anchor="middle">Draining</text>
-  <rect class="box none" x="400" y="240" width="210" height="56" rx="28"/><text class="title" x="505" y="273" text-anchor="middle">Recovering (slice B)</text>
+  <rect class="box state" x="400" y="240" width="210" height="56" rx="28"/><text class="title" x="505" y="273" text-anchor="middle">Recovering</text>
   <rect class="box" x="1010" y="90" width="150" height="56" rx="28"/><text class="title" x="1085" y="123" text-anchor="middle">gone</text>
   </a>
   <path class="wire" d="M270,118 L398,118" marker-end="url(#arr5)"/>
@@ -406,16 +431,46 @@ Click any box to jump to its row in the table.</div>
   <text class="lbl" x="380" y="322">ready timeout 120 s · Unschedulable 30 s → StartFailed / ServersFull</text>
   <path class="wire" d="M505,90 C 505,58 1085,58 1085,88" marker-end="url(#arr5)"/>
   <text class="lbl" x="640" y="72">no heartbeat for 2 × 30 s → Lost</text>
-  <path class="pending" d="M505,146 L505,238" marker-end="url(#arr5p)"/>
-  <text class="pend" x="520" y="186">lease expired</text>
-  <text class="pend" x="520" y="204">· server_crashed</text>
-  <path class="pending" d="M560,240 L560,148" marker-end="url(#arr5p)"/>
-  <text class="pend" x="574" y="222">new boot_id</text>
+  <path class="wire" d="M505,146 L505,238" marker-end="url(#arr5)"/>
+  <text class="lbl" x="520" y="186">lease lapsed → probe</text>
+  <text class="lbl" x="520" y="204">· server_crashed</text>
+  <path class="wire" d="M560,240 L560,148" marker-end="url(#arr5)"/>
+  <text class="lbl" x="574" y="222">new boot_id</text>
   <path class="wire" d="M610,268 L1008,130" marker-end="url(#arr5)"/>
   <text class="lbl" x="700" y="286">ready timeout → Lost</text>
   <text class="muted" x="40" y="40">One workflow per instance, rots-gs-&lt;queue&gt;-&lt;k&gt;-g&lt;g&gt;: it owns the lease, the roster and the Kubernetes objects, and it continues as new hourly.</text>
 </svg>
-<figcaption>Figure 5 — the instance state machine (<code>rots-authserver/src/temporal/server.rs</code>). Returning to <code>Ready</code> is a heartbeat from the same generation with a new <code>boot_id</code>. Today an instance with no heartbeat for two lease windows (2 × 30 s) is deleted; slice B probes it at the first lapse and kills only a server that does not answer.</figcaption>
+<figcaption>Figure 5 — the instance state machine (<code>rots-authserver/src/temporal/server.rs</code>). Returning to <code>Ready</code> is a heartbeat from the same generation with a new <code>boot_id</code>. A lapse in the lease (30 s) — or a client's crash report — signals the instance <code>probe</code>: the workflow fetches the pod IP and asks <code>/healthz</code> with a 2 s timeout. A 200 means the server is alive and nothing is killed; no answer means the pod is hard-killed (<code>gracePeriodSeconds: 0</code>) and the StatefulSet restarts it on the same volume. Killing is also rate-limited: <code>KILL_BACKOFF</code> is 300 s per instance.</figcaption>
+</figure>
+
+<figure id="restoring">
+<svg class="diagram" viewBox="0 0 1200 240" role="img" aria-label="Restoring a world: a restarted pod reads state.bin from its volume, spawns every unit with its own NetEntId and every saved player as a ghost, pauses the world in Restoring, then unpauses when every saved player is connected again or after 30 seconds; after that an absent character is live and killable">
+  <defs>
+    <marker id="arr6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+  <a href="#row-gameserver">
+  <rect class="box" x="40" y="80" width="220" height="64" rx="10"/>
+  <text class="title" x="150" y="106" text-anchor="middle">state.bin on the volume</text>
+  <text class="muted" x="150" y="126" text-anchor="middle">tick · terrain · units · players</text>
+
+  <rect class="box state" x="380" y="80" width="230" height="64" rx="28"/>
+  <text class="title" x="495" y="106" text-anchor="middle">Restoring (paused)</text>
+  <text class="muted" x="495" y="126" text-anchor="middle">physics paused · heartbeats running</text>
+
+  <rect class="box state" x="740" y="80" width="200" height="64" rx="28"/>
+  <text class="title" x="840" y="106" text-anchor="middle">Running</text>
+  <text class="muted" x="840" y="126" text-anchor="middle">world ticks again</text>
+  </a>
+  <path class="wire" d="M260,112 L378,112" marker-end="url(#arr6)"/>
+  <text class="lbl" x="262" y="102">restart on the same PVC</text>
+  <path class="wire" d="M610,112 L738,112" marker-end="url(#arr6)"/>
+  <text class="lbl" x="614" y="102">every saved player connected</text>
+  <text class="lbl" x="614" y="146">or 30 s after startup</text>
+  <text class="muted" x="40" y="40">Units come back with their NetEntIds; each saved player is a ghost until they reconnect. After Restoring ends, an absent character is live and killable, and death is real. Idle counting starts only now.</text>
+</svg>
+<figcaption>Figure 6 — restoring a world after a forced failure (<code>bevy2025/server/src/statefile.rs</code>). SIGTERM on an instance with a statefile takes the same path: pause, write the final snapshot, exit 0 <em>without</em> the shutdown sentinel and without a shutdown request, so the StatefulSet restarts the pod on the same volume.</figcaption>
 </figure>
 
 <!-- ============================================================ -->
@@ -424,8 +479,9 @@ Click any box to jump to its row in the table.</div>
 <thead><tr><th>Event</th><th>What players see</th><th>Recovery</th></tr></thead>
 <tbody>
 <tr id="fail-temporal"><td>Temporal down</td><td><code>/play</code> returns 503 <code>temporal_unavailable</code>; new joins are refused. Players already in a game keep playing.</td><td>The worker reconnects every 10 s; workflow state is intact in temporal-db.</td></tr>
-<tr id="fail-authserver"><td>Authserver restart</td><td>Brief errors on login, Play and new joins; players already in a game keep playing.</td><td>None needed: the authserver keeps no state. A game server counts as gone only after two lease windows (2 × 30 s) without a heartbeat, so a restart shorter than that costs nothing. A longer outage ends a static server's workflow (its next heartbeat starts a new one) and deletes managed instances; slice B probes before anything is killed.</td></tr>
-<tr id="fail-gameserver"><td>Game server crash</td><td>Its players drop to the menu (slice B: they reconnect into the same world).</td><td>A crash-looping or silent instance is deleted by its workflow after 2 × 30 s without a heartbeat, and its slot is freed. Slice B probes first, then replaces the pod on the same volume and restores the world from the statefile.</td></tr>
+<tr id="fail-authserver"><td>Authserver restart or outage</td><td>Brief errors on login, Play and new joins; players already in a game keep playing, and a client that stops receiving heartbeats shows "Reconnecting…".</td><td>None needed: the authserver keeps no state. An instance's lease may lapse, but a lapse only signals <code>probe</code>, and nothing is killed unless the probe says the pod is dead — so an outage longer than the lease (30 s) deletes no instance, and its world stays on its volume. A static server's workflow is recreated by its next heartbeat.</td></tr>
+<tr id="fail-gameserver"><td>Game server crash, hang or hard kill</td><td>Its players see "Reconnecting…" and come back into the same world, in the same body, where they left it.</td><td>The lease lapses after 30 s (or a client's crash report arrives first) and the instance workflow probes the pod: it fetches the pod IP and asks <code>GET /healthz</code> with a 2 s timeout. A 200 means the server is alive — nothing is killed and the lease is re-armed. No answer means the pod is hard-killed (<code>gracePeriodSeconds: 0</code>), the StatefulSet restarts it on the same PVC, the process loads <code>state.bin</code> and the world comes back paused until its players return or 30 s pass (figure 6). A second kill within <code>KILL_BACKOFF</code> (300 s) is refused. No heartbeat within the 120 s ready timeout → the instance is deleted as <code>Lost</code> and the coordinator unbinds its characters.</td></tr>
+<tr id="fail-node"><td>Node lost</td><td>Players on that node see "Reconnecting…"; their characters stay in the world.</td><td>The volume has two replicas (StorageClass <code>longhorn-rots-gs</code>), so it survives the loss of the node its pod ran on. Longhorn's <code>nodeDownPodDeletionPolicy</code> force-deletes the StatefulSet pod so its ReadWriteOnce volume can attach elsewhere; the pod restarts on another node with the same PVC and restores from the statefile like any other restart. If no node can run it within the ready timeout, the instance is <code>Lost</code>.</td></tr>
 <tr id="fail-full"><td>Fleet full</td><td><code>503 servers_full</code>; the client shows "Servers are full, retrying…" and retries every 5 s for up to 10 min.</td><td>The ResourceQuota frees a slot when a server drains; the next Play takes it. The coordinator also holds the fleet full for 30 s after an <code>Unschedulable</code> pod.</td></tr>
 <tr id="fail-start"><td>Provisioning keeps failing</td><td><code>503 no_game_server</code> while spawning is paused.</td><td>Three consecutive start failures pause spawning for 300 s; one successful first heartbeat resets the counter. A ready timeout or an unschedulable pod deletes the instance.</td></tr>
 <tr id="fail-session"><td>Login session ended (logout, or replaced by a new login)</td><td>A late connect or join is refused: <code>409 session_ended</code> on the internal join.</td><td>Play again from the menu, which starts a new session.</td></tr>

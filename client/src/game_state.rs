@@ -44,6 +44,8 @@ pub enum NetworkGameState {
     ClientConnecting,
     ClientSendRequestPacket,
     ClientConnected,
+    /// The server stopped answering: retry it, then ask the authserver for a new one.
+    Reconnecting,
     Paused,
     Quit,
 }

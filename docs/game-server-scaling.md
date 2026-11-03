@@ -1,9 +1,10 @@
 # Game-server scaling
 
-How ROTS creates, owns and retires game-server instances. Slice A (this document's subject) is
-implemented: a fresh tutorial instance per new player, a Temporal workflow per instance, idle
-self-destruction and `servers_full`. Slice B (forced-failure recovery, the statefile, ghosts)
-follows and is marked **pending** below.
+How ROTS creates, owns and retires game-server instances. Slice A is implemented: a fresh tutorial
+instance per new player, a Temporal workflow per instance, idle self-destruction and
+`servers_full`. Slice B is implemented too: the statefile, ghosts (characters that outlive a
+disconnect), the restoring pause, probe/kill/recover and the client's reconnect path. Slices C
+(join codes, successor migration) and D (pause, chat) are marked **pending** below.
 
 ## Summary
 
@@ -34,6 +35,7 @@ deletes the StatefulSet and PVC.
 | Instance name | `rots-gs-<k>-g<g>`: the StatefulSet, its headless Service and the label `rots.2143.me/instance`. The PVC is `data-rots-gs-<k>-g<g>-0`. |
 | Workflow id | `rots-gs-<queue>-<k>-g<g>` (`server_id(queue, slot, generation)`). |
 | Join code | 4 characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, unique among live instances, derived from a seed the coordinator carries so it is replay-safe. Only tutorial instances get one. |
+| Statefile | `$ROTS_STATE_DIR/state.bin` on the instance's volume: postcard `WorldSnapshot { version, tick, terrain, paused, units, players }`, written every 5 s and once on SIGTERM (write `state.bin.tmp`, fsync, rename). |
 | Static mode | `GAME_SERVER_PROVISIONER=static` (prod today, local dev): servers are external, report `generation` 1 and are placed by "least loaded"; nothing provisions or deletes them. |
 
 The report env a provisioner sets on a managed instance is
@@ -48,12 +50,12 @@ stateDiagram-v2
     [*] --> Provisioning: coordinator allocates the slot
     Provisioning --> Ready: first heartbeat
     Provisioning --> [*]: ready timeout / unschedulable (StartFailed / ServersFull)
-    Ready --> Draining: request_shutdown (idle or SIGTERM)
-    Ready --> [*]: no heartbeat for 2 × stale_secs (Lost)
-    Ready --> Recovering: lease expired / server_crashed (slice B)
-    Recovering --> Ready: new boot_id heartbeat
+    Ready --> Draining: request_shutdown (idle, or SIGTERM without a statefile)
+    Ready --> Recovering: lease lapsed (stale_secs) / server_crashed
+    Recovering --> Ready: new boot_id heartbeat (restored from the statefile)
     Recovering --> [*]: ready timeout (Lost)
     Draining --> [*]: pod exited, instance deleted
+    Ready --> Ready: SIGTERM with a statefile (pod restarts, same volume)
 ```
 
 **Coordinator** (`rots-authserver/src/temporal/coordinator.rs`): owns `servers: slot →
@@ -72,7 +74,7 @@ generation, sid}`, reservations, `next_generation`, `code_seed`, the start-failu
   StartFailed | ServersFull`;
 - update `request_shutdown { slot, generation, reason, players }` → `Destroy | ToMenu` (slice C
   adds `Migrate`);
-- update `server_crashed { character_id }` → `bool` (**slice B**);
+- update `server_crashed { character_id }` → `bool` (true when a probe was started);
 - query `fleet`.
 
 There is no `heartbeat`, `join` or `leave` on the coordinator any more. A coordinator that starts
@@ -82,15 +84,17 @@ roster) and rebuilds its directory and index from the answers; `place` and `clai
 
 **GameServerWorkflow** (`rots-authserver/src/temporal/server.rs`): one per instance.
 `GameServerArgs { task_queue, slot, generation, provisioner, join_code, stale_secs,
-ready_timeout_secs, unschedulable_secs, carried }`. It receives `heartbeat`, `leave` and (slice B)
-`probe` signals, and a `join` update it answers by claiming at the coordinator through a local
+ready_timeout_secs, unschedulable_secs, carried }`. It receives `heartbeat`, `leave` and `probe`
+signals, and a `join` update it answers by claiming at the coordinator through a local
 activity, and a `shutdown` update (the internal API's `shutdown-request`) it answers by asking the
 coordinator's `request_shutdown`. It holds the lease and the roster, sends presence to the
 sessions of the characters that join and leave, and drives provisioning, the ready timeout, the
-unschedulable check and deletion (5 s after a `destroy` grant, 15 s after `to_menu`). An instance
-with no heartbeat for two lease windows (2 × `COORDINATOR_STALE_SECS`, 60 s) is deleted and
-reported `Lost`; slice B replaces that with a probe at the first lapse. Every heartbeat names `<slot, generation>`; a report for a pair
-the workflow does not own gets `409 unknown_instance`.
+unschedulable check and deletion (5 s after a `destroy` grant, 15 s after `to_menu`). A lapse in the lease
+(the first one, `COORDINATOR_STALE_SECS` = 30 s) signals `probe`, and only a pod that does not
+answer `GET /healthz` is killed and reported to the coordinator as `Recovering`; an instance that
+never reports again within the 120 s ready timeout is deleted and reported `Lost`. Every heartbeat
+names `<slot, generation>`; a report for a pair the workflow does not own gets
+`409 unknown_instance`.
 
 Both loops obey the same rules, and they are load-bearing:
 
@@ -171,12 +175,71 @@ broadcasts `HostMigration { ToMenu { reason: "server_shutdown" } }`, waits until
 left or 10 s, then writes the sentinel and exits 0. Clients land in the main menu with "The server
 shut down".
 
-Forced failure (**slice B, pending**): a lease expiry or a client's `server_crashed` report
-triggers `probe()`; the activity GETs `http://<podIP>:<health>/healthz` with a 2 s timeout. 200
-means alive — nothing is killed, so an authserver outage cannot take the fleet down. No pod, no IP
-or a failed probe means dead: the workflow sets the phase `Recovering`, deletes the pod with
-`gracePeriodSeconds: 0`, and the StatefulSet recreates it on the same PVC; the new process loads
-the statefile, reports a new `boot_id`, and its first heartbeat returns the phase to `Ready`.
+SIGTERM with a statefile (slice B): the world outlives the process. The server pauses the world,
+writes the final snapshot and sets it frozen, then exits 0 **without** the sentinel and **without**
+a shutdown request. The StatefulSet restarts the pod on the same volume, moving it to another node
+if this one is draining; the new process restores the world paused, and the clients come back
+through the reconnect path below. The lease covers the gap, so a restart that takes longer than
+`stale_secs` merely triggers a probe, which finds the new pod alive (or kills a stuck one).
+
+Ghosts — a disconnect is not a death:
+
+- On disconnect the server keeps the character's units and only swaps `ConnectedPlayer` for
+  `DisconnectedPlayer`. Other players still see the character, and it stays attackable and
+  killable; death is real. `OwnedByPlayer` marks a unit as a character's.
+- The heartbeat roster lists every character with units in the world — connected or ghost — and
+  `connected` counts live connections only, which is what the idle rule and the fleet view mean by
+  "somebody is here". A disconnect sends nothing to the coordinator.
+- A character is released (`POST /internal/v1/servers/leave`) only when its camera unit leaves the
+  world: that is its death.
+- On connect, a verified character that matches a ghost is rebound: same player entity, same
+  `NetEntId` for the camera unit, new endpoint and session. Nothing new is spawned.
+- A restored world lists its ghosts in its first heartbeat, so the coordinator keeps them bound to
+  the instance.
+
+Forced failure: a lapse in the lease (`stale_secs = 30`, detected within 2 × stale) or a client's
+`server_crashed` report triggers `probe()`; the activity resolves the pod IP with `GET pods/<name>`
+and GETs `http://<podIP>:<health>/healthz` with a 2 s timeout. 200 means alive — nothing is killed,
+the lease is re-armed, so an authserver outage cannot take the fleet down. No pod, no IP or a failed
+probe means dead: the workflow sets the phase `Recovering`, deletes the pod with
+`gracePeriodSeconds: 0` (at most once per `KILL_BACKOFF` = 300 s per instance), and the StatefulSet
+recreates it on the same PVC. The new process loads the statefile, reports a new `boot_id`, and its
+first heartbeat returns the phase to `Ready`. While `Recovering`, `/play` answers
+`503 server_recovering` for bound characters and claims are still accepted; no heartbeat within the
+120 s ready timeout deletes the instance as `Lost`.
+
+The client's side of a forced failure:
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant A as Authserver
+    participant G as GameServerWorkflow
+    participant P as Game server pod
+    C->>C: no heartbeat for 10 s → Reconnecting
+    C->>A: POST /api/v1/play (fresh ticket; the old one may have expired)
+    C->>P: ConnectRequest once a second for 10 s (no answer)
+    C->>A: POST /api/v1/my-server-crashed (202)
+    A->>G: server_crashed {character_id}
+    G->>P: probe: GET /healthz, 2 s (no answer)
+    G->>P: DELETE pods/<name> gracePeriodSeconds: 0
+    P->>P: StatefulSet restarts it on the same PVC
+    P->>P: load state.bin, pause (Restoring)
+    P->>G: heartbeat {k, g, new boot_id, ghosts, connected: 0}
+    G->>G: phase Ready
+    C->>A: poll /play every 2 s (up to 120 s)
+    A-->>C: ticket for the same slot
+    C->>P: connect, join, ghost rebound
+    P->>P: every saved player back (or 30 s) → unpause
+```
+
+A restored world is paused with `PauseReason::Restoring`: avian's `Time<Physics>` is paused and the
+systems that step the simulation are skipped, while heartbeats, the UDP/WebSocket flush and input
+handling keep running (freezing `Time<Virtual>` would stop the flush, which runs in
+`FixedPostUpdate`). It unpauses when every saved player is connected again, or 30 s after startup;
+after that an absent character is live and killable. Idle counting starts only then. A statefile
+that cannot be read, or one of another version, logs `statefile unusable, starting a fresh world`
+and starts fresh rather than crash-looping.
 
 ## Placement and extension points
 
@@ -249,9 +312,11 @@ that then ends would be orphaned from its parent's perspective anyway.
 | No pod 30 s after create (a quota race) | as `servers_full` | Treated like `Unschedulable`. |
 | Report for an unknown `<slot, generation>` | — | `409 unknown_instance`; a managed server writes its sentinel and exits 0. |
 | Idle | — | The server destroys its own instance and volume. |
-| Pod crash (**slice B**) | Its players reconnect: 10 s of retries against the server, then `/api/v1/my-server-crashed`, then `/play` | Probe first, then kill, then the same PVC and a restored world. |
-| Node loss (**slice B**) | as a crash | Longhorn moves the volume; the pod restarts elsewhere and restores the world. |
-| Authserver outage | Players already in a game keep playing | Shorter than 2 × 30 s: nothing happens. Longer: static servers' workflows end and restart with the next heartbeat; managed instances are deleted. Slice B probes first, and a probe that answers 200 kills nothing. |
+| Pod crash, hang or hard kill | Its players see "Reconnecting…" and come back into the same world, in the same body | The lease lapses (30 s) or a client reports the crash; probe `/healthz` (2 s). A 200 kills nothing. A dead pod is hard-killed (≤ once per 300 s), the StatefulSet restarts it on the same PVC, `state.bin` is restored and the world unpauses when everyone is back or after 30 s. No heartbeat within the ready timeout → `Lost`. |
+| Node loss | as a crash | `longhorn-rots-gs` has two replicas, so the volume survives the node; Longhorn's `nodeDownPodDeletionPolicy` force-deletes the StatefulSet pod so the RWO volume attaches elsewhere, and the pod restarts there and restores the world. |
+| SIGTERM | Its players reconnect into the same world | With a statefile: pause, final snapshot, exit 0 without the sentinel; the StatefulSet restarts the pod on the same volume. Without one: `HostMigration::ToMenu`. |
+| Authserver outage | Players already in a game keep playing; a client that loses heartbeats shows "Reconnecting…" | A lease lapse only triggers a probe, and nothing is killed without an answer that says the pod is dead, so no instance is deleted by an outage. Static servers' workflows are recreated by their next heartbeat. |
+| Lost connection (client) | "Reconnecting…", then "Lost connection to the server" after ~2.5 min | A fresh ticket and 10 s of retries at the old address, then `/api/v1/my-server-crashed`, then `/play` every 2 s for up to 120 s. |
 
 ## Event budget
 
@@ -269,7 +334,7 @@ that then ends would be orphaned from its parent's perspective anyway.
 | Slice | Scope | Status |
 |---|---|---|
 | A (#118) | #112 Steam ticket GET fix, #114 probe timeouts, directory, placement, GameServerWorkflow, provisioners, generation in reports, idle destroy, sentinel, `unknown_instance`, `server_starting`/`servers_full` client handling, `HostMigration::ToMenu`, chart managed mode | This document; managed path implemented, prod still static |
-| B (#119) | Statefile, ghosts (`OwnedByPlayer`), restoring pause, probe/kill/recover, client reconnect, `/api/v1/my-server-crashed` | pending |
+| B (#119) | Statefile, ghosts (`OwnedByPlayer`), restoring pause, probe/kill/recover, client reconnect, `/api/v1/my-server-crashed` | This document; implemented |
 | C (#120) | Join codes, graceful successor migration (`Migrate`) | pending |
 | D (#121) | Pause, chat, slash commands | pending |
 | prod (#122) | `GAME_SERVER_PROVISIONER=kubernetes` in prod | pending, blocked on D |
@@ -288,3 +353,13 @@ that then ends would be orphaned from its parent's perspective anyway.
 - Placement is per character by position, with `CharacterLocation` as the extension point for
   world-aware rules.
 - Carried unit bytes travel via the coordinator's reservation, not inside the ticket.
+- A disconnect keeps the character in the world as a ghost (`OwnedByPlayer` units, same camera
+  `NetEntId` on reconnect); only its camera unit leaving the world releases the character.
+- The heartbeat roster lists ghosts and `connected` counts only live connections, so a world full of
+  ghosts shuts down when it has been idle long enough.
+- A forced failure keeps the volume and the generation: probe, hard-kill, restart on the same PVC,
+  restore `state.bin`. Nothing is killed without a probe that says the pod is dead.
+- SIGTERM on an instance with a statefile saves the world and lets the StatefulSet restart it; on
+  one without, it migrates its players to the menu.
+- A restored world is paused (`Restoring`) until every saved player is back or 30 s pass; after
+  that, absent characters are live and killable.

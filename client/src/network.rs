@@ -23,15 +23,17 @@ use shared::{
     },
     netlib::{
         ClientNetworkingResources, EventToClient, EventToServer, FakePingSettings,
-        MainServerEndpoint, Tick, setup_incoming_client,
+        MainServerEndpoint, NetworkConnectionTarget, Tick, setup_incoming_client,
     },
     physics::terrain::TerrainParams,
 };
 use std::sync::Arc;
 
+#[cfg(not(feature = "web"))]
+use crate::auth::AssignedServer;
 use crate::{
     assets::{FontAssets, ModelAssets, WorldAssets},
-    auth::{AuthState, GameTicket},
+    auth::{AuthRequest, AuthState, GameTicket},
     camera::LocalCamera,
     game_state::{GameState, NetworkGameState, TerrainEntity},
     notification::Notification,
@@ -75,6 +77,12 @@ impl Plugin for NetworkingPlugin {
                 |mut state: ResMut<NextState<NetworkGameState>>| state.set(NetworkGameState::Quit),
             )
             .add_systems(OnEnter(NetworkGameState::Quit), send_disconnect_packet)
+            .add_systems(OnEnter(NetworkGameState::Quit), abandon_reconnect)
+            .add_systems(OnEnter(NetworkGameState::Reconnecting), start_reconnect)
+            .add_systems(OnEnter(NetworkGameState::ClientConnected), finish_reconnect)
+            // The driver keeps running after the state has moved on to the connect sequence, so
+            // it is driven by the resource rather than by the state.
+            .add_systems(Update, drive_reconnect.run_if(resource_exists::<Reconnect>))
             // .add_systems(
             //     Update,
             //     (check_connect_button).run_if(in_state(NetworkGameState::MainMenu)),
@@ -527,20 +535,28 @@ fn send_connect_packet(
 
 /// The server refused our ticket (expired, wrong environment, character already playing...).
 /// Drop the ticket and go back to the main menu; the next attempt fetches a new one.
+///
+/// A reconnect is different: the server may have restarted and simply not know the ticket any
+/// more, so the attempt is retried with a fresh one instead of ending the session.
 fn receive_connect_rejected(
     mut rejected: UDPacketEvent<ConnectRejected>,
     mut commands: Commands,
     mut notif: MessageWriter<Notification>,
     mut auth_state: ResMut<NextState<AuthState>>,
     mut network_state: ResMut<NextState<NetworkGameState>>,
+    mut reconnect: Option<ResMut<Reconnect>>,
 ) {
     for event in rejected.read() {
         let reason = &event.event.reason;
         warn!("Server rejected connection: {reason}");
+        commands.remove_resource::<GameTicket>();
+        if let Some(reconnect) = reconnect.as_mut() {
+            reconnect.rejected = true;
+            continue;
+        }
         notif.write(Notification(format!(
             "Server rejected connection: {reason}"
         )));
-        commands.remove_resource::<GameTicket>();
         auth_state.set(AuthState::Idle);
         network_state.set(NetworkGameState::Quit);
     }
@@ -686,7 +702,7 @@ fn receive_world_data(
     mut world_data: UDPacketEvent<WorldData2>,
     mut commands: Commands,
     mut notif: MessageWriter<Notification>,
-    mut local_player: Query<(Entity, &mut Transform), With<LocalCamera>>,
+    local_camera: Query<(Entity, Has<PlayerCamera>), With<LocalCamera>>,
     mut spawn_units: MessageWriter<SpawnUnit2>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -710,6 +726,18 @@ fn receive_world_data(
 
         for ent in ents_to_despawn.iter() {
             commands.entity(ent).despawn();
+        }
+
+        // A reconnect keeps this client's camera entity across sessions: drop the network identity
+        // of the last one so `apply_pending_camera_id` installs the unit this world uses (the same
+        // one after a restart, a new one after a death or a move to another instance).
+        for (entity, was_camera) in local_camera.iter() {
+            if was_camera {
+                commands
+                    .entity(entity)
+                    .remove::<PlayerCamera>()
+                    .remove::<NetEntId>();
+            }
         }
 
         let my_id = event.event.your_player_id;
@@ -783,16 +811,177 @@ fn receive_heartbeat(
     }
 }
 
+/// Ten seconds without a server heartbeat is a disconnect (the server is restarting, or gone).
+/// The client does not quit: the character is still in the world, and a reconnect brings it back.
 fn check_if_we_are_timed_out(
     time: Res<Time>,
     last_heartbeat: Res<LastHeartbeatReceived>,
-    mut notif: MessageWriter<Notification>,
+    reconnect: Option<Res<Reconnect>>,
     mut state: ResMut<NextState<NetworkGameState>>,
 ) {
+    if reconnect.is_some() {
+        return;
+    }
     let cur_time = time.elapsed_secs_f64();
     if cur_time - last_heartbeat.time > 10.0 {
-        notif.write(Notification("Disconnected: Timeout".to_string()));
-        state.set(NetworkGameState::Quit);
+        warn!("no heartbeat for 10 s: reconnecting");
+        state.set(NetworkGameState::Reconnecting);
+    }
+}
+
+/// How long to keep resending `ConnectRequest` at the address the character was on.
+const RECONNECT_SAME_SERVER_SECS: f32 = 10.0;
+
+/// How long a reconnect may take in total before the client gives up: the 10 s retry, then
+/// [`crate::auth::PlayWait::Starting`]'s 120 s of `/play` polling, plus slack.
+const RECONNECT_GIVE_UP_SECS: f32 = 150.0;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReconnectPhase {
+    /// Waiting for `/play` to hand out a fresh ticket.
+    Ticket,
+    /// The ticket is in hand: the normal connect sequence is resending `ConnectRequest`.
+    SameServer,
+    /// The server did not come back: the coordinator has been told, and `/play` is being polled.
+    WaitingForServer,
+}
+
+/// One reconnect, from the heartbeat timeout to either `ClientConnected` or `Quit`.
+///
+/// A forced failure restarts the pod on the same volume and it answers again within a few seconds,
+/// so the client first asks for a fresh ticket (the old one may have expired) and keeps sending
+/// `ConnectRequest` to the address it was on. Only when that fails does it report the crash —
+/// which is what makes the authserver probe and recover the instance — and then wait for `/play`
+/// to place the character again.
+#[derive(Resource, Debug)]
+struct Reconnect {
+    phase: ReconnectPhase,
+    /// Seconds in the current phase.
+    phase_for: f32,
+    /// Seconds since the connection dropped.
+    total: f32,
+    /// The `AuthState` seen last frame, so a fresh ticket is noticed once.
+    last_auth: AuthState,
+    /// The server refused this connection attempt (an expired ticket, or one a restarted server
+    /// does not know): go around again with a new one.
+    rejected: bool,
+}
+
+fn start_reconnect(
+    mut commands: Commands,
+    mut auth_requests: MessageWriter<AuthRequest>,
+    mut notif: MessageWriter<Notification>,
+) {
+    info!("reconnecting: asking the authserver for a fresh ticket");
+    notif.write(Notification("Reconnecting…".to_string()));
+    auth_requests.write(AuthRequest::FetchTicket);
+    commands.insert_resource(Reconnect {
+        phase: ReconnectPhase::Ticket,
+        phase_for: 0.0,
+        total: 0.0,
+        last_auth: AuthState::Idle,
+        rejected: false,
+    });
+}
+
+fn finish_reconnect(mut commands: Commands, reconnect: Option<Res<Reconnect>>) {
+    if reconnect.is_none() {
+        return;
+    }
+    info!("reconnected to the game server");
+    commands.remove_resource::<Reconnect>();
+}
+
+fn abandon_reconnect(mut commands: Commands) {
+    commands.remove_resource::<Reconnect>();
+}
+
+/// The reconnect state machine. It runs for as long as [`Reconnect`] exists, including after the
+/// state has moved on to the connect sequence, so one attempt is followed through to its end.
+#[allow(clippy::too_many_arguments, unused_mut)]
+fn drive_reconnect(
+    time: Res<Time>,
+    state: Res<State<NetworkGameState>>,
+    mut next_state: ResMut<NextState<NetworkGameState>>,
+    auth_state: Res<State<AuthState>>,
+    mut next_auth: ResMut<NextState<AuthState>>,
+    mut reconnect: ResMut<Reconnect>,
+    #[cfg(not(feature = "web"))] assigned: Option<Res<AssignedServer>>,
+    mut config: ResMut<Config>,
+    mut auth_requests: MessageWriter<AuthRequest>,
+    mut notif: MessageWriter<Notification>,
+    mut commands: Commands,
+) {
+    if *state.get() == NetworkGameState::ClientConnected {
+        return;
+    }
+    let delta = time.delta_secs();
+    reconnect.total += delta;
+    reconnect.phase_for += delta;
+
+    if reconnect.total > RECONNECT_GIVE_UP_SECS || *auth_state.get() == AuthState::Failed {
+        warn!("could not reconnect to the game server: giving up");
+        notif.write(Notification("Lost connection to the server".to_string()));
+        next_state.set(NetworkGameState::Quit);
+        return;
+    }
+
+    if reconnect.rejected {
+        reconnect.rejected = false;
+        info!("reconnect: the server refused the ticket, asking the coordinator for a server");
+        auth_requests.write(AuthRequest::ReportServerCrashed);
+        auth_requests.write(AuthRequest::FetchTicket);
+        reconnect.phase = ReconnectPhase::WaitingForServer;
+        reconnect.phase_for = 0.0;
+        return;
+    }
+
+    let auth = *auth_state.get();
+    if auth == AuthState::Ready && reconnect.last_auth != AuthState::Ready {
+        // A fresh ticket is waiting to be used, and `AssignedServer` says where to go.
+        reconnect.last_auth = AuthState::Idle;
+        // Native connects to the assigned `host:port`; web keeps its stub address and opens the
+        // WebSocket to the assigned `ws_path` (see `web::setup`).
+        #[cfg(not(feature = "web"))]
+        if let Some(assigned) = assigned.as_deref() {
+            crate::apply_server_addr(&mut config, &assigned.udp);
+        }
+        commands.insert_resource(NetworkConnectionTarget {
+            ip: config.ip.clone(),
+            port: config.port,
+        });
+        // `ClientConnecting` runs the whole connect sequence again: a fresh endpoint, then
+        // `ConnectRequest` once a second until the server sends the world.
+        next_state.set(NetworkGameState::ClientConnecting);
+        next_auth.set(AuthState::Idle);
+        reconnect.phase = ReconnectPhase::SameServer;
+        reconnect.phase_for = 0.0;
+        info!("reconnect: connecting to the assigned server");
+        return;
+    }
+    reconnect.last_auth = auth;
+
+    match reconnect.phase {
+        ReconnectPhase::Ticket => {
+            if reconnect.phase_for >= RECONNECT_SAME_SERVER_SECS {
+                info!("reconnect: no ticket yet, reporting this character's server as crashed");
+                auth_requests.write(AuthRequest::ReportServerCrashed);
+                reconnect.phase = ReconnectPhase::WaitingForServer;
+                reconnect.phase_for = 0.0;
+            }
+        }
+        ReconnectPhase::SameServer => {
+            if reconnect.phase_for >= RECONNECT_SAME_SERVER_SECS {
+                info!(
+                    "reconnect: the server did not come back, asking the coordinator to recover it"
+                );
+                auth_requests.write(AuthRequest::ReportServerCrashed);
+                auth_requests.write(AuthRequest::FetchTicket);
+                reconnect.phase = ReconnectPhase::WaitingForServer;
+                reconnect.phase_for = 0.0;
+            }
+        }
+        ReconnectPhase::WaitingForServer => {}
     }
 }
 

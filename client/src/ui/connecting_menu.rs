@@ -216,6 +216,9 @@ pub fn monitor_connection_status(
                 info!("Successfully connected - transitioning to Playing");
                 next_game_state.set(GameState::Playing);
             }
+            NetworkGameState::Reconnecting => {
+                text.0 = "Reconnecting…".to_string();
+            }
             NetworkGameState::Paused => {
                 text.0 = "Connection paused".to_string();
             }

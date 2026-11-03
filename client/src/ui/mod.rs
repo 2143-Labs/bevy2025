@@ -4,6 +4,7 @@ pub mod gym_list;
 pub mod home_menu;
 pub mod inventory_menu;
 pub mod paused_menu;
+pub mod reconnecting;
 pub mod scoreboard_menu;
 pub mod skills_menu;
 pub mod styles;
@@ -81,6 +82,7 @@ impl Plugin for UIPlugin {
             )
             //
             .add_plugins((
+                reconnecting::ReconnectingOverlayPlugin,
                 scoreboard_menu::ScoreboardMenuPlugin,
                 inventory_menu::InventoryMenuPlugin,
                 skills_menu::SkillsMenuPlugin,
