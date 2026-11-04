@@ -354,6 +354,8 @@ pub struct LifecyclePlugin {
     settings: InstanceSettings,
     idle: IdleTimer,
     sigterm: Sigterm,
+    /// Provisioned into the warm pool: hold the world paused until the coordinator claims it.
+    pre_game: bool,
 }
 
 impl LifecyclePlugin {
@@ -369,6 +371,7 @@ impl LifecyclePlugin {
             },
             idle: IdleTimer::new(idle_secs),
             sigterm: spawn_sigterm_watcher(runtime),
+            pre_game: coordinator.pre_game,
         }
     }
 }
@@ -381,17 +384,60 @@ impl Plugin for LifecyclePlugin {
             .init_resource::<Shutdown>()
             .add_systems(
                 Update,
-                (ask_when_idle, ask_on_sigterm, drive_shutdown)
+                (
+                    unpause_when_activated,
+                    ask_when_idle,
+                    ask_on_sigterm,
+                    drive_shutdown,
+                )
                     .chain()
                     .run_if(in_state(ServerState::Running)),
             );
+        if self.pre_game {
+            // After `Startup` (so a restored world's `Restoring` pause is already in place) and on
+            // the same frame the world goes online.
+            app.add_systems(OnEnter(ServerState::Running), pause_before_activation);
+        }
     }
+}
+
+/// A world that has never been online waits for the coordinator's activation. A world restored
+/// from its volume already paused itself (`Restoring`) for its players: leave it alone.
+fn pause_before_activation(mut paused: ResMut<Paused>) {
+    if paused.reason().is_none() {
+        paused.pause(PauseReason::PreGame);
+    }
+}
+
+/// The coordinator's `POST /activate`, or a player who got in first: either way the world is
+/// wanted now.
+fn unpause_when_activated(
+    axum: Res<crate::axum::AxumServerResource>,
+    mut paused: ResMut<Paused>,
+    players: Query<(), With<ConnectedPlayer>>,
+) {
+    if paused.reason() != Some(PauseReason::PreGame) {
+        return;
+    }
+    if axum.activated.load(Ordering::Relaxed) || !players.is_empty() {
+        paused.unpause();
+    }
+}
+
+/// Whether an empty world may count towards its idle shutdown. A restored world is waiting for
+/// its players; a pre-game one has never had any.
+fn idle_applies(paused: &Paused) -> bool {
+    !matches!(
+        paused.reason(),
+        Some(PauseReason::Restoring | PauseReason::PreGame)
+    )
 }
 
 /// Nobody connected for `ROTS_IDLE_SECS`: ask the coordinator to destroy this instance.
 ///
-/// A restored world is exempt until it has finished restoring: it is supposed to have nobody
-/// connected while its players reconnect, and idle counting only starts once it unpauses.
+/// A restored world is exempt until it has finished restoring, and a pre-game one until it is
+/// activated: both are supposed to have nobody connected, and idle counting only starts once the
+/// world unpauses.
 fn ask_when_idle(
     time: Res<Time<Real>>,
     mut idle: ResMut<IdleTimer>,
@@ -400,7 +446,7 @@ fn ask_when_idle(
     link: Res<CoordinatorLink>,
     mut shutdown: ResMut<Shutdown>,
 ) {
-    if shutdown.is_running() || paused.reason() == Some(PauseReason::Restoring) {
+    if shutdown.is_running() || !idle_applies(&paused) {
         return;
     }
     let connected = players.iter().count();
@@ -509,6 +555,17 @@ mod tests {
         assert_eq!(prepare(&dir, 6), Startup::Run);
         assert_eq!(prepare(&dir, 6), Startup::Run);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn idle_does_not_apply_before_activation() {
+        let mut paused = Paused::default();
+        assert!(idle_applies(&paused));
+        paused.pause(PauseReason::PreGame);
+        assert!(!idle_applies(&paused));
+        paused.unpause();
+        paused.pause(PauseReason::Restoring);
+        assert!(!idle_applies(&paused));
     }
 
     #[test]

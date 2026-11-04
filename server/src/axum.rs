@@ -5,7 +5,9 @@ use shared::{
     tokio_udp::TokioRuntimeResource,
 };
 
-use crate::{ConnectedPlayer, ServerState};
+use subtle::ConstantTimeEq;
+
+use crate::{ConnectedPlayer, GameServerCoordinator, ServerState};
 
 pub struct AxumServerPlugin;
 
@@ -47,7 +49,7 @@ pub struct BevyAxumReplyGetPlayers {
 
 use dashmap::DashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 #[derive(Resource, Clone, Default)]
 pub struct AxumServerResource {
@@ -55,6 +57,9 @@ pub struct AxumServerResource {
     pub get_players_replys: Arc<DashMap<AxumRequestId, BevyAxumReplyGetPlayers>>,
     /// Unix seconds of the last frame, read by `/healthz`.
     pub last_frame: Arc<AtomicU64>,
+    /// Set by `POST /activate`: the coordinator has claimed this warm-pool instance, so its world
+    /// may come online. Ungated on `/healthz` — a pre-game instance answers like any other.
+    pub activated: Arc<AtomicBool>,
 }
 
 /// `/healthz` fails once the game loop has not run a frame for this long, so a hung loop
@@ -82,12 +87,16 @@ fn loop_alive(last_frame: u64, now: u64) -> bool {
 struct AxumState {
     _server_networking_resources: ServerNetworkingResources,
     axum_bevy_queues: AxumServerResource,
+    /// The token the coordinator link was given; `None` on a standalone server, which nothing can
+    /// activate.
+    coordinator_token: Option<String>,
 }
 
 fn setup_shared_axum_server(
     res: Res<ServerNetworkingResources>,
     axum_server_res: Res<AxumServerResource>,
     tokio_runtime: Res<TokioRuntimeResource>,
+    coordinator: Option<Res<GameServerCoordinator>>,
 ) {
     let (ip, port) = res.con_str.as_ref().clone();
     info!("Starting shared axum server on {}:{}", ip, port + 1);
@@ -95,6 +104,7 @@ fn setup_shared_axum_server(
     let state = AxumState {
         _server_networking_resources: res.clone(),
         axum_bevy_queues: axum_server_res.clone(),
+        coordinator_token: coordinator.map(|c| c.token.clone()),
     };
 
     let router = Router::new()
@@ -102,6 +112,7 @@ fn setup_shared_axum_server(
         .route("/healthz", axum::routing::get(healthz))
         .route("/", axum::routing::get(|| async { "Hello, World!" }))
         .route("/players", axum::routing::get(get_players_endpoint))
+        .route("/activate", axum::routing::post(activate))
         .with_state(state);
 
     let _x = tokio_runtime.spawn(async move {
@@ -130,6 +141,32 @@ async fn healthz(state: axum::extract::State<AxumState>) -> (axum::http::StatusC
             "game loop stalled",
         )
     }
+}
+
+/// The coordinator claims this pool instance. Idempotent: a world already online is left alone.
+async fn activate(
+    state: axum::extract::State<AxumState>,
+    headers: axum::http::HeaderMap,
+) -> axum::http::StatusCode {
+    let presented = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .unwrap_or("");
+    if !token_ok(state.coordinator_token.as_deref().unwrap_or(""), presented) {
+        return axum::http::StatusCode::UNAUTHORIZED;
+    }
+    state
+        .axum_bevy_queues
+        .activated
+        .store(true, Ordering::Relaxed);
+    info!("activate: the coordinator has claimed this instance");
+    axum::http::StatusCode::NO_CONTENT
+}
+
+/// Empty expected token: no activation is accepted (a standalone server has no coordinator).
+fn token_ok(expected: &str, presented: &str) -> bool {
+    !expected.is_empty() && bool::from(presented.as_bytes().ct_eq(expected.as_bytes()))
 }
 
 async fn get_players_endpoint(
@@ -186,6 +223,17 @@ fn respond_to_get_players_request(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn activation_needs_the_coordinator_token() {
+        // A standalone server has no coordinator: nothing can activate it.
+        assert!(!token_ok("", ""));
+        assert!(!token_ok("", "anything"));
+        assert!(!token_ok("sekrit-token", ""));
+        assert!(!token_ok("sekrit-token", "sekrit-toke"));
+        assert!(!token_ok("sekrit-token", "sekrit-tokenx"));
+        assert!(token_ok("sekrit-token", "sekrit-token"));
+    }
 
     #[test]
     fn healthz_fails_once_the_loop_stalls() {

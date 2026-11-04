@@ -572,7 +572,11 @@ fn send_heartbeat(
             .then_with(|| a.sid.cmp(&b.sid))
     });
     players.dedup();
-    link.heartbeat(players, connected_count, paused.is_paused());
+    // Pre-game is not a pause a player can see: the instance is simply not online yet.
+    let visible_pause = paused
+        .reason()
+        .is_some_and(|r| r != crate::PauseReason::PreGame);
+    link.heartbeat(players, connected_count, visible_pause);
 }
 
 #[cfg(test)]
@@ -670,6 +674,7 @@ mod tests {
             // managed instance and a hangover for a test.
             managed: false,
             token: TOKEN.to_string(),
+            pre_game: false,
         }
     }
 
@@ -908,6 +913,32 @@ mod tests {
         assert_eq!(body["paused"], true);
         assert_eq!(body["connected"], 1);
         assert_eq!(body["players"], json!(players()));
+    }
+
+    #[test]
+    fn the_heartbeat_of_a_pre_game_world_is_not_reported_as_paused() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let (endpoint, mock) = start_mock(&runtime, vec![]);
+        let link = spawn_link(&runtime, coordinator(&endpoint));
+
+        let mut paused = crate::Paused::default();
+        paused.pause(crate::PauseReason::PreGame);
+        let mut app = App::new();
+        app.insert_resource(link)
+            .init_resource::<PendingJoins>()
+            .init_resource::<ReadyToAdmit>()
+            .insert_resource(paused)
+            .add_systems(Update, send_heartbeat);
+        app.update();
+
+        wait_for(&mock, 1, Duration::from_secs(5));
+        let body = &mock.requests()[0].body;
+        // A pool instance answers like a running one; its pause is the coordinator's own bookkeeping.
+        assert_eq!(body["paused"], false);
+        assert_eq!(body["connected"], 0);
     }
 
     #[test]

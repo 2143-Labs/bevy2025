@@ -22,8 +22,9 @@ deletes the StatefulSet and PVC.
   position yet, so today every `/play` for an unbound character allocates a new instance.
 - Capacity is the cluster's: a ResourceQuota. When it is exhausted the player is told
   `servers_full` and the client retries every 5 s.
-- prod still runs the **static** fleet (`rots-gameserver-0..3`, `GAME_SERVER_PROVISIONER=static`)
-  until the prod switch (#122). The managed path is what previews and, later, prod use.
+- prod runs the **managed** fleet too (`GAME_SERVER_PROVISIONER=kubernetes`, 64 slots, argo #40);
+  it keeps one instance **warm** — booted in pre-game and activated on placement — so `/play`
+  answers with a ticket in about a second instead of the ~15 s a fresh instance takes to provision.
 
 ## Ownership and identity
 
@@ -36,11 +37,12 @@ deletes the StatefulSet and PVC.
 | Workflow id | `rots-gs-<queue>-<k>-g<g>` (`server_id(queue, slot, generation)`). |
 | Join code | 4 characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, unique among live instances, derived from a seed the coordinator carries so it is replay-safe. Only tutorial instances get one. |
 | Statefile | `$ROTS_STATE_DIR/state.bin` on the instance's volume: postcard `WorldSnapshot { version, tick, terrain, paused, units, players }`, written every 5 s and once on SIGTERM (write `state.bin.tmp`, fsync, rename). |
-| Static mode | `GAME_SERVER_PROVISIONER=static` (prod today, local dev): servers are external, report `generation` 1 and are placed by "least loaded"; nothing provisions or deletes them. |
+| Static mode | `GAME_SERVER_PROVISIONER=static` (local dev): servers are external, report `generation` 1 and are placed by "least loaded"; nothing provisions or deletes them. |
 
 The report env a provisioner sets on a managed instance is
 `ROTS_SERVER_SLOT`, `ROTS_SERVER_GENERATION`, `ROTS_SERVER_JOIN_CODE`, `ROTS_PUBLIC_UDP_PORT`,
-`ROTS_STATE_DIR` and `ROTS_IDLE_SECS`. The game server treats `ROTS_SERVER_GENERATION` as the flag
+`ROTS_STATE_DIR`, `ROTS_IDLE_SECS` and `ROTS_PRE_GAME` (`1` for a warm-pool instance, empty
+otherwise). The game server treats `ROTS_SERVER_GENERATION` as the flag
 that it is managed: with it unset it behaves exactly as a static server does.
 
 ## Workflows
@@ -344,7 +346,8 @@ that then ends would be orphaned from its parent's perspective anyway.
 | B (#119) | Statefile, ghosts (`OwnedByPlayer`), restoring pause, probe/kill/recover, client reconnect, `/api/v1/my-server-crashed` | This document; implemented |
 | C (#120) | Join codes, graceful successor migration (`Migrate`) | pending |
 | D (#121) | Pause, chat, slash commands | pending |
-| prod (#122) | `GAME_SERVER_PROVISIONER=kubernetes` in prod | pending, blocked on D |
+| prod (#122) | `GAME_SERVER_PROVISIONER=kubernetes` in prod | implemented (argo #40: prod is managed, 64 slots) |
+| warm pool | Pre-game mode (`ROTS_PRE_GAME=1`, `PauseReason::PreGame`), `POST /activate` on the server's axum port, the coordinator's `warm` pool (`warmInstances`, `warmMaxAgeSecs`), the image-staleness check, prod's `minReplicas: 1` | implemented: prod keeps 1 instance warm, previews 0 |
 
 ## Choices
 
@@ -372,3 +375,8 @@ that then ends would be orphaned from its parent's perspective anyway.
   one without, it migrates its players to the menu.
 - A restored world is paused (`Restoring`) until every saved player is back or 30 s pass; after
   that, absent characters are live and killable.
+- A pool instance is a paused world (`PreGame`), not a held process: the sockets, the coordinator
+  link and `/healthz` all run, so the instance reports and passes its probes, and the coordinator
+  claims it with `POST /activate` (or the first admitted player unpauses it). Holding a process
+  before the world exists would be probed dead and killed; the idle clock, like the restored one,
+  only starts once the world is online.

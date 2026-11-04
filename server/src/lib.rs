@@ -99,6 +99,10 @@ pub struct GameServerCoordinator {
     /// rather than noise. Static servers (prod, local dev) are never in that position.
     pub managed: bool,
     pub token: String,
+    /// `ROTS_PRE_GAME=1`: the provisioner created this instance for the warm pool. Its world is
+    /// built, its sockets are up and it reports, but it stays paused until the coordinator claims
+    /// it with `POST /activate`.
+    pub pre_game: bool,
 }
 
 impl std::fmt::Debug for GameServerCoordinator {
@@ -110,6 +114,7 @@ impl std::fmt::Debug for GameServerCoordinator {
             .field("generation", &self.generation)
             .field("udp_port", &self.udp_port)
             .field("managed", &self.managed)
+            .field("pre_game", &self.pre_game)
             .finish()
     }
 }
@@ -127,6 +132,9 @@ impl GameServerCoordinator {
         let udp_port = parse_env::<u16>("ROTS_PUBLIC_UDP_PORT");
         let token = std::env::var("ROTS_COORDINATOR_TOKEN")
             .expect("ROTS_COORDINATOR_TOKEN must be set with ROTS_COORDINATOR_URL");
+        // Only a provisioned instance is ever activated: a static server has no coordinator to
+        // claim it, so it never boots into a world it cannot leave.
+        let pre_game = generation.is_some() && parse_env::<u8>("ROTS_PRE_GAME") == Some(1);
         Some(Self {
             endpoint,
             slot,
@@ -134,6 +142,7 @@ impl GameServerCoordinator {
             udp_port,
             managed: generation.is_some(),
             token,
+            pre_game,
         })
     }
 }
@@ -398,6 +407,9 @@ fn add_network_connection_info_from_config(config: Res<Config>, mut commands: Co
 pub enum PauseReason {
     /// A restored world, waiting for its players to reconnect (or for the grace period to end).
     Restoring,
+    /// Provisioned into the warm pool: the world exists and the server answers, but it is not
+    /// online until the coordinator activates it.
+    PreGame,
 }
 
 /// The world's pause switch.
@@ -1689,6 +1701,7 @@ mod tests {
                 udp_port: None,
                 managed: false,
                 token: "test-token".to_string(),
+                pre_game: false,
             },
         );
         (link, log)

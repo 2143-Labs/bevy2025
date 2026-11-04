@@ -402,7 +402,17 @@ fn tick_write_timer(time: Res<Time<Real>>, mut statefile: ResMut<Statefile>) {
 
 /// Take the world once the interval has passed, or at once when SIGTERM asked for the final
 /// snapshot.
-fn capture_pending(world: &World, statefile: Res<Statefile>, pending: Res<PendingSnapshot>) {
+fn capture_pending(
+    paused: Res<Paused>,
+    world: &World,
+    statefile: Res<Statefile>,
+    pending: Res<PendingSnapshot>,
+) {
+    // A pre-game world has never been online: a snapshot of it would be empty, and a restart
+    // would restore it as a phantom world instead of re-entering pre-game.
+    if paused.reason() == Some(PauseReason::PreGame) {
+        return;
+    }
     if statefile.frozen {
         return;
     }
