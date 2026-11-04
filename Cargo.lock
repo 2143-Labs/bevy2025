@@ -7172,6 +7172,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "shared",
+ "subtle",
  "tokio",
  "tokio-tungstenite",
  "tungstenite 0.28.0",
