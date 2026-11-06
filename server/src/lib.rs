@@ -59,6 +59,11 @@ struct EndpointToPlayerId {
     map: DashMap<EndpointGeneral, PlayerId>,
 }
 
+/// Characters the coordinator moved to another tutorial (`POST /evict`), as `character_id`s,
+/// waiting for `evict_characters` to take them out of the world.
+#[derive(Resource, Clone, Default)]
+pub struct Evictions(pub Arc<Mutex<Vec<i64>>>);
+
 #[derive(Debug, Component)]
 struct PlayerEndpoint(EndpointGeneral);
 
@@ -279,6 +284,7 @@ fn do_app(base_plugins: bevy::app::PluginGroupBuilder, f: impl FnOnce(&mut App))
 
     app.insert_resource(EndpointToPlayerId::default())
         .insert_resource(HeartbeatList::default())
+        .init_resource::<Evictions>()
         .init_resource::<PendingJoins>()
         .init_resource::<ReadyToAdmit>()
         .init_resource::<Paused>()
@@ -327,6 +333,7 @@ fn do_app(base_plugins: bevy::app::PluginGroupBuilder, f: impl FnOnce(&mut App))
             Update,
             (
                 on_player_disconnect,
+                evict_characters,
                 (vet_connect_requests, poll_pending_joins, admit_players).chain(),
                 on_player_heartbeat,
                 on_receive_ping_challenge,
@@ -1196,6 +1203,97 @@ fn on_player_disconnect(
     }
 }
 
+/// Characters the coordinator moved to another tutorial (`POST /evict`): their units and player
+/// entity leave this world, the other clients are told, and the release is reported. The moving
+/// client is told nothing: it is already connecting elsewhere, and a despawn of its own camera
+/// unit would take its camera with it.
+fn evict_characters(
+    evictions: Res<Evictions>,
+    world: &World,
+    mut commands: Commands,
+    sr: Res<ServerNetworkingResources>,
+    link: Option<Res<crate::coordinator::CoordinatorLink>>,
+) {
+    let ids: Vec<i64> = {
+        let mut queue = evictions.0.lock().expect("evictions lock poisoned");
+        std::mem::take(&mut *queue)
+    };
+    for id in ids {
+        let player = PlayerId(id as u64);
+        // The player entity (connected, or a ghost) and the units the character owns.
+        let mut entities: Vec<Entity> = vec![];
+        let mut endpoint: Option<EndpointGeneral> = None;
+        if let Some(mut players) = world.try_query::<(Entity, &PlayerId, &PlayerEndpoint)>() {
+            for (entity, player_id, their_endpoint) in players.iter(world) {
+                if *player_id == player {
+                    entities.push(entity);
+                    endpoint = Some(their_endpoint.0);
+                }
+            }
+        }
+        let mut units: Vec<(Entity, NetEntId)> = vec![];
+        if let Some(mut owned) = world.try_query::<(Entity, &NetEntId, &OwnedByPlayer)>() {
+            for (entity, net_ent_id, owner) in owned.iter(world) {
+                if owner.player_id == player {
+                    units.push((entity, *net_ent_id));
+                }
+            }
+        }
+        if entities.is_empty() && units.is_empty() {
+            // Already gone (a duplicate `/evict`): nothing to do.
+            continue;
+        }
+        let unit_count = units.len();
+
+        let mut events: Vec<EventToClient> = units
+            .iter()
+            .map(|(_, net_ent_id)| {
+                EventToClient::DespawnUnit2(DespawnUnit2 {
+                    net_ent_id: *net_ent_id,
+                })
+            })
+            .collect();
+        events.push(EventToClient::PlayerDisconnected(PlayerDisconnected {
+            id: player,
+            reason: "moved to another tutorial".to_string(),
+        }));
+
+        if let Some(mut clients) =
+            world.try_query_filtered::<&PlayerEndpoint, With<ConnectedPlayer>>()
+        {
+            for their_endpoint in clients.iter(world) {
+                if Some(their_endpoint.0) != endpoint {
+                    sr.send_outgoing_event_next_tick_batch(their_endpoint.0, &events);
+                }
+            }
+        }
+
+        for entity in entities
+            .into_iter()
+            .chain(units.into_iter().map(|(entity, _)| entity))
+        {
+            commands.entity(entity).despawn();
+        }
+
+        let heartbeat_list = world.resource::<HeartbeatList>();
+        heartbeat_list.heartbeats.remove(&player);
+        heartbeat_list.pings.remove(&player);
+        world
+            .resource::<EndpointToPlayerId>()
+            .map
+            .retain(|_, mapped| *mapped != player);
+
+        if let Some(link) = link.as_deref() {
+            link.leave(id);
+        }
+        info!(
+            character_id = id,
+            units = unit_count,
+            "evicted: moved to another tutorial"
+        );
+    }
+}
+
 fn on_unit_despawn(
     mut pd: MessageReader<DespawnUnit2>,
     clients: Query<&PlayerEndpoint, With<ConnectedPlayer>>,
@@ -1419,6 +1517,7 @@ mod tests {
             .insert_resource(networking())
             .init_resource::<HeartbeatList>()
             .init_resource::<EndpointToPlayerId>()
+            .init_resource::<Evictions>()
             .init_resource::<PendingJoins>()
             .init_resource::<ReadyToAdmit>()
             .insert_resource(CurrentTick(Tick(11)))
@@ -1426,7 +1525,13 @@ mod tests {
             .add_message::<DespawnUnit2>()
             .add_systems(
                 Update,
-                (admit_players, on_player_disconnect, on_unit_despawn).chain(),
+                (
+                    admit_players,
+                    on_player_disconnect,
+                    evict_characters,
+                    on_unit_despawn,
+                )
+                    .chain(),
             );
         if keep_ghosts {
             app.insert_resource(KeepGhosts);
@@ -1794,6 +1899,88 @@ mod tests {
             paths_seen(&seen).is_empty(),
             "a ghost is not released on disconnect: {:?}",
             paths_seen(&seen)
+        );
+    }
+
+    /// A join-code move takes the character out of the old world: its units and player entity go,
+    /// the other clients are told, and the moving client (already connecting elsewhere) is not
+    /// sent a despawn of its own camera.
+    #[test]
+    fn evicting_a_character_removes_it_from_the_world() {
+        let mut app = app(true);
+        admit_now(&mut app, request(7, endpoint(5001)));
+        admit_now(&mut app, request(8, endpoint(5002)));
+        let camera = camera_units(&mut app, 7)[0];
+
+        let man = shared::net_components::make_man(
+            Transform::from_xyz(1.0, 2.0, 1.0),
+            ControlledBy::single(PlayerId(7)),
+            "TypeQ",
+        );
+        let man_ent = man.clone().spawn_entity(&mut app.world_mut().commands());
+        app.world_mut()
+            .commands()
+            .entity(man_ent)
+            .insert(OwnedByPlayer {
+                player_id: PlayerId(7),
+            });
+        app.world_mut().flush();
+        assert_eq!(unit_count(&mut app), 3, "two cameras and one man");
+
+        app.world()
+            .resource::<Evictions>()
+            .0
+            .lock()
+            .expect("evictions lock")
+            .push(7);
+        app.update();
+
+        assert!(
+            camera_units(&mut app, 7).is_empty(),
+            "the character's units left the world"
+        );
+        assert_eq!(unit_count(&mut app), 1, "only player 8's camera is left");
+        assert!(
+            players::<With<PlayerId>>(&mut app)
+                .iter()
+                .all(|id| *id != PlayerId(7)),
+            "the player entity went with its units"
+        );
+
+        let to_b = queued_events(&mut app, endpoint(5002));
+        assert_eq!(
+            to_b
+                .iter()
+                .filter(
+                    |event| matches!(event, EventToClient::DespawnUnit2(d) if d.net_ent_id == camera)
+                )
+                .count(),
+            1,
+            "the other player is told the camera left: {to_b:?}"
+        );
+        assert_eq!(
+            to_b
+                .iter()
+                .filter(
+                    |event| matches!(event, EventToClient::DespawnUnit2(d) if d.net_ent_id == man.net_ent_id)
+                )
+                .count(),
+            1,
+            "and the man: {to_b:?}"
+        );
+        assert!(
+            to_b.iter().any(
+                |event| matches!(event, EventToClient::PlayerDisconnected(p) if p.id == PlayerId(7))
+            ),
+            "the other player is told the character disconnected: {to_b:?}"
+        );
+
+        let to_a = queued_events(&mut app, endpoint(5001));
+        assert!(
+            !to_a
+                .iter()
+                .any(|event| matches!(event, EventToClient::DespawnUnit2(_))),
+            "the moving client is not sent a despawn of its own camera: {to_a:?}"
         );
     }
 }

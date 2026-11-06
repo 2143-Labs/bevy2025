@@ -107,7 +107,10 @@ impl Plugin for SkillBindsPlugin {
             (
                 on_bind_skill_to_key,
                 check_for_key_combo_press,
-                write_begin_skill_use_events.run_if(in_state(SkillBindOverlayState::Inactive)),
+                // Typing a join code must not cast: Q/E/F/K/P/I are skill keys.
+                write_begin_skill_use_events
+                    .run_if(in_state(SkillBindOverlayState::Inactive))
+                    .run_if(not(resource_exists::<ChompInputs>)),
             )
                 .run_if(in_state(GameState::Playing)),
         );

@@ -3,8 +3,9 @@
 How ROTS creates, owns and retires game-server instances. Slice A is implemented: a fresh tutorial
 instance per new player, a Temporal workflow per instance, idle self-destruction and
 `servers_full`. Slice B is implemented too: the statefile, ghosts (characters that outlive a
-disconnect), the restoring pause, probe/kill/recover and the client's reconnect path. Slices C
-(join codes, successor migration) and D (pause, chat) are marked **pending** below.
+disconnect), the restoring pause, probe/kill/recover and the client's reconnect path. Join codes
+(slice C's first half) are implemented; its successor migration, and slice D (pause, chat), stay
+**pending** below.
 
 ## Summary
 
@@ -68,13 +69,17 @@ generation, sid}`, reservations, `next_generation`, `code_seed`, the start-failu
 - update `place { character_id, sid, location }` → `Ready | Starting | Recovering | NoGameServer | ServersFull`;
 - update `claim { slot, generation, character_id, sid }` → `Admitted | AlreadyOnOtherServer |
   ServerDraining | UnknownInstance`;
+- update `resolve_code { code, character_id, sid }` → `Moved { slot, generation } | SameServer |
+  NotFound | Unavailable`: a join code rebinds the character to the instance that holds it (never a
+  warm one) and the character's old instance is told to `evict` it;
 - signal `release { slot, generation, character_id }` (the character's units left the world);
 - signal `server_ready { slot, generation, udp_port, paused, connected, players }`;
 - signal `server_status` (same body; only on change, plus an anti-entropy report every 300 s;
   an unknown instance is taken as ready);
 - signal `server_gone { slot, generation, reason }`, `reason ∈ Drained | Destroyed | Lost |
   StartFailed | ServersFull`;
-- update `request_shutdown { slot, generation, reason, players }` → `Destroy | ToMenu` (slice C
+- update `request_shutdown { slot, generation, reason, players }` → `Destroy | ToMenu` (a
+  completed tutorial's `tutorial_complete` also answers `ToMenu`; slice C's successor migration
   adds `Migrate`);
 - update `server_crashed { character_id }` → `bool` (true when a probe was started);
 - query `fleet`.
@@ -86,10 +91,12 @@ roster) and rebuilds its directory and index from the answers; `place` and `clai
 
 **GameServerWorkflow** (`rots-authserver/src/temporal/server.rs`): one per instance.
 `GameServerArgs { task_queue, slot, generation, provisioner, join_code, stale_secs,
-ready_timeout_secs, unschedulable_secs, carried }`. It receives `heartbeat`, `leave` and `probe`
-signals, and a `join` update it answers by claiming at the coordinator through a local
-activity, and a `shutdown` update (the internal API's `shutdown-request`) it answers by asking the
-coordinator's `request_shutdown`. It holds the lease and the roster, sends presence to the
+ready_timeout_secs, unschedulable_secs, carried }`. It receives `heartbeat`, `leave`, `probe`
+and `activate` signals, an `evict` signal (the character moved to another tutorial: a local
+activity `POST`s `/evict` on the instance, which removes its units and reports the `leave`), a
+`join` update it answers by claiming at the coordinator through a local activity, and a `shutdown`
+update (the internal API's `shutdown-request`) it answers by asking the coordinator's
+`request_shutdown`. It holds the lease and the roster, sends presence to the
 sessions of the characters that join and leave, and drives provisioning, the ready timeout, the
 unschedulable check and deletion (5 s after a `destroy` grant, 15 s after `to_menu`). A lapse in the lease
 (the first one, `COORDINATOR_STALE_SECS` = 30 s) signals `probe`, and only a pod that does not
@@ -344,7 +351,7 @@ that then ends would be orphaned from its parent's perspective anyway.
 |---|---|---|
 | A (#118) | #112 Steam ticket GET fix, #114 probe timeouts, directory, placement, GameServerWorkflow, provisioners, generation in reports, idle destroy, sentinel, `unknown_instance`, `server_starting`/`servers_full` client handling, `HostMigration::ToMenu`, chart managed mode | This document; managed path implemented, prod still static |
 | B (#119) | Statefile, ghosts (`OwnedByPlayer`), restoring pause, probe/kill/recover, client reconnect, `/api/v1/my-server-crashed` | This document; implemented |
-| C (#120) | Join codes, graceful successor migration (`Migrate`) | pending |
+| C (#120) | Join codes, graceful successor migration (`Migrate`) | join codes done; successor migration pending |
 | D (#121) | Pause, chat, slash commands | pending |
 | prod (#122) | `GAME_SERVER_PROVISIONER=kubernetes` in prod | implemented (argo #40: prod is managed, 64 slots) |
 | warm pool | Pre-game mode (`ROTS_PRE_GAME=1`, `PauseReason::PreGame`), `POST /activate` on the server's axum port, the coordinator's `warm` pool (`warmInstances`, `warmMaxAgeSecs`), the image-staleness check, prod's `minReplicas: 1` | implemented: prod keeps 1 instance warm, previews 0 |

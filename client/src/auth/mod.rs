@@ -96,8 +96,7 @@ pub struct AssignedServer {
     /// Path on the page's own host that web clients connect to.
     #[allow(dead_code, reason = "native connects to `udp` instead")]
     pub ws_path: String,
-    /// The tutorial instance's join code, for slice C's "join someone" box. Not shown yet.
-    #[allow(dead_code, reason = "slice C displays the join code")]
+    /// The tutorial instance's join code, shown by `ui::join_code`.
     pub join_code: Option<String>,
     /// A migrated world comes back paused; nothing acts on it until slice D adds pausing.
     #[allow(dead_code, reason = "slice D unpauses")]
@@ -201,9 +200,26 @@ pub enum AuthRequest {
     Login(LoginMethod),
     Logout,
     Claim(String),
+    /// Ask the authserver to move this character into the tutorial with this join code
+    /// (`/api/v1/join-code`). The answer is a [`JoinCodeAnswer`].
+    JoinCode(String),
     /// Tell the authserver a character's game server stopped answering (`/api/v1/my-server-crashed`),
     /// which makes the coordinator probe and, if it is dead, recover the instance.
     ReportServerCrashed,
+}
+
+/// What the authserver said about a join code.
+#[derive(Message, Clone, Debug, PartialEq, Eq)]
+pub enum JoinCodeAnswer {
+    /// The character now belongs to that tutorial: the next `/play` answers with it.
+    Moved,
+    /// The character is already on that tutorial's instance.
+    AlreadyThere,
+    /// No tutorial is running with that code.
+    NotFound,
+    /// The tutorial exists but is not taking players (starting, recovering or draining).
+    Unavailable,
+    Failed(String),
 }
 
 /// What to do with a finished request.
@@ -217,6 +233,7 @@ enum Op {
     },
     Me,
     Claim,
+    JoinCode,
     Logout,
     ServerCrashed,
     #[cfg(feature = "steam")]
@@ -238,6 +255,7 @@ impl Plugin for AuthPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<AuthState>()
             .add_message::<AuthRequest>()
+            .add_message::<JoinCodeAnswer>()
             .init_resource::<AvailableLoginMethods>()
             .init_resource::<AuthSession>()
             .init_resource::<PendingAuth>()
@@ -324,6 +342,16 @@ fn handle_auth_requests(
                     ),
                 ));
             }
+            AuthRequest::JoinCode(code) => {
+                pending.0.push((
+                    Op::JoinCode,
+                    http.post(
+                        "/api/v1/join-code",
+                        json!({ "code": code }),
+                        session.native_token.clone(),
+                    ),
+                ));
+            }
             // Platform backends own their login flows.
             AuthRequest::Login(_) => {}
         }
@@ -358,6 +386,7 @@ fn poll_auth_responses(
     mut session: ResMut<AuthSession>,
     mut auth_state: ResMut<NextState<AuthState>>,
     mut notif: MessageWriter<Notification>,
+    mut answers: MessageWriter<JoinCodeAnswer>,
     mut commands: Commands,
     #[cfg(not(feature = "web"))] mut config: ResMut<crate::Config>,
 ) {
@@ -479,6 +508,24 @@ fn poll_auth_responses(
             (Op::Claim, Err(e)) => {
                 warn!("Claim failed: {e}");
                 notif.write(Notification(format!("Claim failed: {e}")));
+            }
+            (Op::JoinCode, Ok(body)) => {
+                let answer = if body.get("moved").and_then(Value::as_bool) == Some(true) {
+                    JoinCodeAnswer::Moved
+                } else {
+                    JoinCodeAnswer::AlreadyThere
+                };
+                info!("join code answered: {answer:?}");
+                answers.write(answer);
+            }
+            (Op::JoinCode, Err(e)) => {
+                let answer = match e.as_str() {
+                    "unknown_join_code" => JoinCodeAnswer::NotFound,
+                    "target_unavailable" => JoinCodeAnswer::Unavailable,
+                    _ => JoinCodeAnswer::Failed(e),
+                };
+                info!("join code failed: {answer:?}");
+                answers.write(answer);
             }
             (Op::Logout, Ok(_)) => {}
             (Op::Logout, Err(e)) => warn!("Logout request failed: {e}"),
