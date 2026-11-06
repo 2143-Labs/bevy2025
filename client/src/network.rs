@@ -17,7 +17,7 @@ use shared::{
         },
     },
     net_components::{
-        ents::{Ball, CanAssumeControl, ItemDrop, Man, NPC, PlayerCamera, Tower},
+        ents::{Ball, CanAssumeControl, GoalFlag, ItemDrop, Man, NPC, PlayerCamera, Tower},
         foreign::ComponentColor,
         ours::{PlayerColor, PlayerName},
     },
@@ -163,6 +163,7 @@ impl Plugin for NetworkingPlugin {
                     on_special_unit_spawn_npc,
                     on_special_unit_spawn_loot,
                     on_special_unit_spawn_tower,
+                    on_special_unit_spawn_goal_flag,
                     receive_heartbeat,
                     receive_tick_just_happened,
                     receive_challenge,
@@ -487,6 +488,42 @@ fn on_special_unit_spawn_tower(
     }
 }
 
+/// The tutorial's green flag: a pole with a banner, no asset needed.
+fn on_special_unit_spawn_goal_flag(
+    mut commands: Commands,
+    mut unit_query: Query<(Entity, &NetEntId, &GoalFlag), With<NeedsClientConstruction>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for (entity, _ent_id, _flag) in unit_query.iter_mut() {
+        let pole = meshes.add(Cylinder {
+            radius: 0.08,
+            half_height: 2.5,
+        });
+        let pole_material = materials.add(StandardMaterial {
+            base_color: Color::srgb(0.85, 0.85, 0.85),
+            metallic: 0.4,
+            perceptual_roughness: 0.6,
+            ..default()
+        });
+        let banner = meshes.add(Cuboid::new(1.6, 1.0, 0.05));
+        let banner_material = materials.add(StandardMaterial {
+            base_color: Color::srgb(0.1, 0.8, 0.2),
+            emissive: LinearRgba::rgb(0.05, 0.4, 0.1),
+            ..default()
+        });
+        commands
+            .entity(entity)
+            .insert((Mesh3d(pole), MeshMaterial3d(pole_material)))
+            .with_child((
+                Mesh3d(banner),
+                MeshMaterial3d(banner_material),
+                Transform::from_xyz(0.8, 2.0, 0.0),
+            ))
+            .remove::<NeedsClientConstruction>();
+    }
+}
+
 fn on_tower_sceneroot_complete(
     mut commands: Commands,
     mesh_we_just_found: Query<(Entity, &ChildOf), Added<Mesh3d>>,
@@ -590,7 +627,13 @@ fn receive_host_migration(
         match &migration.event.kind {
             MigrationKind::ToMenu { reason } => {
                 info!(reason, "server is shutting down: back to the menu");
-                notif.write(Notification("The server shut down".to_string()));
+                // A finished tutorial says so; anything else is the server going away.
+                let text = if reason == shared::event::TUTORIAL_COMPLETE {
+                    "Tutorial complete"
+                } else {
+                    "The server shut down"
+                };
+                notif.write(Notification(text.to_string()));
                 commands.remove_resource::<GameTicket>();
                 auth_state.set(AuthState::Idle);
                 network_state.set(NetworkGameState::Quit);

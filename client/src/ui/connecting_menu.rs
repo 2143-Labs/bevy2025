@@ -25,8 +25,14 @@ pub fn spawn_connecting_menu_and_connect(
     mut commands: Commands,
     config: Res<Config>,
     auth_state: Res<State<AuthState>>,
+    fade: Option<Res<super::fade::ScreenFade>>,
     #[cfg(feature = "web")] assigned: Option<Res<crate::auth::AssignedServer>>,
 ) {
+    // A fade overlay is up (Play now): it carries the status line and the Cancel button, and
+    // `single_mut` on `ConnectionStatusText` must not find two of them.
+    if fade.is_some() {
+        return;
+    }
     #[cfg(feature = "web")]
     let server_display = crate::web::game_server_url(
         assigned

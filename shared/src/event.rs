@@ -13,6 +13,10 @@ pub mod server;
 #[derive(Debug, Clone, Copy, Component, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct NetEntId(pub u64);
 
+/// The `reason` on a `MigrationKind::ToMenu` sent because a tutorial's flag was reached: everyone
+/// in that instance goes back to the main menu after their characters were saved.
+pub const TUTORIAL_COMPLETE: &str = "tutorial_complete";
+
 /// Why a server is handing its clients off ([`client::HostMigration`]).
 ///
 /// Declared here, not in `client.rs`: `shared/build.rs` turns every type declared in that file

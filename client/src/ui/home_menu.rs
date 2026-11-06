@@ -44,7 +44,12 @@ pub fn spawn_home_menu(
     image_assets: Res<ImageAssets>,
     session: Res<AuthSession>,
     methods: Res<AvailableLoginMethods>,
+    existing: Query<(), With<HomeMenu>>,
 ) {
+    // A cancelled Play now comes back here while the title it faded is still up.
+    if !existing.is_empty() {
+        return;
+    }
     build_home_menu(&mut commands, &image_assets, &session, &methods);
 }
 
@@ -210,7 +215,15 @@ fn spawn_claim_input(parent: &mut ChildSpawnerCommands) {
 }
 
 /// Despawn the home menu
-pub fn despawn_home_menu(mut commands: Commands, menu_query: Query<Entity, With<HomeMenu>>) {
+pub fn despawn_home_menu(
+    mut commands: Commands,
+    menu_query: Query<Entity, With<HomeMenu>>,
+    fade: Option<Res<super::fade::ScreenFade>>,
+) {
+    // Play now leaves the title up until the screen is white; the fade despawns it there.
+    if super::fade::is_fading_from_title(fade.as_deref()) {
+        return;
+    }
     for entity in menu_query.iter() {
         commands.entity(entity).despawn();
     }
@@ -222,7 +235,7 @@ pub fn handle_home_buttons(
     session: Res<AuthSession>,
     mut auth_requests: MessageWriter<AuthRequest>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
-    #[cfg(not(feature = "web"))] mut commands: Commands,
+    mut commands: Commands,
     #[cfg(not(feature = "web"))] mut config: ResMut<crate::Config>,
     #[cfg(not(feature = "web"))] args: Res<crate::ClapArgs>,
     #[cfg(not(feature = "web"))] mut next_auth_state: ResMut<NextState<crate::auth::AuthState>>,
@@ -231,6 +244,9 @@ pub fn handle_home_buttons(
     // says; the address arrives with the ticket (`auth::AssignedServer`).
     for () in play_query.iter() {
         info!("Play now pressed");
+        // The title fades to white while the connection happens behind it; the world fades in
+        // from white once it is up.
+        super::fade::start_fade_to_white(&mut commands);
         // Dev only: connect straight to --play-server with an empty ticket, no login.
         #[cfg(not(feature = "web"))]
         if let Some(addr) = &args.play_server {

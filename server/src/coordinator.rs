@@ -25,7 +25,7 @@ use std::time::Duration;
 use bevy::prelude::*;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use shared::event::PlayerId;
+use shared::event::{PlayerId, client::SpawnUnit2};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
@@ -54,6 +54,15 @@ pub struct PlayerRef {
     pub sid: String,
 }
 
+/// One character's units, as the authserver saves them when a tutorial is finished.
+#[derive(Clone, Debug, Serialize)]
+pub struct CharacterDump {
+    /// The ticket's `sub`: the character id the coordinator and the database know.
+    pub character_id: i64,
+    /// Every entity the character owned in this world, as the client would spawn it.
+    pub units: Vec<SpawnUnit2>,
+}
+
 /// Everything the link sends, in production order.
 pub enum LinkOp {
     /// The full roster of this slot, how many of those characters are connected, and whether the
@@ -72,6 +81,8 @@ pub enum LinkOp {
     /// The character's units left this world (its camera unit was despawned): the coordinator may
     /// release its slot. A mere disconnect does not do this.
     Leave { character_id: i64 },
+    /// A player reached this tutorial's flag: save every character in the world.
+    TutorialDone { characters: Vec<CharacterDump> },
     /// Ask the coordinator what to do with this instance before exiting; `reason` is `idle` or
     /// `sigterm`. The answer arrives on `reply`.
     ShutdownRequest {
@@ -138,6 +149,12 @@ impl CoordinatorLink {
 
     pub fn leave(&self, character_id: i64) {
         self.send(LinkOp::Leave { character_id });
+    }
+
+    /// Queue the dump of every character in the world. It is posted before the shutdown request
+    /// that follows it, so the characters are saved even if the process exits soon after.
+    pub fn tutorial_done(&self, characters: Vec<CharacterDump>) {
+        self.send(LinkOp::TutorialDone { characters });
     }
 
     /// Ask what to do with this instance's players. The reply is the coordinator's plan; an `Err`
@@ -215,6 +232,14 @@ struct LeaveBody<'a> {
     generation: u64,
     boot_id: &'a str,
     character_id: i64,
+}
+
+#[derive(Serialize)]
+struct TutorialDoneBody<'a> {
+    slot: u32,
+    generation: u64,
+    boot_id: &'a str,
+    characters: &'a [CharacterDump],
 }
 
 #[derive(Serialize)]
@@ -337,6 +362,21 @@ async fn run_link(
                 };
                 send_until_accepted(&client, &coordinator, "/internal/v1/servers/leave", &body)
                     .await;
+            }
+            LinkOp::TutorialDone { characters } => {
+                let body = TutorialDoneBody {
+                    slot: coordinator.slot,
+                    generation: coordinator.generation,
+                    boot_id: &boot_id,
+                    characters: &characters,
+                };
+                send_until_accepted(
+                    &client,
+                    &coordinator,
+                    "/internal/v1/servers/tutorial-done",
+                    &body,
+                )
+                .await;
             }
             LinkOp::ShutdownRequest {
                 reason,
