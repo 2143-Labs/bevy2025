@@ -87,6 +87,8 @@ fn loop_alive(last_frame: u64, now: u64) -> bool {
 struct AxumState {
     _server_networking_resources: ServerNetworkingResources,
     axum_bevy_queues: AxumServerResource,
+    /// Characters the coordinator moved to another tutorial, drained by `evict_characters`.
+    evictions: crate::Evictions,
     /// The token the coordinator link was given; `None` on a standalone server, which nothing can
     /// activate.
     coordinator_token: Option<String>,
@@ -95,6 +97,7 @@ struct AxumState {
 fn setup_shared_axum_server(
     res: Res<ServerNetworkingResources>,
     axum_server_res: Res<AxumServerResource>,
+    evictions: Res<crate::Evictions>,
     tokio_runtime: Res<TokioRuntimeResource>,
     coordinator: Option<Res<GameServerCoordinator>>,
 ) {
@@ -104,6 +107,7 @@ fn setup_shared_axum_server(
     let state = AxumState {
         _server_networking_resources: res.clone(),
         axum_bevy_queues: axum_server_res.clone(),
+        evictions: evictions.clone(),
         coordinator_token: coordinator.map(|c| c.token.clone()),
     };
 
@@ -113,6 +117,7 @@ fn setup_shared_axum_server(
         .route("/", axum::routing::get(|| async { "Hello, World!" }))
         .route("/players", axum::routing::get(get_players_endpoint))
         .route("/activate", axum::routing::post(activate))
+        .route("/evict", axum::routing::post(evict))
         .with_state(state);
 
     let _x = tokio_runtime.spawn(async move {
@@ -162,6 +167,40 @@ async fn activate(
         .store(true, Ordering::Relaxed);
     info!("activate: the coordinator has claimed this instance");
     axum::http::StatusCode::NO_CONTENT
+}
+
+/// The character moved to another tutorial: queue it for `evict_characters`, which takes its
+/// units out of the world and tells the other clients.
+async fn evict(
+    state: axum::extract::State<AxumState>,
+    headers: axum::http::HeaderMap,
+    axum::Json(body): axum::Json<EvictBody>,
+) -> axum::http::StatusCode {
+    let presented = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .unwrap_or("");
+    if !token_ok(state.coordinator_token.as_deref().unwrap_or(""), presented) {
+        return axum::http::StatusCode::UNAUTHORIZED;
+    }
+    // Idempotent: an unknown character is dropped by `evict_characters`.
+    state
+        .evictions
+        .0
+        .lock()
+        .expect("evictions lock poisoned")
+        .push(body.character_id);
+    info!(
+        character_id = body.character_id,
+        "evict: the character moved to another tutorial"
+    );
+    axum::http::StatusCode::NO_CONTENT
+}
+
+#[derive(Deserialize)]
+struct EvictBody {
+    character_id: i64,
 }
 
 /// Empty expected token: no activation is accepted (a standalone server has no coordinator).

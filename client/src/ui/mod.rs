@@ -3,6 +3,7 @@ pub mod connecting_menu;
 pub mod gym_list;
 pub mod home_menu;
 pub mod inventory_menu;
+pub mod join_code;
 pub mod paused_menu;
 pub mod reconnecting;
 pub mod scoreboard_menu;
@@ -82,12 +83,23 @@ impl Plugin for UIPlugin {
             )
             //
             .add_plugins((
+                join_code::JoinCodePlugin,
                 reconnecting::ReconnectingOverlayPlugin,
                 scoreboard_menu::ScoreboardMenuPlugin,
                 inventory_menu::InventoryMenuPlugin,
                 skills_menu::SkillsMenuPlugin,
                 skills_menu::binds::SkillBindsPlugin,
             ))
+            // The join-code box is a text input outside the menu states that already run these.
+            .add_systems(
+                Update,
+                (
+                    text_input::handle_text_input_focus,
+                    text_input::handle_text_input_keyboard,
+                    text_input::update_text_input_visual_feedback,
+                )
+                    .run_if(in_state(OverlayMenuState::Paused)),
+            )
             // Global button feedback
             .add_systems(Update, styles::button_visual_feedback);
 

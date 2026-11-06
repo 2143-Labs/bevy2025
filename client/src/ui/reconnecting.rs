@@ -8,13 +8,13 @@
 
 use bevy::prelude::*;
 
-use crate::network::Reconnect;
+use crate::network::{Reconnect, ReconnectLabel};
 
 /// The overlay root.
 #[derive(Component)]
 pub struct ReconnectingOverlay;
 
-fn spawn_reconnecting_overlay(mut commands: Commands) {
+fn spawn_reconnecting_overlay(mut commands: Commands, text: String) {
     commands
         .spawn((
             Node {
@@ -28,7 +28,7 @@ fn spawn_reconnecting_overlay(mut commands: Commands) {
         ))
         .with_children(|parent| {
             parent.spawn((
-                Text::new("Reconnecting…"),
+                Text::new(text),
                 TextFont {
                     font_size: FontSize::Px(28.0),
                     ..default()
@@ -41,12 +41,16 @@ fn spawn_reconnecting_overlay(mut commands: Commands) {
 /// Keep the overlay on screen exactly as long as a reconnect is running.
 fn manage_reconnecting_overlay(
     reconnect: Option<Res<Reconnect>>,
+    label: Option<Res<ReconnectLabel>>,
     overlay: Query<Entity, With<ReconnectingOverlay>>,
     mut commands: Commands,
 ) {
     match (reconnect.is_some(), overlay.is_empty()) {
         (true, true) => {
-            spawn_reconnecting_overlay(commands);
+            let text = label
+                .map(|label| label.0.clone())
+                .unwrap_or_else(|| "Reconnecting…".to_string());
+            spawn_reconnecting_overlay(commands, text);
         }
         (false, false) => {
             for entity in overlay.iter() {

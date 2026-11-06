@@ -80,6 +80,7 @@ impl Plugin for NetworkingPlugin {
             .add_systems(OnEnter(NetworkGameState::Quit), abandon_reconnect)
             .add_systems(OnEnter(NetworkGameState::Reconnecting), start_reconnect)
             .add_systems(OnEnter(NetworkGameState::ClientConnected), finish_reconnect)
+            .add_systems(Update, begin_move_to_tutorial)
             // The driver keeps running after the state has moved on to the connect sequence, so
             // it is driven by the resource rather than by the state.
             .add_systems(Update, drive_reconnect.run_if(resource_exists::<Reconnect>))
@@ -860,6 +861,18 @@ enum ReconnectPhase {
     WaitingForServer,
 }
 
+/// A join code the player entered: leave this world and join the tutorial that has it. The move
+/// itself is the authserver's (`/api/v1/join-code` rebinds the character); the client only
+/// reconnects afterwards, which is what [`Reconnect`] does.
+#[derive(Message, Clone, Debug)]
+pub struct MoveToTutorial {
+    pub code: String,
+}
+
+/// What the reconnecting overlay says while a [`MoveToTutorial`] is under way.
+#[derive(Resource, Clone)]
+pub(crate) struct ReconnectLabel(pub String);
+
 /// One reconnect, from the heartbeat timeout to either `ClientConnected` or `Quit`.
 ///
 /// A forced failure restarts the pod on the same volume and it answers again within a few seconds,
@@ -885,9 +898,14 @@ fn start_reconnect(
     mut commands: Commands,
     mut auth_requests: MessageWriter<AuthRequest>,
     mut notif: MessageWriter<Notification>,
+    label: Option<Res<ReconnectLabel>>,
 ) {
     info!("reconnecting: asking the authserver for a fresh ticket");
-    notif.write(Notification("Reconnecting…".to_string()));
+    notif.write(Notification(
+        label
+            .map(|label| label.0.clone())
+            .unwrap_or_else(|| "Reconnecting…".to_string()),
+    ));
     auth_requests.write(AuthRequest::FetchTicket);
     commands.insert_resource(Reconnect {
         phase: ReconnectPhase::Ticket,
@@ -898,7 +916,37 @@ fn start_reconnect(
     });
 }
 
+/// The player entered a join code: the authserver has already rebound their character, so all the
+/// client has to do is drop this connection and reconnect — `/play` now answers with the new
+/// instance. Ignored unless this client is in a world and not already reconnecting.
+fn begin_move_to_tutorial(
+    mut moves: MessageReader<MoveToTutorial>,
+    state: Res<State<NetworkGameState>>,
+    reconnect: Option<Res<Reconnect>>,
+    sr: Res<ClientNetworkingResources>,
+    mse: Res<MainServerEndpoint>,
+    mut next_state: ResMut<NextState<NetworkGameState>>,
+    mut commands: Commands,
+) {
+    let Some(mv) = moves.read().last() else {
+        return;
+    };
+    if *state.get() != NetworkGameState::ClientConnected || reconnect.is_some() {
+        info!("join code {}: not in a world, ignored", mv.code);
+        return;
+    }
+    info!("joining the tutorial with code {}", mv.code);
+    sr.send_outgoing_event_now(
+        mse.0,
+        &EventToServer::IWantToDisconnect(IWantToDisconnect {}),
+        None,
+    );
+    commands.insert_resource(ReconnectLabel(format!("Joining {}…", mv.code)));
+    next_state.set(NetworkGameState::Reconnecting);
+}
+
 fn finish_reconnect(mut commands: Commands, reconnect: Option<Res<Reconnect>>) {
+    commands.remove_resource::<ReconnectLabel>();
     if reconnect.is_none() {
         return;
     }
@@ -908,6 +956,7 @@ fn finish_reconnect(mut commands: Commands, reconnect: Option<Res<Reconnect>>) {
 
 fn abandon_reconnect(mut commands: Commands) {
     commands.remove_resource::<Reconnect>();
+    commands.remove_resource::<ReconnectLabel>();
 }
 
 /// The reconnect state machine. It runs for as long as [`Reconnect`] exists, including after the
