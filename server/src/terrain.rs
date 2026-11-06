@@ -16,11 +16,8 @@ impl Plugin for TerrainPlugin {
 
 /// Setup terrain mesh with physics collider
 pub fn setup_terrain_server(mut commands: Commands, terrain_params: Res<TerrainParams>) {
-    // Calculate water level: 30% between min and max terrain height
-    // Terrain heights range from -max_height_delta to +max_height_delta
-    let min_height = -terrain_params.max_height_delta;
-    let max_height = terrain_params.max_height_delta;
-    let water_level = min_height + 0.3 * (max_height - min_height);
+    // 30% between the lowest and the highest possible height (the client draws it the same way).
+    let water_level = terrain_params.water_level();
 
     // Generate terrain collision mesh data
     let (vertices, indices) = generate_terrain_trimesh(&terrain_params);

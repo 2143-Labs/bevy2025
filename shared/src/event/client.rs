@@ -151,4 +151,8 @@ pub struct ConnectRejected {
     pub reason: String,
 }
 
+/// A player reached this tutorial's flag: everyone in the instance has won.
+#[derive(Debug, Clone, Serialize, Deserialize, Message)]
+pub struct TutorialComplete {}
+
 include!(concat!(env!("OUT_DIR"), "/client_event.rs"));

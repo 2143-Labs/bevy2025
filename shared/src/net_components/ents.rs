@@ -37,6 +37,11 @@ pub struct ItemDrop {
 #[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct Tower;
 
+/// The green flag at the end of a tutorial: a living man that reaches it wins the tutorial for
+/// everyone in that instance.
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
+pub struct GoalFlag;
+
 //include!(concat!(env!("OUT_DIR"), "/net_components_ents.rs"));
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -49,6 +54,7 @@ pub enum NetComponentEnts {
     NPC(NPC),
     ItemDrop(ItemDrop),
     Tower(Tower),
+    GoalFlag(GoalFlag),
 }
 
 impl NetComponentEnts {
@@ -76,6 +82,9 @@ impl NetComponentEnts {
                 entity.insert(c);
             }
             NetComponentEnts::Tower(c) => {
+                entity.insert(c);
+            }
+            NetComponentEnts::GoalFlag(c) => {
                 entity.insert(c);
             }
         }
@@ -112,6 +121,10 @@ impl NetComponentEnts {
         } else if type_id == std::any::TypeId::of::<Tower>() {
             Some(NetComponentEnts::Tower(
                 unsafe { ptr.deref::<Tower>() }.clone(),
+            ))
+        } else if type_id == std::any::TypeId::of::<GoalFlag>() {
+            Some(NetComponentEnts::GoalFlag(
+                unsafe { ptr.deref::<GoalFlag>() }.clone(),
             ))
         } else {
             None
@@ -164,5 +177,11 @@ impl ToNetComponent for NPC {
 impl ToNetComponent for Tower {
     fn to_net_component(self) -> super::NetComponent {
         super::NetComponent::Ents(NetComponentEnts::Tower(self))
+    }
+}
+
+impl ToNetComponent for GoalFlag {
+    fn to_net_component(self) -> super::NetComponent {
+        super::NetComponent::Ents(NetComponentEnts::GoalFlag(self))
     }
 }

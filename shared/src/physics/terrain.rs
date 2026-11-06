@@ -207,6 +207,16 @@ impl TerrainParams {
         }
     }
 
+    /// The terrain's height at `(x, z)`, as `generate_terrain_mesh_buffers` lays it out.
+    pub fn ground_height(&self, x: f32, z: f32) -> f32 {
+        self.perlin().sample_height(x, z) * self.max_height_delta
+    }
+
+    /// Where the water surface sits: 30% up from the lowest possible height.
+    pub fn water_level(&self) -> f32 {
+        -self.max_height_delta + 0.6 * self.max_height_delta
+    }
+
     pub fn perlin(&self) -> TerrainPerlin {
         TerrainPerlin {
             perlin_continentalness: Perlin::new(self.seed),
@@ -412,4 +422,44 @@ pub fn generate_terrain_mesh(params: &TerrainParams) -> Mesh {
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
     .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
     .with_inserted_indices(Indices::U32(indices))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `ground_height` must be the height the collision mesh and the rendered mesh put at that
+    /// x/z: the tutorial flag is placed with it, and a flag in the air or under the ground would
+    /// be unreachable.
+    #[test]
+    fn ground_height_matches_the_mesh() {
+        let params = TerrainParams {
+            seed: 42,
+            ..TerrainParams::default()
+        };
+        let (vertices, _) = generate_terrain_trimesh(&params);
+        for vertex in vertices.iter().step_by(997) {
+            let ground = params.ground_height(vertex.x, vertex.z);
+            assert!(
+                (vertex.y - ground).abs() < 1e-3,
+                "({}, {}) is {} high in the mesh, {} by ground_height",
+                vertex.x,
+                vertex.z,
+                vertex.y,
+                ground
+            );
+        }
+    }
+
+    #[test]
+    fn water_level_is_thirty_percent_up() {
+        let params = TerrainParams {
+            max_height_delta: 10.0,
+            ..TerrainParams::default()
+        };
+        assert!((params.water_level() - (-10.0 + 6.0)).abs() < 1e-6);
+        let gym = TerrainParams::gym();
+        assert_eq!(gym.ground_height(12.0, -7.0), 0.0, "a gym is flat");
+        assert_eq!(gym.water_level(), 0.0, "and dry");
+    }
 }

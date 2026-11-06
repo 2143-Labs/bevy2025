@@ -381,6 +381,28 @@ box under the code; typing another tutorial's code moves the character there.</p
       (starting, recovering or draining) and <code>{"moved":false}</code> when the character is already there.</li>
 </ol>
 
+<h3 id="play-tutorial-end">Finishing the tutorial</h3>
+<p>A tutorial's goal is a green flag on the far side of the map (the first candidate spot that is not
+under water). Reaching it is what ends the tutorial, for everyone in the instance:</p>
+<ol>
+  <li>Any player's <em>living man</em> within 3 m of the flag (horizontal distance) wins it. The server
+      sends <code>TutorialComplete</code> to every connected client, which puts "You win!" on screen
+      for everybody.</li>
+  <li>At the same moment the server dumps every character in the world — connected or a ghost, as long
+      as it has a login session — as <code>units: [SpawnUnit2]</code>, and posts
+      <code>/internal/v1/servers/tutorial-done {slot, generation, boot_id, characters}</code>. The
+      authserver upserts each into <code>social.character_states</code> (<code>units</code> JSONB,
+      <code>saved_from='tutorial_complete'</code>). Nothing reads it back yet.</li>
+  <li>After 5 s the server asks for a shutdown with reason <code>tutorial_complete</code>; the
+      coordinator's <code>request_shutdown</code> answers <code>to_menu</code> because the instance has
+      players. Every client gets <code>HostMigration::ToMenu { reason: "tutorial_complete" }</code>, the
+      client returns to the main menu with "Tutorial complete", and the instance exits and is deleted.</li>
+</ol>
+<p><code>Play now</code> goes straight into the world: the title fades to white over 2 s while the client
+gets a ticket and connects behind it, then the world fades in with the player already driving a new man
+at the spawn point (a character that comes back to a world that kept its units keeps the man it was
+driving).</p>
+
 <!-- ============================================================ -->
 <h2 id="state">4. State machines</h2>
 

@@ -1,4 +1,5 @@
 pub mod connecting_menu;
+pub mod fade;
 #[cfg(feature = "testing")]
 pub mod gym_list;
 pub mod home_menu;
@@ -10,6 +11,7 @@ pub mod scoreboard_menu;
 pub mod skills_menu;
 pub mod styles;
 pub mod text_input;
+pub mod tutorial;
 
 use crate::{
     auth::{AuthSession, AuthState, AvailableLoginMethods},
@@ -83,7 +85,9 @@ impl Plugin for UIPlugin {
             )
             //
             .add_plugins((
+                fade::FadePlugin,
                 join_code::JoinCodePlugin,
+                tutorial::TutorialUiPlugin,
                 reconnecting::ReconnectingOverlayPlugin,
                 scoreboard_menu::ScoreboardMenuPlugin,
                 inventory_menu::InventoryMenuPlugin,

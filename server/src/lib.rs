@@ -20,8 +20,8 @@ use shared::{
     net_components::{
         ToNetComponent,
         ents::{Man, PlayerCamera, SendNetworkTranformUpdates},
-        make_ball,
-        ours::{ControlledBy, OwnedByPlayer, PlayerColor, PlayerName},
+        make_ball, make_man,
+        ours::{ControlledBy, Dead, OwnedByPlayer, PlayerColor, PlayerName},
     },
     netlib::{
         EndpointGeneral, EventToClient, EventToServer, NetworkConnectionTarget,
@@ -59,13 +59,21 @@ struct EndpointToPlayerId {
     map: DashMap<EndpointGeneral, PlayerId>,
 }
 
+/// `Play` spawns the player straight into the world, driving a new man, instead of leaving them in
+/// freecam with Q/E to summon one. Only authserver-placed servers get it: a testing gym keeps Q/E.
+#[derive(Resource)]
+pub struct SpawnManOnJoin;
+
+/// How far above the ground that man is spawned, so it lands instead of starting inside it.
+const MAN_SPAWN_LIFT: f32 = 2.0;
+
 /// Characters the coordinator moved to another tutorial (`POST /evict`), as `character_id`s,
 /// waiting for `evict_characters` to take them out of the world.
 #[derive(Resource, Clone, Default)]
 pub struct Evictions(pub Arc<Mutex<Vec<i64>>>);
 
 #[derive(Debug, Component)]
-struct PlayerEndpoint(EndpointGeneral);
+pub(crate) struct PlayerEndpoint(pub(crate) EndpointGeneral);
 
 //pub mod chat;
 //pub mod game_manager;
@@ -79,6 +87,7 @@ pub mod spawns;
 pub mod statefile;
 pub mod terrain;
 pub mod ticket;
+pub mod tutorial;
 pub mod websocket;
 
 use ticket::{TicketVerifier, VerifiedTicket};
@@ -221,12 +230,16 @@ pub fn run_server(
         match coordinator {
             Some(c) => {
                 info!("coordinator: {:?}", c);
+                // A provisioned instance is a tutorial: `Play` puts the player in the world.
+                app.insert_resource(SpawnManOnJoin);
                 app.insert_resource(coordinator::spawn_link(&link_runtime, c.clone()));
                 if c.managed {
                     // A provisioned instance owns its own lifecycle: it destroys itself when it
                     // is idle and migrates its players off on SIGTERM. Static servers have no
                     // such env, so none of this exists for them (prod, local dev).
                     app.add_plugins(lifecycle::LifecyclePlugin::new(&c, &link_runtime));
+                    // The flag that ends the tutorial, and the dump of every character on it.
+                    app.add_plugins(tutorial::TutorialPlugin);
                     // `ROTS_STATE_DIR` gives the instance a world that outlives its process: the
                     // StatefulSet restarts the pod on the same volume and the world comes back.
                     if let Some(statefile) = statefile::StatefilePlugin::from_env() {
@@ -378,6 +391,11 @@ fn do_app(base_plugins: bevy::app::PluginGroupBuilder, f: impl FnOnce(&mut App))
                 Duration::from_millis(200),
             )),
         );
+
+    // Read at runtime by `living_man` and the tutorial's flag check: a `try_query` over a
+    // component the world has never seen returns `None`, which those would read as "no men at
+    // all" and never spawn one or never end the tutorial.
+    app.world_mut().register_component::<Dead>();
 
     f(&mut app);
 
@@ -764,6 +782,17 @@ fn controlled_man(world: &World, player_id: PlayerId) -> Option<NetEntId> {
         })
 }
 
+/// The man a character is driving, if it is still alive.
+fn living_man(world: &World, player_id: PlayerId) -> Option<NetEntId> {
+    world
+        .try_query_filtered::<(&NetEntId, &ControlledBy), (With<Man>, Without<Dead>)>()
+        .and_then(|mut men| {
+            men.iter(world)
+                .find(|(_, controller)| controller.players.contains(&player_id))
+                .map(|(net_ent_id, _)| *net_ent_id)
+        })
+}
+
 /// Everything a client needs to spawn `entity`: the per-entity component walk of [`WorldData2`],
 /// shared with the statefile (which has to bring units back exactly as they were).
 pub(crate) fn unit_snapshot(world: &World, entity: Entity) -> Option<SpawnUnit2> {
@@ -916,6 +945,23 @@ fn admit(
         }
     }
 
+    // Play puts the player straight into the world driving a man. A character that still drives a
+    // living man (a rebound ghost) keeps it.
+    let new_man = (world.get_resource::<SpawnManOnJoin>().is_some()
+        && living_man(world, new_player_id).is_none())
+    .then(|| {
+        let (x, z) = (spawn_location.translation.x, spawn_location.translation.z);
+        let at = Transform::from_xyz(x, terrain.ground_height(x, z) + MAN_SPAWN_LIFT, z);
+        make_man(at, ControlledBy::single(new_player_id), "TypeQ")
+    });
+    if let Some(man) = &new_man {
+        let ent = man.clone().spawn_entity(commands);
+        commands.entity(ent).insert(OwnedByPlayer {
+            player_id: new_player_id,
+        });
+        cam_back = Some(man.net_ent_id);
+    }
+
     let player_unit = SpawnUnit2 {
         net_ent_id: NetEntId::none(),
         components: vec![
@@ -940,6 +986,10 @@ fn admit(
     }
     if is_new_character {
         announcement.push(EventToClient::SpawnUnit2(player_unit));
+    }
+    if let Some(man) = &new_man {
+        // SPAWN C: the man the new player drives, for everybody else.
+        announcement.push(EventToClient::SpawnUnit2(man.clone()));
     }
 
     let mut unit_list_to_new_client = vec![];
@@ -983,6 +1033,11 @@ fn admit(
                 large_unit_list_to_send.push(unit);
             }
         }
+    }
+    // The man spawned above is not in the world yet (its commands are not applied), so the new
+    // client is told about it here.
+    if let Some(man) = &new_man {
+        large_unit_list_to_send.push(man.clone());
     }
 
     // Each time we miss a heartbeat, we increment the Atomic counter.
@@ -1536,6 +1591,8 @@ mod tests {
         if keep_ghosts {
             app.insert_resource(KeepGhosts);
         }
+        // `living_man` and the tutorial's flag check read this at runtime.
+        app.world_mut().register_component::<Dead>();
         app
     }
 
@@ -1568,6 +1625,18 @@ mod tests {
             .expect("ready to admit lock")
             .push(request);
         app.update();
+    }
+
+    /// The living men a character drives.
+    fn men(app: &mut App, player_id: u64) -> Vec<NetEntId> {
+        let world = app.world_mut();
+        let mut query =
+            world.query_filtered::<(&NetEntId, &ControlledBy), (With<Man>, Without<Dead>)>();
+        query
+            .iter(world)
+            .filter(|(_, controller)| controller.players.contains(&PlayerId(player_id)))
+            .map(|(id, _)| *id)
+            .collect()
     }
 
     fn camera_units(app: &mut App, player_id: u64) -> Vec<NetEntId> {
@@ -1900,6 +1969,103 @@ mod tests {
             "a ghost is not released on disconnect: {:?}",
             paths_seen(&seen)
         );
+    }
+
+    /// The flag wins the tutorial for everyone in the instance.
+    #[test]
+    fn the_flag_completes_the_tutorial_for_everyone() {
+        let mut app = app(true);
+        app.init_resource::<crate::tutorial::TutorialState>();
+        app.add_systems(
+            Update,
+            (
+                crate::tutorial::tick_tutorial_state,
+                crate::tutorial::detect_flag_reached,
+            )
+                .chain(),
+        );
+        admit_now(&mut app, request(7, endpoint(5001)));
+        admit_now(&mut app, request(8, endpoint(5002)));
+
+        app.world_mut().spawn((
+            shared::net_components::ents::GoalFlag,
+            Transform::from_xyz(0.0, 2.5, 0.0),
+        ));
+        let man = shared::net_components::make_man(
+            Transform::from_xyz(1.0, 0.0, 1.0),
+            ControlledBy::single(PlayerId(7)),
+            "TypeQ",
+        );
+        let man_ent = man.spawn_entity(&mut app.world_mut().commands());
+        app.world_mut()
+            .commands()
+            .entity(man_ent)
+            .insert(OwnedByPlayer {
+                player_id: PlayerId(7),
+            });
+        app.world_mut().flush();
+        app.update();
+
+        assert!(
+            app.world()
+                .resource::<crate::tutorial::TutorialState>()
+                .completed_for
+                .is_some(),
+            "the tutorial is over"
+        );
+        for endpoint in [endpoint(5001), endpoint(5002)] {
+            let events = queued_events(&mut app, endpoint);
+            assert!(
+                events
+                    .iter()
+                    .any(|event| matches!(event, EventToClient::TutorialComplete(_))),
+                "{:?} was not told: {events:?}",
+                endpoint
+            );
+        }
+    }
+
+    /// Play puts the player straight into the world, driving a man.
+    #[test]
+    fn a_new_player_is_given_a_man_to_drive() {
+        let mut app = app(true);
+        app.insert_resource(SpawnManOnJoin);
+        admit_now(&mut app, request(7, endpoint(5001)));
+
+        let men = men(&mut app, 7);
+        assert_eq!(men.len(), 1, "one man, spawned on join");
+        let events = queued_events(&mut app, endpoint(5001));
+        assert!(
+            events.iter().any(
+                |event| matches!(event, EventToClient::SpawnUnit2(unit) if unit.net_ent_id == men[0])
+            ),
+            "the world sent to the joining client includes its man: {events:?}"
+        );
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                EventToClient::BeginThirdpersonControllingUnit(control) if control.unit == Some(men[0])
+            )),
+            "and the client is put in third person on it: {events:?}"
+        );
+    }
+
+    /// A character that comes back to a world that kept it keeps the body it was driving.
+    #[test]
+    fn a_rebound_player_keeps_its_man() {
+        let mut app = app(true);
+        app.insert_resource(SpawnManOnJoin);
+        admit_now(&mut app, request(7, endpoint(5001)));
+        let man = men(&mut app, 7)[0];
+
+        app.world_mut().write_message(PlayerDisconnected {
+            id: PlayerId(7),
+            reason: "Player timeout".to_string(),
+        });
+        app.update();
+        admit_now(&mut app, request(7, endpoint(5001)));
+
+        assert_eq!(men(&mut app, 7), vec![man], "no second man");
     }
 
     /// A join-code move takes the character out of the old world: its units and player entity go,

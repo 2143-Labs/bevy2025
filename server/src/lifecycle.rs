@@ -29,8 +29,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use bevy::prelude::*;
 use bevy::time::Real;
 use shared::{
-    event::MigrationKind, event::client::HostMigration, netlib::EventToClient,
-    netlib::ServerNetworkingResources,
+    event::MigrationKind, event::TUTORIAL_COMPLETE, event::client::HostMigration,
+    netlib::EventToClient, netlib::ServerNetworkingResources,
 };
 use tokio::sync::oneshot;
 
@@ -39,6 +39,7 @@ use crate::{
     ServerState,
     coordinator::{CoordinatorLink, ShutdownPlan},
     statefile::Statefile,
+    tutorial::{TutorialState, WIN_BANNER_SECS},
 };
 
 /// The sentinel's name inside `ROTS_STATE_DIR`.
@@ -387,6 +388,7 @@ impl Plugin for LifecyclePlugin {
                 (
                     unpause_when_activated,
                     ask_when_idle,
+                    ask_when_tutorial_complete,
                     ask_on_sigterm,
                     drive_shutdown,
                 )
@@ -458,6 +460,33 @@ fn ask_when_idle(
     shutdown.ask("idle", reply);
 }
 
+/// The flag was reached and "You win!" has been up long enough: ask the coordinator to send
+/// everyone back to the main menu. The dump of every character was queued before this, so it
+/// lands first.
+fn ask_when_tutorial_complete(
+    tutorial: Option<Res<TutorialState>>,
+    link: Res<CoordinatorLink>,
+    players: Query<&PlayerId, With<ConnectedPlayer>>,
+    mut shutdown: ResMut<Shutdown>,
+) {
+    let Some(tutorial) = tutorial else {
+        return;
+    };
+    let Some(elapsed) = tutorial.completed_for else {
+        return;
+    };
+    if elapsed < WIN_BANNER_SECS || shutdown.is_running() {
+        return;
+    }
+    let players: Vec<i64> = players.iter().map(|id| id.0 as i64).collect();
+    info!(
+        players = players.len(),
+        "tutorial complete: asking to send everyone to the menu"
+    );
+    let reply = link.shutdown_request(TUTORIAL_COMPLETE, players);
+    shutdown.ask(TUTORIAL_COMPLETE, reply);
+}
+
 /// SIGTERM: either save the world for the restart, or ask the coordinator what to do with the
 /// players on this server.
 fn ask_on_sigterm(
@@ -510,9 +539,16 @@ fn drive_shutdown(
     match shutdown.step(time.delta_secs(), connected) {
         ShutdownStep::Wait => {}
         ShutdownStep::Broadcast => {
+            // A finished tutorial says so: the client shows "Tutorial complete" instead of
+            // "The server shut down".
+            let reason = if shutdown.reason == Some(TUTORIAL_COMPLETE) {
+                TUTORIAL_COMPLETE
+            } else {
+                SERVER_SHUTDOWN
+            };
             let event = EventToClient::HostMigration(HostMigration {
                 kind: MigrationKind::ToMenu {
-                    reason: SERVER_SHUTDOWN.to_string(),
+                    reason: reason.to_string(),
                 },
             });
             info!(connected, "telling clients to go back to the menu");
